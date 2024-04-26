@@ -1,2 +1,1 @@
-# blud
-There will be blud.
+# blud -- There will be blud
