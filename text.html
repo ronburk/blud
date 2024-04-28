@@ -1,0 +1,52 @@
+<html>
+    <head>
+        
+    </head>
+    <body>
+    </body>
+    <p>
+        blud is a portable build utility that uses Lua as its
+        extension language.
+        It was created to spark joy for the author in a way that Gnu make and cmake
+        do not.
+    </p>
+    <p>
+        Feldman's original make was a marvel of simplicity;
+        a simple syntax for describing a dependency graph
+        along with the actions required to rebuild missing
+        dependents.
+        One can
+        implement a basic version of it in a single page of awk script.
+        However, incremental improvements to make to handle additional demands
+        have tended to be less marvelous.
+        Feldman's make made liberal use of special character sequences
+        to add features to the basic simple syntax.
+        This trend often continued in make derivatives to
+        the logical conclusion of drifting into incorporating
+        a scripting language made cryptic by its roots.
+        Incrementally developing a language starting from the
+        primitives of make tends to result in a language that
+        satisfies no one.
+    </p>
+    <p>
+        Instead, blud is built on a simple, efficient, widely-known
+        scripting language: Lua.
+    </p>
+    <p>
+        Here is a simple blud script:
+        <pre>
+program: program.c
+    cc -o program program.c
+        </pre>
+        As you can see it would also be valid input for make,
+        or even most utilities derived from make.
+        Note that make always contained a concept of <emph>implicit directory</emph>.
+        There is no mention in the script of where program.c resides;
+        it is assumed to reside in the <q>current</q> directory,
+        that is, the directory the user was in when they ran blud.
+        This idea leads to the first extension blud adds to basic make.
+    </p>
+    <p>
+        
+    </p>
+</html>

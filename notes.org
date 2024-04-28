@@ -1,1 +1,13 @@
 * blud
+
+* log
+** <2024-04-27 Sat>
+
+When can custom Lua code be run? 
+
+program: program.c
+    cc -o program program.c
+
+Now want to put products in a different directory.
+
+all: program
