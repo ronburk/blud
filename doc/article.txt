@@ -1,0 +1,2 @@
+http://gamesfromwithin.com/the-quest-for-the-perfect-build-system
+http://mad-scientist.net/make/multi-arch.html
