@@ -1,3 +1,13 @@
 
+debug: program function(env)
+    env.DEBUG_FLAG = "-g"
+    env.PRODUCT_DIR = "debug"
+end
+
+release:  program function(env)
+    env.DEBUG_FLAG = ""
+    env.PRODUCT_DIR = "release"
+end
+
 program: program.c
     cc -o program program.c
