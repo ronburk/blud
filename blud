@@ -1,8 +1,23 @@
+debug : {./debug} program CFLAGS += -g
+
+-- same as:
+debug : PRODUCT_DIR = ./debug
+debug : CFLAGS += -g
+debug : program
+-- same as:
+debug : {PRODUCT_DIR = ./debug} {CFLAGS += -g} program
+
+
+debug:.CC.DEBUG: -g
+
 
 debug: program function(env)
     env.DEBUG_FLAG = "-g"
     env.PRODUCT_DIR = "debug"
 end
+
+debug: program
+{debug/program}
 
 release:  program function(env)
     env.DEBUG_FLAG = ""

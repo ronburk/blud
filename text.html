@@ -1,6 +1,43 @@
 <html>
     <head>
         <style>
+
+         /* Basic CSS for header elements */
+         body {
+             font-family: Arial, sans-serif; /* Sets a readable typeface */
+             color: #333; /* Dark gray for text for better readability */
+             line-height: 1.6; /* Improves line spacing throughout the body */
+         }
+
+         h1 {
+             font-size: 2em; /* Makes H1 significantly larger */
+             margin-top: 0.5em; /* Adds space at the top of the H1 */
+             margin-bottom: 0.5em; /* Adds space at the bottom of the H1 */
+             color: #000; /* Optional: Darker color for more emphasis */
+         }
+
+         h2 {
+             font-size: 1.75em; /* Slightly smaller than H1 */
+             margin-top: 0.75em; /* More top margin */
+             margin-bottom: 0.5em; /* Consistent bottom margin */
+             color: #222; /* Slightly lighter than H1 */
+         }
+
+         h3 {
+             font-size: 1.5em; /* Smaller than H2 */
+             margin-top: 1em; /* More top margin as headers get smaller */
+             margin-bottom: 0.5em; /* Keeps content separated */
+             color: #444; /* Lighter than H2 */
+         }
+
+         h4, h5, h6 {
+             font-size: 1.25em; /* Even smaller */
+             margin-top: 1em; /* Consistent top margin */
+             margin-bottom: 0.5em; /* Consistent bottom margin */
+             font-weight: normal; /* Less emphasis on the least important headers */
+             color: #666; /* Lighter color for less emphasis */
+         }
+
          .content {
              max-width: 80ch; /* 100 characters wide */
              margin: 0 auto;   /* Centers the text block horizontally */
@@ -11,70 +48,85 @@
     <body>
     </body>
     <div class="content">
-    <p>
-        blud is a portable build utility that uses Lua as its
-        extension language.
-        It was created to spark joy for the author in a way that Gnu <code>make</code> and <code>cmake</code>
-        do not.
-        This document assumes you are familiar with the basics of make.
-        Famliarity with Lua is helpful,
-        but familiarity with most any interpreted language that offers objects
-        is really sufficient.
-    </p>
-    <p>
-        Feldman's original <code>make</code> was a marvel of simplicity;
-        a simple syntax for describing a dependency graph
-        along with the actions required to rebuild missing
-        dependents.
-        One can
-        implement a basic version of it in a single page of awk script.
-        However, incremental improvements to <code>make</code> to handle additional demands
-        have tended to be less marvelous.
-    </p>
-    <p>
-        Feldman's make made liberal use of recursive macros
-        and special character sequences
-        to add features to the basic simple syntax.
-        This trend often continued in make derivatives to
-        the logical conclusion of drifting into incorporating
-        a scripting language made cryptic by its roots.
-        Incrementally developing a language starting from the
-        primitives of make tends to result in a language that
-        satisfies no one.
-    </p>
-    <p>
-        Instead of bolting on yet another peculiar language to the basic make syntax,
-        blud is built on a simple, efficient, widely-known
-        scripting language: Lua.
-        The basic Lua syntax is extended to include the very simple basic make
-        syntax for specifying dependencies.
-    </p>
-    <p>
-        Here is a simple blud script:
-        <pre>
+        <h2>Introduction</h2>
+            <p>
+                blud is a portable build utility that uses Lua as its
+                extension language.
+                It was created to spark joy for the author in a way that Gnu <code>make</code> and <code>cmake</code>
+                do not.
+                This document assumes basic familiarity with <code>make</code>
+                or any of its descendants.
+                Famliarity with Lua is helpful,
+                but familiarity with most any interpreted language that offers objects
+                is probably sufficient,
+                and free Lua tutorials abound.
+            </p>
+            <p>
+                Feldman's original <code>make</code> was a marvel of simplicity;
+                a simple syntax for describing a dependency graph
+                along with the actions required to rebuild missing
+                dependents.
+                One can
+                implement a basic version of it in a single page of awk script.
+            </p>
+            <p>
+                The syntactic challenge for any modern <code>make</code>, however,
+                is the <emph>build</emph>.
+                Programmers often want to create slightly different builds of
+                the same (or nearly the same) source files
+                (a Windows build, a Linux build, a release build, a debug build, etc.).
+                This is always possible in even the simplest <code>make</code>
+                by just duplicating and then adjusting the original
+                set of dependency graph rules but of course keeping
+                nearly duplicate rule sets in sync is verbose and error-prone.
+            </p>
+            <p>
+                
+
+                Feldman's make made liberal use of recursive macros
+                and special character sequences
+                to add features to the basic simple syntax.
+                This trend often continued in make derivatives to
+                the logical conclusion of drifting into incorporating
+                a scripting language made cryptic by its roots.
+                Incrementally developing a language starting from the
+                primitives of make tends to result in a language that
+                satisfies no one.
+            </p>
+            <p>
+                Instead of bolting on yet another peculiar language to the basic make syntax,
+                blud is built on a simple, efficient, widely-known
+                scripting language: Lua.
+                The basic Lua syntax is extended to include the very simple basic make
+                syntax for specifying dependencies.
+            </p>
+            <h2>Overview</h2>
+            <p>
+                Here is a simple blud script:
+                <pre>
 program: program.c
     cc -o program program.c
-        </pre>
-        As you can see it would also be valid input for make,
-        or even most utilities derived from make.
-    </p>
-    <p>
-        Assuming this script was in a file called <code>blud</code>,
-        executing the blud command would first rewrite this as Lua code
-        into a file named <code>blud.lua</code> and then execute that code.
-        Here roughly what <code>blud.lua</code> might look like in this case:
-        <pre>
+                </pre>
+                As you can see it would also be valid input for make,
+                or even most utilities derived from make.
+            </p>
+            <p>
+                Assuming this script was in a file called <code>blud</code>,
+                executing the blud command would first rewrite this as Lua code
+                into a file named <code>blud.lua</code> and then execute that code.
+                Here roughly what <code>blud.lua</code> might look like in this case:
+                <pre>
 -- DO NOT MODIFY: Generated by blud.
 table.insert(OBJECTS["program"].PREREQUISITES, "program.c");
 table.insert(OBJECTS["program"].ACTIONS, "cc -o program program.c");
 BUILD.default = "program"
 build()
-        </pre>
-    </p>
-    <p>
-        Now suppose we want to have two different builds for our program:
-        one will include debugging symbols and the other will not.
-        <pre>
+                </pre>
+            </p>
+            <p>
+                Now suppose we want to have two different builds for our program:
+                one will include debugging symbols and the other will not.
+                <pre>
 debug : debug/program
 release : release/program
 
@@ -82,60 +134,60 @@ debug/program : program.c
     cc -g -o debug/program program.c
 release/program : program.c
     cc -o release/program program.c
-        </pre>
-        Again, this is a valid specification for <code>make</code> or almost
-        any <code>make</code> derivative.
-        However, the rules have begun to become repetitive and have begun
-        to obscure the fact that the debug and release builds are identical
-        except for the location they store their object files and the
-        compiler flags they use.
-    </p>
-    <p>
-        This is the fundamental syntactic challenge of any <code>make</code>
-        utility: allowing arbitrary build customizations while
-        succinctly capturing their similarities.
-    </p>
-    <svg width="300" height="100" xmlns="http://www.w3.org/2000/svg">
-        <!-- Parameters -->
-        <defs>
-            <style>
-             .box { fill: white; stroke: black; stroke-width: 2; }
-             .label { font-family: Arial, sans-serif; font-size: 16px; text-anchor: middle; }
-             .arrow { stroke: black; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
-            </style>
-        </defs>
-        
-        <!-- Arrowhead definition -->
-        <marker id="arrowhead" markerWidth="10" markerHeight="7" 
-                refX="0" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="black"/>
-        </marker>
-        
-        <!-- Variables -->
-        <g id="boxA" transform="translate(10, 20)">
-            <rect width="80" height="50" class="box"/>
-            <text x="40" y="35" class="label">A</text>
-        </g>
-        
-        <g id="boxB" transform="translate(210, 20)">
-            <rect width="80" height="50" class="box"/>
-            <text x="40" y="35" class="label">B</text>
-        </g>
-        
-        <!-- Arrow -->
-        <line x1="90" y1="45" x2="210" y2="45" class="arrow"/>
-    </svg>
+                </pre>
+                Again, this is a valid specification for <code>make</code> or almost
+                any <code>make</code> derivative.
+                However, the rules have begun to become repetitive and have begun
+                to obscure the fact that the debug and release builds are identical
+                except for the location they store their object files and the
+                compiler flags they use.
+            </p>
+            <p>
+                This is the fundamental syntactic challenge of any <code>make</code>
+                utility: allowing arbitrary build customizations while
+                succinctly capturing their similarities.
+            </p>
+            <svg width="300" height="100" xmlns="http://www.w3.org/2000/svg">
+                <!-- Parameters -->
+                <defs>
+                    <style>
+                     .box { fill: white; stroke: black; stroke-width: 2; }
+                     .label { font-family: Arial, sans-serif; font-size: 16px; text-anchor: middle; }
+                     .arrow { stroke: black; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+                    </style>
+                </defs>
+                
+                <!-- Arrowhead definition -->
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                        refX="0" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="black"/>
+                </marker>
+                
+                <!-- Variables -->
+                <g id="boxA" transform="translate(10, 20)">
+                    <rect width="80" height="50" class="box"/>
+                    <text x="40" y="35" class="label">A</text>
+                </g>
+                
+                <g id="boxB" transform="translate(210, 20)">
+                    <rect width="80" height="50" class="box"/>
+                    <text x="40" y="35" class="label">B</text>
+                </g>
+                
+                <!-- Arrow -->
+                <line x1="90" y1="45" x2="210" y2="45" class="arrow"/>
+            </svg>
 
-<p>
+            <p>
 
-        Note that make always contained a concept of <emph>implicit directory</emph>.
-        There is no mention in the script of where program.c resides;
-        it is assumed to reside in the <q>current</q> directory,
-        that is, the directory the user was in when they ran blud.
-        This idea leads to the first extension blud adds to basic make.
-    </p>
-    <p>
-        
-    </p>
+                Note that make always contained a concept of <emph>implicit directory</emph>.
+                There is no mention in the script of where program.c resides;
+                it is assumed to reside in the <q>current</q> directory,
+                that is, the directory the user was in when they ran blud.
+                This idea leads to the first extension blud adds to basic make.
+            </p>
+            <p>
+                
+            </p>
     </div>
 </html>

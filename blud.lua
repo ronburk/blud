@@ -1,5 +1,6 @@
 -- blud.lua
 
+top_env = {}
 -- returns generator that lets you read/peek one line at a time from the file
 function buffered_line_io(file)
     local current_line = file:read("*l")  -- Read the first line to prime the generator
@@ -78,6 +79,7 @@ function process_make_rule(line)
     -- Check and split the target part into paths
     if target_part ~= "" then
         for target in target_part:gmatch("%S+") do
+            top_env.PRIMARY_TARGET = top_env.PRIMARY_TARGET or target
             table.insert(targets, target)
         end
     end
@@ -115,5 +117,20 @@ if not file then
 end
 preprocess(buffered_line_io(file))
 file:close()
+
+function build(target)
+    print("build " .. target)
+end
+local x
+x
+    :foo()
+
+
+if top_env.PRIMARY_TARGET == nil then
+    print("No target given to build")
+else
+    build(top_env.PRIMARY_TARGET)
+end
+
 
 
