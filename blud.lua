@@ -121,10 +121,7 @@ file:close()
 function build(target)
     print("build " .. target)
 end
-local x
-x
-    :foo()
-
+x = "x" y = "y"
 
 if top_env.PRIMARY_TARGET == nil then
     print("No target given to build")
