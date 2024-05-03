@@ -6,7 +6,7 @@
          body {
              font-family: Arial, sans-serif; /* Sets a readable typeface */
              color: #333; /* Dark gray for text for better readability */
-             line-height: 1.6; /* Improves line spacing throughout the body */
+             line-height: 1.5; /* Improves line spacing throughout the body */
          }
 
          h1 {
@@ -43,6 +43,7 @@
              margin: 0 auto;   /* Centers the text block horizontally */
              padding: 1rem;    /* Adds padding inside the content area */
          }
+         pre { font-size: 1.3em; line-height: 1.4;}
         </style>
     </head>
     <body>
@@ -52,16 +53,136 @@
             <p>
                 blud is a portable build utility that uses Lua as its
                 extension language.
-                It was created to spark joy for the author in a way that Gnu <code>make</code> and <code>cmake</code>
-                do not.
-                This document assumes basic familiarity with <code>make</code>
-                or any of its descendants.
-                Famliarity with Lua is helpful,
-                but familiarity with most any interpreted language that offers objects
-                is probably sufficient,
-                and free Lua tutorials abound.
+                It addresses two drawbacks of most
+                <code>make</code>-derived designs
+                (such as GNU <code>make</code>).
             </p>
             <p>
+                First, it adds a second implicit directory to the
+                <q>current working directory</q> that all such
+                utilities rely on.
+                The <q>output working directory</q>
+                makes it simple to allow more than one build,
+                each in its own separate directory
+                (e.g., debug and release builds).
+            </p>
+            <p>
+                Second, rather than add features by trying to extend
+                the simple macro language of original <code>make</code>,
+                beneath the covers blud is essentially a preprocessor
+                for Lua, a widely-known and well-documented scripting language.
+                This means that when a task arises that is not easily
+                handled by conventional <code>make</code> rules,
+                the user can always switch to writing explicit Lua
+                code to handle most any task imaginable.
+            </p>
+            <p>
+                This documentation assumes you are familiar with most any
+                build utility that descends from <code>make</code>.
+                It also assumes you either have a passing familiarity
+                with Lua or are willing to go watch a quick tutorial.
+                If you know JavaScript, you can view Lua as a similar
+                but vastly simpler language.
+            </p>
+            <h2>Overview</h2>
+            <p>
+                Although you can write simple <code>make</code> scripts
+                for blud and never actually use any Lua code,
+                if you understand how <code>make</code> directives
+                are integrated with Lua,
+                you will be able to switch to writing Lua whenever
+                it is more convenient or required to do something
+                out of the ordinary.
+            </p>
+
+            <p>
+                Consider the following simple blud script:
+                <pre>
+program: program.c utility.c
+    cc -o program program.c utility.c
+                </pre>
+                The basic idea of any <code>make</code> is to construct
+                a dependency graph from such rules:
+
+                <svg xmlns='http://www.w3.org/2000/svg' class="pikchr" width="385" height="198" viewBox="0 0 428.4 220.32">
+                    <ellipse cx="128.16" cy="38.16" rx="54" ry="36"  style="fill:none;stroke-width:2.16;stroke:rgb(0,0,0);" />
+                    <text x="128.16" y="38.16" text-anchor="middle" fill="rgb(0,0,0)" dominant-baseline="central">program</text>
+                    <text x="308.16" y="38.16" text-anchor="middle" font-family="monospace" fill="rgb(0,0,0)" dominant-baseline="central">cc -o program.c utility.c</text>
+                    <polygon points="56.16,146.16 61.2512,134.959 67.3606,141.069" style="fill:rgb(0,0,0)"/>
+                    <path d="M128.16,74.16L60.2329,142.087"  style="fill:none;stroke-width:2.16;stroke:rgb(0,0,0);" />
+                    <ellipse cx="56.16" cy="182.16" rx="54" ry="36"  style="fill:none;stroke-width:2.16;stroke:rgb(0,0,0);" />
+                    <text x="56.16" y="182.16" text-anchor="middle" fill="rgb(0,0,0)" dominant-baseline="central">program.c</text>
+                    <polygon points="200.16,146.16 188.959,141.069 195.069,134.959" style="fill:rgb(0,0,0)"/>
+                    <path d="M128.16,74.16L196.087,142.087"  style="fill:none;stroke-width:2.16;stroke:rgb(0,0,0);" />
+                    <ellipse cx="200.16" cy="182.16" rx="54" ry="36"  style="fill:none;stroke-width:2.16;stroke:rgb(0,0,0);" />
+                    <text x="200.16" y="182.16" text-anchor="middle" fill="rgb(0,0,0)" dominant-baseline="central">utility.c</text>
+                </svg>
+                <p>
+                    To build a file named in the rules, such as <code>program</code>,
+                    any <code>make</code> utility first recursively checks all its children in
+                    the graph.
+                    Each file named in the rules can have actions associated with it
+                    that are presumed to update that file.
+                    For each child that is newer than its parent,
+                    <code>make</code> executes its associated actions to update it.
+                    Thus, the basic two phases of a <code>make</code> utility are:
+                    build a dependency graph, then traverse it checking file timestamps
+                    to execute actions to update that file if necessary.
+                </p>
+                <p>
+                    blud allows you to impose your own custom Lua code into nearly
+                    every aspect of these two phases: build a graph and traverse the graph.
+                    Your particular build may have no need for customizing blud,
+                    but understanding its structure in some detail can make it
+                    easier to understand why things work the way they do.
+                </p>
+                <h3>Terminology</h3>
+                <p>
+                    In the blud script above, the only rule involves three files:
+                    <code>program</code>, <code>program.c</code>, and <code>utility.c</code>.
+                    Files on the left side of the colon (<code>program</code>) are called
+                    <strong>targets</strong>, while files appearing on the right side
+                    of the colon
+                    (<code>program.c</code> and <code>utility.c</code>) are called
+                    <strong>prerequisites</strong>.
+                </p>
+                <p>
+                    The term <strong>atom</strong> refers generically to something
+                    that appears on either the left or right side of a rule.
+                    The term is a useful reminder that these are not always
+                    files.
+                    For example, sometimes it is useful to have an atom that simply
+                    serves as a label:
+                    <pre>
+clean:
+    rm program.o utility.o program
+                    </pre>
+                    Assuming no file named <code>clean</code> actually exists,
+                    this rule means that <code>blud clean</code> will simply
+                    execute a command that removes the products that may have
+                    been created by running <code>blud program</code>.
+                    When a rule has no prerequisites, the targets are presumed
+                    to need updating, so their actions are executed.
+                </p>
+                <p>
+                    The term <strong>atom</strong> also helps remind us that
+                    the names in a rule are usually not precisely files.
+                    For example, the name <code>program.c</code> only uniquely
+                    identifies a file when it is combined with the implicit
+                    current working directory.
+                    Thus there is a step in which <code>blud</code> must
+                    uniquely associate the atoms in a rule with files.
+                    We call this step <strong>binding</strong>
+                    and after an atom is <strong>bound</strong> it
+                    has a <strong>bound name</strong>,
+                    which is a precise path.
+                </p>
+                <p>
+                    
+                </p>
+
+                <h2>...</h2>
+                <p>
                 Feldman's original <code>make</code> was a marvel of simplicity;
                 a simple syntax for describing a dependency graph
                 along with the actions required to rebuild missing
@@ -71,7 +192,7 @@
             </p>
             <p>
                 The syntactic challenge for any modern <code>make</code>, however,
-                is the <emph>build</emph>.
+                is the <strong>build</strong>.
                 Programmers often want to create slightly different builds of
                 the same (or nearly the same) source files
                 (a Windows build, a Linux build, a release build, a debug build, etc.).
@@ -180,7 +301,7 @@ release/program : program.c
 
             <p>
 
-                Note that make always contained a concept of <emph>implicit directory</emph>.
+                Note that make always contained a concept of <strong>implicit directory</strong>.
                 There is no mention in the script of where program.c resides;
                 it is assumed to reside in the <q>current</q> directory,
                 that is, the directory the user was in when they ran blud.

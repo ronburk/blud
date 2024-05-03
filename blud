@@ -1,6 +1,10 @@
+-- the basics: assign an attribute to an atom:
+
+name:
+
 -- let's say that Lua inside make rules is identified by {}
 
-{.PHONY = true} : a b c d
+{this.PHONY = true} : a b c d
 
 -- assign to a target attribute
 debug:virtual={true}
