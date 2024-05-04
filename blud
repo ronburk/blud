@@ -1,6 +1,17 @@
 -- the basics: assign an attribute to an atom:
 
-name:
+name: .BINARYATOM .ALSO
+.BINARYATOM: a b c d
+
+-- the basics: assign an attribute value to an atom
+
+name: .ONLYONEATOM = some stuff in make style
+name: .ONLYONEATOM = { true --[[ final expression of Lua block ]] }
+a b c : .ONLYONEATOM = { false }
+
+-- the basics assign a variable, which is always a string
+
+name : VAR = a b c d
 
 -- let's say that Lua inside make rules is identified by {}
 

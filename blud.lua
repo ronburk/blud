@@ -1,9 +1,26 @@
 -- blud.lua
 
 top_env = {}
+blud_module_code = [[
+blud = {}
+blud.TARGETS = {}
+blud.add_raw_dependents = function(target_name, string_list)
+    local target = blud.TARGETS[target_name]
+    if(target == nil)
+        blud.TARGETS[target_name] = target = {}
+    raw_table = target.RAW_DEPENDENTS or {}
+    for _, dep in ipairs(string_list) do
+        table.insert(raw_table, dep)
+    end
+end
+]]
+
+blud_user_code = ""
+
+
 -- returns generator that lets you read/peek one line at a time from the file
 function buffered_line_io(file)
-    local current_line = file:read("*l")  -- Read the first line to prime the generator
+    local current_line; --  = file:read("*l")  -- Read the first line to prime the generator
     local has_peeked   = false
     local peek_line    = nil
 
@@ -42,7 +59,7 @@ function calculate_indent(line)
             break
         end
     end
-    print("indent of '" .. line .. "' = " .. indent);
+--    print("indent of '" .. line .. "' = " .. indent);
     return indent
 end
 
@@ -61,7 +78,7 @@ function preprocess(get_line)
                 print(">>>" .. get_line(false))
             end
         else
-            print(line)  -- Output the line as is.
+            blud_user_code = blud_user_code .. line .. '\n'
         end
     end
 end
@@ -91,10 +108,17 @@ function process_make_rule(line)
         end
     end
 
-    for _, t in ipairs(targets) do
-        
+    local code = [[    blud.add_raw_dependents("{target}", [{atom_list}])\n ]]
+
+    for _, target in ipairs(targets) do
+        local atom_list = ""
+        for _, prequisite in ipairs(prerequisites) do
+            atom_list = atom_list .. "," .. prerequisite
+        end
+        code = code:gsub("{target}", target);
+        code = code:gsub("{atom_list}", atom_list);
+        blud_user_code = blud_user_code .. code
     end
-    
 
     -- Debug: Output the results
     print("Targets:")
@@ -108,13 +132,15 @@ function process_make_rule(line)
     end
 end
 
--- Call the function to process the file.
+--[[ Call the function to process the file.
 local bludfile = "blud"
 local file     = io.open(bludfile, "r")  -- Open the file for reading.
 if not file then
     print("Failed to open file: " .. filePath)
     return
 end
+]]
+file = io.stdin
 preprocess(buffered_line_io(file))
 file:close()
 
@@ -129,5 +155,7 @@ else
     build(top_env.PRIMARY_TARGET)
 end
 
-
+print("-----------------------")
+print(blud_module_code)
+print(blud_user_code);
 
