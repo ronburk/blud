@@ -4,13 +4,16 @@ top_env = {}
 blud_module_code = [[
 blud = {}
 blud.TARGETS = {}
-blud.add_raw_dependents = function(target_name, string_list)
-    local target = blud.TARGETS[target_name]
-    if(target == nil)
-        blud.TARGETS[target_name] = target = {}
-    raw_table = target.RAW_DEPENDENTS or {}
-    for _, dep in ipairs(string_list) do
-        table.insert(raw_table, dep)
+blud.add_raw_dependents = function(targets, string_list)
+    for _, target_name in ipairs(targets) do
+        local target = blud.TARGETS[target_name]
+        if(target == nil)
+            blud.TARGETS[target_name] = target = {}
+        local raw_dependents = target.RAW_DEPENDENTS or {}
+        for _, dep in ipairs(string_list) do
+            table.insert(raw_dependents, dep)
+        end
+        target.RAW_DEPENDENTS = raw_dependents
     end
 end
 ]]
@@ -63,20 +66,35 @@ function calculate_indent(line)
     return indent
 end
 
+function atoms_to_string(atoms)
+    local result = ""
+    for _, name in ipairs(atoms) do
+        if result ~= "" then result = result .. ", " end
+        result = result .. name
+    end
+    return result
+end
+
 function preprocess(get_line)
     local previous_indent   = 0
     local makeRulePattern = "^%s*(%S*%s*):.*$"
 
-    while true do
-        --    for line in file:lines() do
+    while true do     -- for line in file:lines() do
         local line = get_line(false)
         if line == nil then break end
         if line:match(makeRulePattern) then
-            process_make_rule(line)  -- Pass to the processing function if it looks like a 'make' rule.
+            blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
+            local targets, prerequisites = process_make_rule(line) 
             local indent = calculate_indent(line)
+            local recipe = ""
             while calculate_indent(get_line(true)) > indent do
-                print(">>>" .. get_line(false))
+                recipe = recipe .. get_line(false) .. "\n"
             end
+            if recipe ~= "" then
+                local code = "    blud.add_recipe(targets,\n[[\n" .. recipe .. "]])\n"
+                blud_user_code = blud_user_code .. code
+            end                
+            blud_user_code = blud_user_code .. "end "
         else
             blud_user_code = blud_user_code .. line .. '\n'
         end
@@ -94,21 +112,24 @@ function process_make_rule(line)
     local target_part, prerequisite_part = line:match("^%s*(.-)%s*:%s*(.*)")
 
     -- Check and split the target part into paths
-    if target_part ~= "" then
-        for target in target_part:gmatch("%S+") do
-            top_env.PRIMARY_TARGET = top_env.PRIMARY_TARGET or target
-            table.insert(targets, target)
-        end
+    blud_user_code = blud_user_code .. "    local targets = { "
+    for target in target_part:gmatch("%S+") do
+        top_env.PRIMARY_TARGET = top_env.PRIMARY_TARGET or target
+        table.insert(targets, target)
+        blud_user_code = blud_user_code .. '"' .. target .. '"'
     end
+    blud_user_code = blud_user_code .. " }\n"
 
     -- Check and split the prerequisite part into paths
-    if prerequisite_part ~= "" then
-        for prerequisite in prerequisite_part:gmatch("%S+") do
-            table.insert(prerequisites, prerequisite)
-        end
+    blud_user_code = blud_user_code .. "    local prerequisites = { "
+    for prerequisite in prerequisite_part:gmatch("%S+") do
+        table.insert(prerequisites, prerequisite)
+        blud_user_code = blud_user_code .. '"' .. prerequisite .. '"'
     end
+    blud_user_code = blud_user_code .. " }\n"
 
-    local code = [[    blud.add_raw_dependents("{target}", [{atom_list}])\n ]]
+    local code = [[    blud.add_raw_dependents(targets, prerequisites)
+]]
 
     for _, target in ipairs(targets) do
         local atom_list = ""
@@ -120,16 +141,7 @@ function process_make_rule(line)
         blud_user_code = blud_user_code .. code
     end
 
-    -- Debug: Output the results
-    print("Targets:")
-    for _, t in ipairs(targets) do
-        print(t)
-    end
-
-    print("Prerequisites:")
-    for _, p in ipairs(prerequisites) do
-        print(p)
-    end
+    return targets, prerequisites
 end
 
 --[[ Call the function to process the file.
