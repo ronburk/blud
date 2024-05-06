@@ -1,0 +1,11 @@
+scale = .9
+#ellipsewid *= .75
+#ellipseht *= .75
+G_top: ellipse "program"
+right; move
+box dotted "cc -o program.c utility.c" mono
+arrow from G_top.s down left
+G_prog_c: ellipse "program.c" with .n at previous.end
+#move to G_top
+arrow from G_top.s down right
+G_util_c: ellipse "utility.c" with .n at previous.end

@@ -2,18 +2,75 @@
 
 top_env = {}
 blud_module_code = [[
-blud = {}
+blud         = {}
+blud.current_time = os.time()
 blud.TARGETS = {}
+blud.get_fs_timestamp = function (filepath)
+    local command = string.format("stat -c %%Y '%s' 2>/dev/null", filepath)
+    local pipe = io.popen(command, "r")
+    local output = pipe:read("*a")
+    pipe:close()
+
+    -- Convert the timestamp to a number
+    local timestamp = tonumber(output)
+    if not timestamp then
+        print("Failed to get timestamp for file: " .. filepath)
+        timestamp = 0
+    end
+    return timestamp
+end
+
 blud.add_raw_dependents = function(targets, string_list)
     for _, target_name in ipairs(targets) do
         local target = blud.TARGETS[target_name]
-        if(target == nil)
-            blud.TARGETS[target_name] = target = {}
+        if target == nil then
+            target = {}
+            blud.TARGETS[target_name] = target
+        end
         local raw_dependents = target.RAW_DEPENDENTS or {}
         for _, dep in ipairs(string_list) do
             table.insert(raw_dependents, dep)
         end
         target.RAW_DEPENDENTS = raw_dependents
+    end
+end
+blud.add_recipe = function(targets, recipe)
+    assert(targets)
+    assert(recipe)
+    print(" add recipe " .. recipe)
+    for _, target_name in ipairs(targets) do
+        local target = blud.TARGETS[target_name]
+        assert(target ~= nil)
+        print(" add recipe " .. recipe .. "\nto target: " .. target_name)
+        target.RECIPE = recipe
+    end
+end
+blud.build = function(atom_name)
+    print("build " .. atom_name)
+    local timestamp = blud.get_fs_timestamp(atom_name)
+    print("timestamp is " .. timestamp)
+    local atom = blud.TARGETS[atom_name]
+    if atom == nil then error("Unknown target: " .. atom_name) end
+    if timestamp < blud.current_time then
+        print(" execute recipe " .. atom.RECIPE)
+        if atom.RECIPE then
+            status, exit_code = os.execute(atom.RECIPE)
+            assert(status)
+            if exit_code then
+                error("command failed: " .. atom.RECIPE)
+            end
+        end
+    end
+end
+blud.run_build = function()
+        print("Type of blud.build:", type(blud.build)) 
+    local targets = {}
+    print("blud " .. top_env.PRIMARY_TARGET)
+    table.insert(targets, top_env.PRIMARY_TARGET)
+    print("before for: Type of blud.build:", type(blud.build)) 
+    for _, target in ipairs(targets) do
+        print("Type of blud.build:", type(blud.build)) 
+        blud.build(target)
     end
 end
 ]]
@@ -144,30 +201,51 @@ function process_make_rule(line)
     return targets, prerequisites
 end
 
---[[ Call the function to process the file.
-local bludfile = "blud"
-local file     = io.open(bludfile, "r")  -- Open the file for reading.
-if not file then
-    print("Failed to open file: " .. filePath)
-    return
-end
-]]
 file = io.stdin
 preprocess(buffered_line_io(file))
 file:close()
 
-function build(target)
-    print("build " .. target)
-end
-x = "x" y = "y"
+
 
 if top_env.PRIMARY_TARGET == nil then
     print("No target given to build")
-else
-    build(top_env.PRIMARY_TARGET)
 end
 
-print("-----------------------")
+blud_user_code = blud_user_code .. [[
+
+blud.run_build()
+]]
+
+print("-------")
 print(blud_module_code)
 print(blud_user_code);
+
+function report_error(error_message, code)
+    print("Error ", error_message)
+   -- Extracting the line number from the error message
+    local lineNumber = tonumber(error_message:match(":(%d+):"))
+    if lineNumber then
+        -- Splitting the code into lines and printing the problematic line
+        local lines = {}
+        for line in code:gmatch("([^\n]*)\n?") do
+            table.insert(lines, line)
+        end
+        print("Error at line", lineNumber, ":", lines[lineNumber])
+    end
+
+end
+
+
+local program = blud_module_code .. blud_user_code
+local func, err = loadstring(program)
+print("back from loadstring")
+if func then
+    status, err = pcall(func)
+    if not status then
+        report_error(err, program);
+    end
+else
+    report_error(err, program);
+end
+
 
