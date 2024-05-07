@@ -45,11 +45,11 @@ debug : {./debug} program { env.CFLAGS = env.CLFAGS .. " -g" }
 
 
 -- same as:
-debug : PRODUCT_DIR = ./debug
+debug : OWD = ./debug
 debug : CFLAGS += -g
 debug : program
 -- same as:
-debug : {PRODUCT_DIR = ./debug} {CFLAGS += -g} program
+debug : {OWD = ./debug} {CFLAGS += -g} program
 
 
 debug:.CC.DEBUG: -g

@@ -1,8 +1,10 @@
 -- blud.lua
+blud_primary_target_name = nil
 
-top_env = {}
 blud_module_code = [[
-blud         = {}
+blud              = {}
+blud.public_env   = {}
+blud.private_env  = { __index = blud.public_env }
 blud.current_time = os.time()
 blud.TARGETS = {}
 blud.get_fs_timestamp = function (filepath)
@@ -62,11 +64,10 @@ blud.build = function(atom_name)
         end
     end
 end
-blud.run_build = function()
-        print("Type of blud.build:", type(blud.build)) 
+blud.run_build = function(primary_target)
     local targets = {}
-    print("blud " .. top_env.PRIMARY_TARGET)
-    table.insert(targets, top_env.PRIMARY_TARGET)
+    print("blud " .. primary_target)
+    table.insert(targets, primary_target)
     print("before for: Type of blud.build:", type(blud.build)) 
     for _, target in ipairs(targets) do
         print("Type of blud.build:", type(blud.build)) 
@@ -158,11 +159,8 @@ function preprocess(get_line)
     end
 end
 
--- Example function to simulate processing 'make' rules.
-
 function process_make_rule(line)
-    -- Initialize arrays
-    local targets = {}
+    local targets       = {}
     local prerequisites = {}
 
     -- Split the line at the colon
@@ -171,7 +169,7 @@ function process_make_rule(line)
     -- Check and split the target part into paths
     blud_user_code = blud_user_code .. "    local targets = { "
     for target in target_part:gmatch("%S+") do
-        top_env.PRIMARY_TARGET = top_env.PRIMARY_TARGET or target
+        blud_primary_target_name = blud_primary_target_name or target
         table.insert(targets, target)
         blud_user_code = blud_user_code .. '"' .. target .. '"'
     end
@@ -207,19 +205,16 @@ file:close()
 
 
 
-if top_env.PRIMARY_TARGET == nil then
+if not blud_primary_target_name  then
     print("No target given to build")
 end
 
-blud_user_code = blud_user_code .. [[
+blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
-blud.run_build()
-]]
-
-print("-------")
 print(blud_module_code)
 print(blud_user_code);
 
+--[[
 function report_error(error_message, code)
     print("Error ", error_message)
    -- Extracting the line number from the error message
@@ -247,5 +242,5 @@ if func then
 else
     report_error(err, program);
 end
-
+]]
 
