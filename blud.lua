@@ -199,6 +199,12 @@ function process_make_rule(line)
     return targets, prerequisites
 end
 
+local file = io.open("blud", "r")
+assert(file)
+local blud_file_text = file:read("*a")
+file:close()
+
+
 file = io.stdin
 preprocess(buffered_line_io(file))
 file:close()
@@ -211,8 +217,45 @@ end
 
 blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
+
 print(blud_module_code)
 print(blud_user_code);
+
+--[[
+function lines_length(input, line_number)
+    if line_number >= 1 then
+        local current_line = 1
+        local position = 1
+
+        -- Repeat finding new lines until the desired line
+        while true do
+            if current_line == line_number then
+                return position
+            end
+            local start_pos, end_pos = string.find(input, "\n", position)
+            if not start_pos then
+                break  -- No more newlines found
+            end
+            current_line = current_line + 1
+            position     = end_pos + 1
+        end
+    end
+    return nil  -- Line number does not exist in the input
+end
+
+
+function parse_blud_file_text(source_text)
+    local lua_text  = ""
+    local func, error_message = loadstring(source_text)
+    local line, message = error_message:match(":(%d+):%s*(.*)")
+    if error_message then
+        print("line " .. line .. ": " .. message)
+        assert(false)
+    end
+end
+parse_blud_file_text(blud_file_text)
+assert(false)
+]]
 
 --[[
 function report_error(error_message, code)

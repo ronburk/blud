@@ -44,13 +44,122 @@
              padding: 1rem;    /* Adds padding inside the content area */
          }
          pre { font-size: 1.3em; line-height: 1.4;}
+         pre:after {
+             content: ""; /* Ensure it's empty */
+             display: block;
+             height: 0;
+             line-height: 0;
+         }
         </style>
     </head>
     <body>
     </body>
     <div class="content">
         <h2>Introduction</h2>
-            <p>
+        <p>
+            In the nearly half-century since Feldman's
+            <code>make</code> utility was described in
+            <i>Software: Practice and Experience</i>,
+            innumerable tools for software configuration management
+            have emerged.
+            Newer tools tend to be complex,
+            often targetting large projects that make up a minority of use cases.
+            Older but still maintained tools such as GNU <code>make</code>
+            that should be more appropriate for the majority of
+            projects that are of modest size
+            have failed to adapt to modern practices,
+            such as the need for multiple builds into multiple output directories.
+        </p>
+        <p>
+            blud is a simple modernization of the original <code>make</code>
+            utility that focuses on two design goals:
+            the most common tasks should be trivial, and less common tasks
+            should be possible using a simple, widely-known, well-documented
+            programming language: Lua.
+        </p>
+        <h2>Quick Look</h2>
+        <p>
+            Without stopping to explain the syntax,
+            here is a simple blud script that can work for most any
+            beginning-stage C programming project:
+            <pre>
+myprog:: *.c
+            </pre>
+            It says that <code>myprog</code> is an executable that
+            should be built by compiling all of the C files in the current directory.
+            The <code>::</code> operator allows rules to refer to source files
+            rather than object files; this is often easier than
+            the traditional <code>:</code> operator
+            (also supported, of course)
+            that refers to object files.
+        </p>
+        <p>
+            Unlike the days when <code>make</code> was invented,
+            modern programmers often want to store the products of their
+            software builds in a separate directory from the source code.
+            <code>blud</code> addresses this by adding a new implicit directory
+            to the <q>current working directory</q> that most build
+            utilities implicitly rely on: the <q>output working directory.</q>
+            Here, the previous <code>blud</code> script is revised to store
+            all its automatically generated files in the <code>./output</code>
+            directory:
+            <pre>
+OWD = ./output
+myprog :: *.c
+            </pre>
+            <code>OWD</code> is a <code>blud</code> variable that specifies
+            where the products of building your software reside,
+            much like the current working directory implicitly specifies
+            where source files are to be found.
+            As usual with <code>make</code>-style utilities,
+            you could instead (or in addition, to override)
+            specify the value of the <code>OWD</code>
+            variable on the blud command line:
+            <code>blud OWD=./output</code>
+        </p>
+        <p>
+            Programmers also often desire to regularly build the
+            same project in more than one way.
+            For example,
+            they may want to create a <q>debug</q> build that contains
+            symbol tables to ease debugging,
+            alongside a <q>release</q> build without such symbols to
+            make the executable smaller.
+            <pre>
+debug   : OWD = ./debug
+debug   : CFLAGS = -g
+debug   : myprog
+release : OWD = ./release
+release : myprog
+myprog :: *.c
+            </pre>
+            Given this script, typing <code>blud debug</code> first sets the
+            <code>OWD</code> variable to the appropriate subdirectory,
+            sets an appropriate compiler flag for generating symbolic tables,
+            then
+            (because <code>debug : myprog</code> says that the
+            target named <q>debug</q> depends on the target named <q>myprog</q>)
+            builds <code>myprog</code>.
+            <code>blud release</code> does the same but for the <code>./release</code>
+            subdirectory and (the default) without symbol tables.
+        </p>
+        <p>
+            However, because this is such a common case
+            and <code>blud</code> is designed to make common
+            tasks trivial,
+            <code>blud</code> offers a simplified syntax:
+            <pre>
+{debug}   : myprog CFLAGS = -g
+{release} : myprog
+myprog   :: *.c
+            </pre>
+            The <code>{directory-name}</code> syntax for a target
+            creates the directory if it does not exist
+            (a detail not handled by the previous more elaborate script)
+            and sets the output working directory to that location.
+        </p>
+
+        <p>
                 blud is a portable build utility that uses Lua as its
                 extension language.
                 It addresses two drawbacks of most
@@ -180,8 +289,69 @@ clean:
                 <p>
                     
                 </p>
+                <h2>Invoking make-style Code from Lua</h2>
+                <p>
+                    blud allows you to mix Lua and make syntax somewhat freely.
+                    It uses a fairly simple set of rules to decide whether it
+                    is reading Lua code that will be passed through or blud
+                    directives that will be translated to Lua before being passed through.
+                    In general, the dollar sign (<q>$</q>) inside Lua code
+                    signals the preprocessor that what follows should be
+                    interpreted in the manner of a make-style script.
+                </p>
+                <p>
+                    First, any line starting with a non-whitespace character is
+                    examined to see if it <q>looks like</q> a make-style rule
+                    or variable assignment. If it does, it is translated to Lua code.
+                    Example:
+                    <pre>
+-- next line is legal Lua, but will be treated as make-style variable assignment
+CFLAGS = -g
+-- Simply indent to force the same line to be interpreted as Lua:
+    -- assign the opposite of Lua variable "g" to Lua variable "CFLAGS"
+    CFLAGS = -g
+-- some might prefer a more verbose difference in syntax:
+do
+    CFLAGS = -g  -- definitely Lua code, not a make-style assignment
+end
+                    </pre>
+                    Second, when a line <q>looks like</q> a make-style rule,
+                    blud will translate it to Lua code and attempt to gather
+                    any following lines that could be part of a recipe for that
+                    rule. These are any indented, non-blank lines that follow
+                    target/prerequisite line:
+                    <pre>
+program : foo.o
+    # next line is passed to shell
+    foo=7
 
-                <h2>...</h2>
+    echo "blank lines mean end of recipe, so this is erroneous Lua code!"
+                    </pre>
+                    Third, inside Lua code, any <q>$(...)</q> construct
+                    will turn into a string that contains what the corresponding
+                    make-style expression would produce:
+                    <pre>
+do
+    if  $(CFLAGS):find("-g") then
+        print("-g already part of CFLAGS")
+  -- ...
+end
+                    </pre>
+                    Finally, Lua code can also contain complete
+                    make-style rules and recipes,
+                    by preceding a line with a dollar sign
+                    and whitespace:
+                    <pre>
+if $(OS) == "Windows" then
+    -- handle special Windows helper utility
+    $ winhelper.exe : winhelper.o
+    $     cl $< /o $@
+end    
+                    </pre>
+                </p>
+                <h2>Invoking Lua Code from make-style Directives
+                <p>
+                    <h2>...</h2>
                 <p>
                 Feldman's original <code>make</code> was a marvel of simplicity;
                 a simple syntax for describing a dependency graph

@@ -52,6 +52,8 @@ debug : program
 debug : {OWD = ./debug} {CFLAGS += -g} program
 
 
+
+
 debug:.CC.DEBUG: -g
 
 
@@ -70,3 +72,23 @@ end
 
 program: program.c
     cc -o program program.c
+--------
+-- I want the OWD to be the CWD during shell
+{debug} : program
+program : *.c
+    gcc $> -o $<
+
+
+
+
+--------------
+{debug} : program
+-- same as:
+debug {
+    blud.mkdir("./debug")
+    
+}
+
+-- how to do conditionals
+if $(willexpand to string) == "foob" then
+    $ CFLAGS = -g    
