@@ -1,0 +1,10 @@
+-- test0002
+--
+-- .AFTER is useful for creating tests, so verify it works
+
+all: success
+    rm -f test0002.out
+
+.AFTER: success
+success:
+    touch test0002.out
