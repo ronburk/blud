@@ -39,22 +39,29 @@ end
 blud.add_recipe = function(targets, recipe)
     assert(targets)
     assert(recipe)
-    print(" add recipe " .. recipe)
+--    print(" add recipe " .. recipe)
     for _, target_name in ipairs(targets) do
         local target = blud.TARGETS[target_name]
         assert(target ~= nil)
-        print(" add recipe " .. recipe .. "\nto target: " .. target_name)
+--        print(" add recipe " .. recipe .. "\nto target: " .. target_name)
         target.RECIPE = recipe
     end
 end
 blud.build = function(atom_name)
     print("build " .. atom_name)
-    local timestamp = blud.get_fs_timestamp(atom_name)
-    print("timestamp is " .. timestamp)
     local atom = blud.TARGETS[atom_name]
     if atom == nil then error("Unknown target: " .. atom_name) end
+    local prerequisites = atom.prerequisites;
+    if prerequisites then
+        for _, prerequisite in ipairs(prerequisites) do
+            bind.build(prerequisite)
+        end
+    end
+
+    local timestamp = blud.get_fs_timestamp(atom_name)
+    print("timestamp is " .. timestamp)
     if timestamp < blud.current_time then
-        print(" execute recipe " .. atom.RECIPE)
+--        print(" execute recipe " .. atom.RECIPE)
         if atom.RECIPE then
             status, exit_code = os.execute(atom.RECIPE)
             assert(status)
@@ -66,11 +73,10 @@ blud.build = function(atom_name)
 end
 blud.run_build = function(primary_target)
     local targets = {}
-    print("blud " .. primary_target)
+--    print("blud " .. primary_target)
     table.insert(targets, primary_target)
-    print("before for: Type of blud.build:", type(blud.build)) 
+--    print("before for: Type of blud.build:", type(blud.build)) 
     for _, target in ipairs(targets) do
-        print("Type of blud.build:", type(blud.build)) 
         blud.build(target)
     end
 end
@@ -188,7 +194,7 @@ function process_make_rule(line)
 
     for _, target in ipairs(targets) do
         local atom_list = ""
-        for _, prequisite in ipairs(prerequisites) do
+        for _, prerequisite in ipairs(prerequisites) do
             atom_list = atom_list .. "," .. prerequisite
         end
         code = code:gsub("{target}", target);
@@ -199,11 +205,12 @@ function process_make_rule(line)
     return targets, prerequisites
 end
 
+--[[
 local file = io.open("blud", "r")
 assert(file)
 local blud_file_text = file:read("*a")
 file:close()
-
+]]
 
 file = io.stdin
 preprocess(buffered_line_io(file))

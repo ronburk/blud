@@ -5,7 +5,7 @@ cd ./test || { echo "Failed to change directory to ./test"; exit 1; }
 run_test() {
     local test_name=$1
 
-    rm -f "${test_name}.out"
+    rm -f "${test_name}.out" "${test_name}.lua" 
 
     if ! lua ../blud.lua  < "${test_name}" > "${test_name}.lua" ; then
         echo "Test compile failed: ${test_name}.lua"
