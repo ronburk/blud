@@ -1,4 +1,8 @@
+-- variables are scoped, from the environment down to individual instances of atoms
+-- attributes are attached to atoms or rules
+
 -- the basics: assign an attribute to an atom:
+-- This is done by putting the attribute on the left
 
 name: .BINARYATOM .ALSO
 .BINARYATOM: a b c d
