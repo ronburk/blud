@@ -22,7 +22,7 @@ blud.get_fs_timestamp = function (filepath)
     return timestamp
 end
 
-blud.add_raw_dependents = function(targets, string_list)
+blud.add_rule = function(targets, prerequisites, action)
     for _, target_name in ipairs(targets) do
         local target = blud.TARGETS[target_name]
         if target == nil then
@@ -30,7 +30,7 @@ blud.add_raw_dependents = function(targets, string_list)
             blud.TARGETS[target_name] = target
         end
         local raw_dependents = target.RAW_DEPENDENTS or {}
-        for _, dep in ipairs(string_list) do
+        for _, dep in ipairs(prerequisites) do
             table.insert(raw_dependents, dep)
         end
         target.RAW_DEPENDENTS = raw_dependents
@@ -189,7 +189,7 @@ function process_make_rule(line)
     end
     blud_user_code = blud_user_code .. " }\n"
 
-    local code = [[    blud.add_raw_dependents(targets, prerequisites)
+    local code = [[    blud.add_dependents(targets, prerequisites)
 ]]
 
     for _, target in ipairs(targets) do

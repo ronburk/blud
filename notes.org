@@ -1,6 +1,72 @@
 * blud
+** distinguish special atoms from ordinary atoms.
+
+User wants to have a target named ".AFTER" even though that's the name
+of a special atom. Well, the user has to quote every instance of that.
+So the atom name will be ".AFTER". The bound name will remove the quotes.
+
+
 
 * log
+** <2024-05-13 Mon>
+
+More than one lhs atom is just a syntax trick, so:
+.ATOM : a b c d
+means we're injecting code into these atoms. While:
+a : b c d .ATOM
+means .ATOM will get passed the rule before it is added to the graph
+
+
+
+OK, really can't nail down graph when generating .lua code, because
+variables can change at runtime via command-line options. So, what
+is translation of:
+
+a $(b) : c $(d)
+
+do
+    targets, prerequisites = blud.parse_rule([=[a $(b) : c $(d)]=])
+end
+-----------------------------------------------------
+
+No, but wait. At least consider nailing down graph at compile time.
+Because, you could always fall back to Lua code at run time that
+does anything.
+
+OK, can't completely nail down graph at compile time because of
+wildcards, like "*.c". Don't want to give up that feature.
+
+-----------------------------------------------------
+
+
+
+.AFTER : a b c d e
+
+a) it marks that attribute TRUE in its dependency list.
+b) it asks to be called back when those atoms actions are to fire
+c) it pretends the actions were successful
+d) it asks to be called back when the parent finishes its action
+e) when it is called back, it fires its own action finally
+
+.BEFORE : a b c d e
+a) it marks that attribute TRUE in its dependency list.
+b) it asks to be called back when 
+
+
+
+
+** <2024-05-12 Sun>
+
+How about: primary way to inject Lua code into the process is via
+special atoms. A special atom can appear on the left or right side of
+a rule (though it may only make sense on one side or the other). The
+name of the atom essentially identifies a Lua object that overrides 1
+or more default behaviors of special atoms.  Function members of the
+object will get called at various points in the processing. The object
+will have access to a variety of information, including everything
+about the rule.
+
+
 ** <2024-04-27 Sat>
 
 When can custom Lua code be run? 
