@@ -8,6 +8,10 @@ So the atom name will be ".AFTER". The bound name will remove the quotes.
 
 
 * log
+** <2024-05-14 Tue>
+
+
+
 ** <2024-05-13 Mon>
 
 More than one lhs atom is just a syntax trick, so:

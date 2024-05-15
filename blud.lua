@@ -29,22 +29,18 @@ blud.add_rule = function(targets, prerequisites, action)
             target = {}
             blud.TARGETS[target_name] = target
         end
-        local raw_dependents = target.RAW_DEPENDENTS or {}
-        for _, dep in ipairs(prerequisites) do
-            table.insert(raw_dependents, dep)
+        if action ~= nil then
+            if target.ACTION then
+                error("Target " .. target_name .. " already has an action")
+            else
+                target.ACTION = action
+            end
         end
-        target.RAW_DEPENDENTS = raw_dependents
-    end
-end
-blud.add_recipe = function(targets, recipe)
-    assert(targets)
-    assert(recipe)
---    print(" add recipe " .. recipe)
-    for _, target_name in ipairs(targets) do
-        local target = blud.TARGETS[target_name]
-        assert(target ~= nil)
---        print(" add recipe " .. recipe .. "\nto target: " .. target_name)
-        target.RECIPE = recipe
+        local prerequisites = target.PREREQUISITES or {}
+        for _, dep in ipairs(prerequisites) do
+            table.insert(prerequisitess, dep)
+        end
+        target.PREREQUISITES = prerequisites
     end
 end
 blud.build = function(atom_name)
@@ -61,12 +57,13 @@ blud.build = function(atom_name)
     local timestamp = blud.get_fs_timestamp(atom_name)
     print("timestamp is " .. timestamp)
     if timestamp < blud.current_time then
---        print(" execute recipe " .. atom.RECIPE)
-        if atom.RECIPE then
-            status, exit_code = os.execute(atom.RECIPE)
+--        print(" execute action " .. atom.ACTION)
+        if atom.ACTION then
+print("execute: '" .. atom.ACTION .. "'")
+            status, exit_code = os.execute(atom.ACTION)
             assert(status)
             if exit_code then
-                error("command failed: " .. atom.RECIPE)
+                error("command failed: " .. atom.ACTION)
             end
         end
     end
@@ -150,14 +147,17 @@ function preprocess(get_line)
             blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
             local targets, prerequisites = process_make_rule(line) 
             local indent = calculate_indent(line)
-            local recipe = ""
+            local action = ""
             while calculate_indent(get_line(true)) > indent do
-                recipe = recipe .. get_line(false) .. "\n"
+                action = action .. get_line(false) .. "\n"
             end
-            if recipe ~= "" then
-                local code = "    blud.add_recipe(targets,\n[[\n" .. recipe .. "]])\n"
-                blud_user_code = blud_user_code .. code
-            end                
+            blud_user_code = blud_user_code .. "    blud.add_rule(targets, prerequisites, "
+            if action == nil then
+                blud_user_code = blud_user_code .. "nil)\n"
+            else
+                blud_user_code = blud_user_code .. "[[" .. action .. "]])\n"
+            end
+            
             blud_user_code = blud_user_code .. "end "
         else
             blud_user_code = blud_user_code .. line .. '\n'
@@ -189,6 +189,7 @@ function process_make_rule(line)
     end
     blud_user_code = blud_user_code .. " }\n"
 
+--[=[
     local code = [[    blud.add_dependents(targets, prerequisites)
 ]]
 
@@ -201,6 +202,7 @@ function process_make_rule(line)
         code = code:gsub("{atom_list}", atom_list);
         blud_user_code = blud_user_code .. code
     end
+    ]=]
 
     return targets, prerequisites
 end

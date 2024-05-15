@@ -18,29 +18,25 @@ blud.get_fs_timestamp = function (filepath)
     return timestamp
 end
 
-blud.add_raw_dependents = function(targets, string_list)
+blud.add_rule = function(targets, prerequisites, action)
     for _, target_name in ipairs(targets) do
         local target = blud.TARGETS[target_name]
         if target == nil then
             target = {}
             blud.TARGETS[target_name] = target
         end
-        local raw_dependents = target.RAW_DEPENDENTS or {}
-        for _, dep in ipairs(string_list) do
-            table.insert(raw_dependents, dep)
+        if action ~= nil then
+            if target.ACTION then
+                error("Target " .. target_name .. " already has an action")
+            else
+                target.ACTION = action
+            end
         end
-        target.RAW_DEPENDENTS = raw_dependents
-    end
-end
-blud.add_recipe = function(targets, recipe)
-    assert(targets)
-    assert(recipe)
---    print(" add recipe " .. recipe)
-    for _, target_name in ipairs(targets) do
-        local target = blud.TARGETS[target_name]
-        assert(target ~= nil)
---        print(" add recipe " .. recipe .. "\nto target: " .. target_name)
-        target.RECIPE = recipe
+        local prerequisites = target.PREREQUISITES or {}
+        for _, dep in ipairs(prerequisites) do
+            table.insert(prerequisitess, dep)
+        end
+        target.PREREQUISITES = prerequisites
     end
 end
 blud.build = function(atom_name)
@@ -57,12 +53,13 @@ blud.build = function(atom_name)
     local timestamp = blud.get_fs_timestamp(atom_name)
     print("timestamp is " .. timestamp)
     if timestamp < blud.current_time then
---        print(" execute recipe " .. atom.RECIPE)
-        if atom.RECIPE then
-            status, exit_code = os.execute(atom.RECIPE)
+--        print(" execute action " .. atom.ACTION)
+        if atom.ACTION then
+print("execute: '" .. atom.ACTION .. "'")
+            status, exit_code = os.execute(atom.ACTION)
             assert(status)
             if exit_code then
-                error("command failed: " .. atom.RECIPE)
+                error("command failed: " .. atom.ACTION)
             end
         end
     end
@@ -84,10 +81,7 @@ end
 do -- all:
     local targets = { "all" }
     local prerequisites = {  }
-    blud.add_raw_dependents(targets, prerequisites)
-    blud.add_recipe(targets,
-[[
-    echo "test001 worked"
+    blud.add_rule(targets, prerequisites, [[    echo "test001 worked"
     touch test0001.out
 ]])
 end 
