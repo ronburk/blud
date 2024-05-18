@@ -1,8 +1,101 @@
+local function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            s = s .. '['..k..'] = ' .. dump(v) .. ','
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
+
 blud              = {}
 blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
 blud.current_time = os.time()
-blud.TARGETS = {}
+-- define super atom (a metatable), which contains defaults for all atoms
+blud.super_atom   = {
+    NAME = "",
+    ADD_RULE = function(target, prerequisites, action)
+        print("super_atom add_rule target = " .. dump(target) .. ": " .. dump(prerequisites))
+        if action ~= nil then
+            if target.ACTION then
+                error("Target " .. target.NAME .. " already has an action")
+            else
+                target.ACTION = action
+            end
+        end
+        local existing_prerequisites = target.PREREQUISITES or {}
+        for _, dep in ipairs(prerequisites) do
+            table.insert(existing_prerequisites, dep)
+        end
+        print("    add_rule, total prereq: " .. dump(existing_prerequisites))
+        target.PREREQUISITES = existing_prerequisites
+    end,
+    APPLY_SPECIAL = function(target)
+        print("APPLY_SPECIAL " .. dump(target))
+    end,
+    BUILD = function(target)
+        print("BUILD('" .. target.NAME .. "')")
+        print("BUILD_PARENT('" .. target.BUILD_PARENT .. "')")
+        return true   -- default is to pretend we successfully built it
+    end,
+    BUILD_PREREQUISITES = function(target)
+        print("BUILD_PREREQUISITES('" .. target.NAME .. "')")
+    end,
+    DO_ACTION = function(target)
+        print("DO_ACTION in super atom for " .. target.NAME)
+        status, exit_code = os.execute(target.ACTION)
+        assert(status)
+        if exit_code then
+            error("command failed: " .. target.ACTION)
+        end
+    end,
+    AFTER_ACTION = function(target)
+        return true
+    end
+}
+
+blud.super_atom.__index = blud.super_atom
+
+blud.new_atom = function(atom_name)
+    local atom = {}
+    atom.NAME  = atom_name
+    return setmetatable(atom, blud.super_atom)
+end
+blud.is_special_atom = function(atom)
+    return string.sub(atom.NAME, 1, 1) == "."
+end
+
+blud.set_callback = function(target, hook_name, callback_func)
+    local new_meta      = setmetatable({}, getmetatable(target))
+    new_meta.__index    = new_meta
+    new_meta[hook_name] = callback_func
+    setmetatable(target, new_meta)
+end
+
+blud.TARGETS = {
+    [ ".AFTER" ] = {
+        NAME = ".AFTER",
+        DO_ACTION = function(target, prerequisites, action)
+            local after = function()
+                print("do after dammit!!!!!!!!!!!!!!!")
+            end
+print(".AFTER is setting callback")
+            blud.set_callback(target.PARENT, "AFTER_ACTION", after)
+            return true
+        end
+    }
+}
+print("before setmetatable " .. #blud.TARGETS)
+for atom_name, atom in pairs(blud.TARGETS) do
+    print("set metatable " .. atom_name)
+    setmetatable(atom, blud.super_atom)
+end
+
 blud.get_fs_timestamp = function (filepath)
     local command = string.format("stat -c %%Y '%s' 2>/dev/null", filepath)
     local pipe = io.popen(command, "r")
@@ -18,35 +111,48 @@ blud.get_fs_timestamp = function (filepath)
     return timestamp
 end
 
-blud.add_rule = function(targets, prerequisites, action)
+blud.add_rule = function(target, prerequisites, action)
+    print("add_rule('" .. target.NAME .. "' :" .. #prerequisites .. ")")
+    if action ~= nil then
+        if target.ACTION then
+            error("Target " .. target.NAME .. " already has an action")
+        else
+            target.ACTION = action
+        end
+    end
+    local prerequisites = target.PREREQUISITES or {}
+    for _, dep in ipairs(prerequisites) do
+        print("    ." .. dep)
+        table.insert(prerequisitess, dep)
+    end
+    target.PREREQUISITES = prerequisites
+end
+
+blud.add_rules = function(targets, prerequisites, action)
+print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites))
     for _, target_name in ipairs(targets) do
-        local target = blud.TARGETS[target_name]
-        if target == nil then
-            target = {}
-            blud.TARGETS[target_name] = target
+        local target = blud.get_or_create_target(target_name)
+        print(target.NAME)
+        if blud.is_special_atom(target) then
+            target:APPLY_SPECIAL(prerequisites, action)
+        else
+            target:ADD_RULE(prerequisites, action)
         end
-        if action ~= nil then
-            if target.ACTION then
-                error("Target " .. target_name .. " already has an action")
-            else
-                target.ACTION = action
-            end
-        end
-        local prerequisites = target.PREREQUISITES or {}
-        for _, dep in ipairs(prerequisites) do
-            table.insert(prerequisitess, dep)
-        end
-        target.PREREQUISITES = prerequisites
     end
 end
+
+
 blud.build = function(atom_name)
-    print("build " .. atom_name)
+    local str = "[[[[[[[[[build "
+    print(str)
+    print("[[[[[[[[[build " .. atom_name)
     local atom = blud.TARGETS[atom_name]
     if atom == nil then error("Unknown target: " .. atom_name) end
-    local prerequisites = atom.prerequisites;
+    local prerequisites = atom.PREREQUISITES;
+    print("prereqs: " .. dump(prerequisites))
     if prerequisites then
         for _, prerequisite in ipairs(prerequisites) do
-            bind.build(prerequisite)
+            blud.build(prerequisite)
         end
     end
 
@@ -56,14 +162,23 @@ blud.build = function(atom_name)
 --        print(" execute action " .. atom.ACTION)
         if atom.ACTION then
 print("execute: '" .. atom.ACTION .. "'")
-            status, exit_code = os.execute(atom.ACTION)
-            assert(status)
-            if exit_code then
-                error("command failed: " .. atom.ACTION)
-            end
+            atom:DO_ACTION()
+            atom:AFTER_ACTION()
         end
     end
 end
+
+blud.get_or_create_target = function(target_name)
+    print("get_or_create_target('" .. target_name .. "')")
+    local target = blud.TARGETS[target_name]
+    if target == nil then
+        target = blud.new_atom(target_name)
+        blud.TARGETS[target_name] = target
+    end
+    return target
+end
+
+-- build
 blud.run_build = function(primary_target)
     local targets = {}
 --    print("blud " .. primary_target)
@@ -74,6 +189,7 @@ blud.run_build = function(primary_target)
     end
 end
 
+
 -- test0001
 --
 -- Simple test to make sure SOMETHING works
@@ -81,7 +197,7 @@ end
 do -- all:
     local targets = { "all" }
     local prerequisites = {  }
-    blud.add_rule(targets, prerequisites, [[    echo "test001 worked"
+    blud.add_rules(targets, prerequisites, [[    echo "test001 worked"
     touch test0001.out
 ]])
 end 
