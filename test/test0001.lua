@@ -17,7 +17,8 @@ blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
 blud.current_time = os.time()
 -- define super atom (a metatable), which contains defaults for all atoms
-blud.super_atom   = {
+blud.super_atom   = {}
+blud.super_atom_meta = {
     NAME = "",
     ADD_RULE = function(target, prerequisites, action)
         print("super_atom add_rule target = " .. dump(target) .. ": " .. dump(prerequisites))
@@ -35,16 +36,44 @@ blud.super_atom   = {
         print("    add_rule, total prereq: " .. dump(existing_prerequisites))
         target.PREREQUISITES = existing_prerequisites
     end,
-    APPLY_SPECIAL = function(target)
-        print("APPLY_SPECIAL " .. dump(target))
+    APPLY_SPECIAL = function(atom, prerequisites)
+        print("APPLY_SPECIAL " .. dump(atom))
+        for _, prerequisite in ipairs(prerequisites) do
+            
+        end
+    end,
+    BIND  = function(atom_name)
+        local atom = blud.TARGETS[atom_name]
+        if atom == nil then error("Unknown target: " .. atom_name) end
+        atom.PARENT = nil
+        return atom
     end,
     BUILD = function(target)
         print("BUILD('" .. target.NAME .. "')")
-        print("BUILD_PARENT('" .. target.BUILD_PARENT .. "')")
+        if target.PARENT then print("PARENT('" .. dump(target.PARENT) .. "')") end
+        local timestamp = blud.get_fs_timestamp(target.NAME)
+        print("timestamp is " .. timestamp)
+        if timestamp < blud.current_time then
+            if target.ACTION then
+                print("execute: '" .. target.ACTION .. "'")
+                target:DO_ACTION()
+                target:AFTER_ACTION()
+            end
+        end
         return true   -- default is to pretend we successfully built it
     end,
     BUILD_PREREQUISITES = function(target)
         print("BUILD_PREREQUISITES('" .. target.NAME .. "')")
+        local prerequisites = target.PREREQUISITES;
+        print("prereqs: " .. dump(prerequisites))
+        if prerequisites then
+            for _, prereq_name in ipairs(prerequisites) do
+                prerequisite = target.BIND(prereq_name)
+                prerequisite.PARENT = target
+                prerequisite.BUILD(prerequisite)
+            end
+        end
+
     end,
     DO_ACTION = function(target)
         print("DO_ACTION in super atom for " .. target.NAME)
@@ -59,11 +88,15 @@ blud.super_atom   = {
     end
 }
 
-blud.super_atom.__index = blud.super_atom
+setmetatable(blud.super_atom, blud.super_atom_meta)
+blud.super_atom_meta.__index = blud.super_atom_meta
+blud.super_atom.__index      = blud.super_atom
 
 blud.new_atom = function(atom_name)
     local atom = {}
     atom.NAME  = atom_name
+    -- the initial metatable for an atom is the "super atom", which
+    -- provides the default behavior
     return setmetatable(atom, blud.super_atom)
 end
 blud.is_special_atom = function(atom)
@@ -90,9 +123,8 @@ print(".AFTER is setting callback")
         end
     }
 }
-print("before setmetatable " .. #blud.TARGETS)
+
 for atom_name, atom in pairs(blud.TARGETS) do
-    print("set metatable " .. atom_name)
     setmetatable(atom, blud.super_atom)
 end
 
@@ -148,24 +180,9 @@ blud.build = function(atom_name)
     print("[[[[[[[[[build " .. atom_name)
     local atom = blud.TARGETS[atom_name]
     if atom == nil then error("Unknown target: " .. atom_name) end
-    local prerequisites = atom.PREREQUISITES;
-    print("prereqs: " .. dump(prerequisites))
-    if prerequisites then
-        for _, prerequisite in ipairs(prerequisites) do
-            blud.build(prerequisite)
-        end
-    end
-
-    local timestamp = blud.get_fs_timestamp(atom_name)
-    print("timestamp is " .. timestamp)
-    if timestamp < blud.current_time then
---        print(" execute action " .. atom.ACTION)
-        if atom.ACTION then
-print("execute: '" .. atom.ACTION .. "'")
-            atom:DO_ACTION()
-            atom:AFTER_ACTION()
-        end
-    end
+    atom.PARENT = nil
+    atom.BUILD_PREREQUISITES(atom)
+    return atom.BUILD(atom)
 end
 
 blud.get_or_create_target = function(target_name)
