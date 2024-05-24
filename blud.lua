@@ -178,10 +178,16 @@ end
 
 blud.add_rules = function(targets, prerequisites, action)
 print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites))
+
+    local prereq_atoms = {}
+    for _, prereq_name in ipairs(prerequisites) do
+        local prerequisite = blud.get_or_create_target(prereq_name)
+        table.insert(prereq_atoms, prerequisite)
+    end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
         print(target.NAME .. " add rule")
-        target.ADD_RULE(target, prerequisites, action)
+        target.ADD_RULE(target, prereq_atoms, action)
     end
 end
 
