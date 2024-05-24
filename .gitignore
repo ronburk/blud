@@ -35,3 +35,7 @@
 *.exe
 *.out
 *.app
+
+# blud
+test/*.out
+test/*.lua

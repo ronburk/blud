@@ -21,10 +21,9 @@ blud.private_env  = { __index = blud.public_env }
 blud.current_time = os.time()
 -- define super atom (a metatable), which contains defaults for all atoms
 blud.global = {
-    BIND  = function(atom_name)
-        local atom = blud.TARGETS[atom_name]
-        if atom == nil then error("Unknown target: " .. atom_name) end
-        atom.PARENT = nil
+    -- BIND: associate an atom with an actual filename
+    BIND  = function(atom)
+        -- ???
         return atom
     end,
     }
@@ -55,6 +54,11 @@ blud.super_atom = {
     BUILD = function(target)
         print("BUILD('" .. target.NAME .. "')")
         if target.PARENT then print("PARENT('" .. dump(target.PARENT) .. "')") end
+        if target.BUILDING then
+            error("circular dependency on " .. target.NAME)
+        end
+        target.BUILDING = true
+        target.BUILD_PREREQUISITES(target)
         local timestamp = blud.get_fs_timestamp(target.NAME)
         print("timestamp is " .. timestamp)
         if timestamp < blud.current_time then
@@ -64,6 +68,7 @@ blud.super_atom = {
                 target:AFTER_ACTION()
             end
         end
+        target.BUILDING = false
         return true   -- default is to pretend we successfully built it
     end,
     BUILD_PREREQUISITES = function(atom)
@@ -192,12 +197,12 @@ print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites
 end
 
 
-blud.build = function(atom_name, parent_atom)
-    print("[[[[[[[[[build " .. atom_name .. "]]]]]]]]")
-    local target = blud.global.BIND(atom_name)
+blud.build = function(target, parent_atom)
+    print("[[[[[[[[[build " .. target.NAME .. "]]]]]]]]")
+    blud.global.BIND(target)
     target.PARENT = parent_atom
-    target.BUILD_PREREQUISITES(target)
-    return target.BUILD(target)
+    target:BUILD_PREREQUISITES()
+    return target:BUILD()
 end
 
 blud.get_or_create_target = function(target_name)
@@ -214,10 +219,10 @@ end
 blud.run_build = function(primary_target)
     local targets = {}
 --    print("blud " .. primary_target)
-    table.insert(targets, primary_target)
+    table.insert(targets, blud.get_or_create_target(primary_target))
 --    print("before for: Type of blud.build:", type(blud.build)) 
     for _, target in ipairs(targets) do
-        blud.build(target, nil)
+        target:BUILD()
     end
 end
 
