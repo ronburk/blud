@@ -103,8 +103,8 @@ blud.super_atom = {
         if prerequisites then
             for _, prereq_name in ipairs(prerequisites) do
                 prerequisite = atom.BIND(prereq_name)
---                prerequisite.PARENT = target
-                prerequisite.BUILD(prerequisite, atom)
+                prerequisite.PARENT = atom
+                prerequisite.BUILD(prerequisite)
             end
         end
 
@@ -218,7 +218,6 @@ print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites
     end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
-        print("add_rules calls " .. target.NAME .. " add rule")
         target.ADD_RULE(target, prereq_atoms, action)
     end
 end
@@ -233,7 +232,6 @@ blud.build = function(target, parent_atom)
 end
 
 blud.get_or_create_target = function(target_name)
-    print("get_or_create_target('" .. target_name .. "')")
     local target = blud.TARGETS[target_name]
     if target == nil then
         target = blud.new_atom(target_name)
