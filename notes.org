@@ -5,6 +5,15 @@ User wants to have a target named ".AFTER" even though that's the name
 of a special atom. Well, the user has to quote every instance of that.
 So the atom name will be ".AFTER". The bound name will remove the quotes.
 
+** Attributes
+*** .AFTER
+*** .BEFORE
+*** .DEFAULT
+*** .IGNORE
+*** .PHONY
+*** .PRECIOUS
+*** .SILENT
+
 
 
 * log

@@ -1,4 +1,6 @@
 -- blud.lua
+
+
 blud_primary_target_name = nil
 
 blud_module_code = [==[
@@ -19,6 +21,14 @@ blud              = {}
 blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
 blud.current_time = os.time()
+blud.shallow_copy = function (original)
+    local copy = {}
+    for key, value in pairs(original) do
+        copy[key] = value
+    end
+    return copy
+end
+
 -- define super atom (a metatable), which contains defaults for all atoms
 blud.global = {
     -- BIND: associate an atom with an actual filename
@@ -29,21 +39,36 @@ blud.global = {
     }
 blud.super_atom = {
     NAME = "",
+    ADD_PREREQUISITE = function(target, prerequisite)
+        print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. prerequisite.NAME .. ")")
+        local prerequisites = target.PREREQUISITES
+        if prerequisites ~= nil then
+            table.insert(prerequisites, prerequisite)
+        else
+            target.PREREQUISITES = { prerequisite }
+        end
+    print(dump(target))
+        if target.ATTRIBUTE == true then
+            local target_copy = blud.shallow_copy(target)
+            setmetatable(target_copy, getmetatable(prerequisite))
+            target_copy.__index = target_copy
+            setmetatable(prerequisite, target_copy)
+        end
+    end,
     ADD_RULE = function(target, prerequisites, action)
-        print("super_atom add_rule target = " .. dump(target) .. ": " .. dump(prerequisites))
-        if action ~= nil then
+        print("super_atom ADD_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
+        if type(action) == 'string' and action ~= '' then
             if target.ACTION then
-                error("Target " .. target.NAME .. " already has an action")
+                error("Target " .. target.NAME .. " already has an action: " .. target.ACTION)
             else
                 target.ACTION = action
             end
         end
-        local existing_prerequisites = target.PREREQUISITES or {}
-        for _, dep in ipairs(prerequisites) do
-            table.insert(existing_prerequisites, dep)
+        if prerequisites ~= nil then
+            for _, prerequisite in ipairs(prerequisites) do
+                target.ADD_PREREQUISITE(target, prerequisite)
+            end
         end
-        print("    add_rule, total prereq: " .. dump(existing_prerequisites))
-        target.PREREQUISITES = existing_prerequisites
     end,
     APPLY_SPECIAL = function(atom, prerequisites)
         print("APPLY_SPECIAL " .. dump(atom))
@@ -54,7 +79,7 @@ blud.super_atom = {
     BUILD = function(target)
         print("BUILD('" .. target.NAME .. "')")
         if target.PARENT then print("PARENT('" .. dump(target.PARENT) .. "')") end
-        if target.BUILDING then
+        if target.BUILDING == true then
             error("circular dependency on " .. target.NAME)
         end
         target.BUILDING = true
@@ -64,8 +89,8 @@ blud.super_atom = {
         if timestamp < blud.current_time then
             if target.ACTION then
                 print("execute: '" .. target.ACTION .. "'")
+--                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
-                target:AFTER_ACTION()
             end
         end
         target.BUILDING = false
@@ -92,9 +117,6 @@ blud.super_atom = {
             error("command failed: " .. target.ACTION)
         end
     end,
-    AFTER_ACTION = function(target)
-        return true
-    end
 }
 
 setmetatable(blud.super_atom, blud.global)
@@ -113,6 +135,7 @@ blud.is_special_atom = function(atom)
 end
 
 blud.set_callback = function(target, hook_name, callback_func)
+print("set_callback(" .. target.NAME .. ", " .. hook_name .. ")")
     -- make new metatable whose metatable is target metatable
     local new_meta      = setmetatable({}, getmetatable(target))
     new_meta.__index    = new_meta
@@ -125,6 +148,8 @@ end
 blud.TARGETS = {
     [ ".AFTER" ] = {
         NAME = ".AFTER",
+        ATTRIBUTE = true,
+--[[
         ADD_RULE = function(target, prerequisites, action)
             print(".AFTER add_rule target = " .. dump(target) .. ": " .. dump(prerequisites))
             getmetatable(target).ADD_RULE(target, prerequisites, action)
@@ -133,13 +158,15 @@ blud.TARGETS = {
                     return true
                     end)
             end
+print(".AFTER ADD_RULE returns!")
         end,
+]]
         DO_ACTION = function(target, prerequisites, action)
             local after = function()
                 print("do after dammit!!!!!!!!!!!!!!!")
             end
 print(".AFTER is setting callback")
-            blud.set_callback(target.PARENT, "AFTER_ACTION", after)
+            blud.set_callback(target.PARENT, "DO_ACTION", after)
             return true
         end
     }
@@ -191,7 +218,7 @@ print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites
     end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
-        print(target.NAME .. " add rule")
+        print("add_rules calls " .. target.NAME .. " add rule")
         target.ADD_RULE(target, prereq_atoms, action)
     end
 end
