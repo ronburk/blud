@@ -15,8 +15,38 @@ So the atom name will be ".AFTER". The bound name will remove the quotes.
 *** .SILENT
 
 
+** Parsing
+
+A line is non-Lua if it starts in column 1 and:
+    a) contains a '$' that is not '${'or
+    b) starts with <identifier> <assign-op> or
+    c) looks like a rule: one or more space-separated atoms followed by colon
+
+A line is also non-lua if it is non-blank and indented following a rule
+
+A line is also non-Lua if it is indented but starts with a $<whitespace>:
+if ${OS} == "Windows" then
+    $ OBJS += winrtl.obj
+end
+
+However, because of comments and string constants, these rules are not
+sufficient.
+
+
+A line is also non-lua if it is non-blank, indented, and follows
+a rule.
+    
 
 * log
+** <2024-05-25 Sat>
+
+can blud rules be indented? e.g.:
+
+if $(OS) == "Windows" then
+    program : 
+end
+
+
 ** <2024-05-14 Tue>
 
 

@@ -9,7 +9,9 @@ local function dump(o)
         local s = '{ '
         for k,v in pairs(o) do
             if type(k) ~= 'number' then k = '"'..k..'"' end
+            if v ~= "__index" then
             s = s .. '['..k..'] = ' .. dump(v) .. ','
+            end
         end
         return s .. '} '
     else
@@ -27,6 +29,16 @@ blud.shallow_copy = function (original)
         copy[key] = value
     end
     return copy
+end
+blud.dump_atom = function (atom)
+    local str = atom.NAME .. " : "
+    local prerequisites = atom.PREREQUISITES
+    if prerequisites ~= nil then
+        for key, value in pairs(prerequisites) do
+            str = str .. " " .. value.NAME
+        end
+    end
+    return str
 end
 
 -- define super atom (a metatable), which contains defaults for all atoms
@@ -47,9 +59,9 @@ blud.super_atom = {
         else
             target.PREREQUISITES = { prerequisite }
         end
-    print(dump(target))
         if target.ATTRIBUTE == true then
             local target_copy = blud.shallow_copy(target)
+            target_copy.ATTRIBUTE_TARGET = prerequisite
             setmetatable(target_copy, getmetatable(prerequisite))
             target_copy.__index = target_copy
             setmetatable(prerequisite, target_copy)
@@ -77,8 +89,8 @@ blud.super_atom = {
         end
     end,
     BUILD = function(target)
-        print("BUILD('" .. target.NAME .. "')")
-        if target.PARENT then print("PARENT('" .. dump(target.PARENT) .. "')") end
+        print("BUILD('" .. blud.dump_atom(target) .. "')")
+        if target.PARENT then print("PARENT('" .. blud.dump_atom(target.PARENT) .. "')") end
         if target.BUILDING == true then
             error("circular dependency on " .. target.NAME)
         end
@@ -97,9 +109,9 @@ blud.super_atom = {
         return true   -- default is to pretend we successfully built it
     end,
     BUILD_PREREQUISITES = function(atom)
-        print("BUILD_PREREQUISITES('" .. atom.NAME .. "')")
+        print("BUILD_PREREQUISITES('" .. blud.dump_atom(atom) .. "')")
         local prerequisites = atom.PREREQUISITES;
-        print("prereqs: " .. dump(prerequisites))
+--        print("prereqs: " .. dump(prerequisites))
         if prerequisites then
             for _, prereq_name in ipairs(prerequisites) do
                 prerequisite = atom.BIND(prereq_name)
@@ -125,7 +137,11 @@ blud.super_atom.__index  = blud.super_atom
 
 blud.new_atom = function(atom_name)
     local atom = {}
+    -- atom must always have a name
     atom.NAME  = atom_name
+    -- atom must always have a prerequisite list, even if it is empty
+    -- this guarantees prerequisites are not inherited
+    atom.PREREQUISITES = {}
     -- the initial metatable for an atom is the "super atom", which
     -- provides the default behavior
     return setmetatable(atom, blud.super_atom)
@@ -149,23 +165,10 @@ blud.TARGETS = {
     [ ".AFTER" ] = {
         NAME = ".AFTER",
         ATTRIBUTE = true,
---[[
-        ADD_RULE = function(target, prerequisites, action)
-            print(".AFTER add_rule target = " .. dump(target) .. ": " .. dump(prerequisites))
-            getmetatable(target).ADD_RULE(target, prerequisites, action)
-            for _, dep in ipairs(target.PREREQUISITES) do
-                blud.set_callback(dep, "DO_ACTION", function (target,prerequistes,action)
-                    return true
-                    end)
-            end
-print(".AFTER ADD_RULE returns!")
-        end,
-]]
         DO_ACTION = function(target, prerequisites, action)
             local after = function()
-                print("do after dammit!!!!!!!!!!!!!!!")
+                status, exit_code = os.execute(target.ATTRIBUTE_TARGET.ACTION)
             end
-print(".AFTER is setting callback")
             blud.set_callback(target.PARENT, "DO_ACTION", after)
             return true
         end
@@ -236,6 +239,7 @@ blud.get_or_create_target = function(target_name)
     if target == nil then
         target = blud.new_atom(target_name)
         blud.TARGETS[target_name] = target
+        blud.PREREQUISITES = {}
     end
     return target
 end
@@ -310,9 +314,32 @@ function atoms_to_string(atoms)
     return result
 end
 
+function line_is_lua(line)
+    local keywords   = {
+        ["do"]     = true,
+        ["else"]     = true,
+        ["elseif"]   = true,
+        ["end"]      = true,
+        ["for"]    = true,
+        ["function"] = true,
+        ["if"]       = true,
+        ["local"]    = true,
+        ["repeat"] = true,
+        ["then"]   = true,
+        ["until"]  = true,
+        ["while"]  = true,
+    }
+    local result     = true
+    local first_word = line:match("^%a+")
+    if first_word ~= nil then
+        if keywords[first_word] == nil then
+            result = false
+        end
+    end
+end
+
 function preprocess(get_line)
     local previous_indent   = 0
-    local makeRulePattern = "^%s*(%S*%s*):.*$"
 
     while true do     -- for line in file:lines() do
         local line = get_line(false)
