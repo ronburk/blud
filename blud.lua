@@ -1,7 +1,14 @@
 -- blud.lua
 
+function template(str, values)
+    return (str:gsub("{(.-)}", function(key)
+        return values[key] or "{" .. key .. "}"
+    end))
+end
 
-blud_primary_target_name = nil
+
+
+blud_primary_target_name = ""
 
 blud_module_code = [==[
 local function dump(o)
@@ -22,6 +29,86 @@ end
 blud              = {}
 blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
+blud.match_macro_assign = function(line)
+    local operators = {
+        ["="]   = true,
+        [":="]  = true,
+        ["+="]  = true,
+    }
+--    print("match_macro_assign(\"" .. line .. "\")")
+    local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
+    macro_name, operator, remainder = line:match(pattern)
+    if macro_name and operator then
+        if operators[operator] == true then
+            return macro_name, operator, remainder
+        end
+    end
+    return nil
+end
+
+blud.lines        = function (str)
+    local pos = 1
+    return function()
+        if pos > #str then return nil end
+        local start, stop, line = str:find("([^\r\n]*)[\r\n]?", pos)
+        pos = stop + 1
+        return line
+    end
+end
+
+blud.get_macro_args = function (text, pos)
+    
+end
+
+blud.get_macro_call = function (text, pos)
+    local macro = nil
+    local char = text:sub(pos, 1)
+    if char == '(' then
+        local pos, args = blud.get_macro_args(text, pos)
+        macro = { name=args[0], args = args }
+    else
+        macro = { name=char, args = {} }
+    end
+    return pos, macro
+end
+
+blud.macro_expand = function (text)
+    local result = ""
+    local pos    = 1
+    local max_pos= #text
+    while pos <= max_pos do
+        local char = text:sub(pos, 1)
+        if char == '$' and pos < max_pos then
+            local macro_name = nil
+            pos  = pos + 1
+            char = text:sub(pos, 1)
+            if char == '$' then result = result .. char
+            elseif char == '(' then
+            end
+        else
+            result = result .. char
+        end
+    end
+    return result
+end
+blud.phase2_text  = ""
+blud.phase2_append= function(str)
+    blud.phase2_text = blud.phase2_text .. str .. "\n"
+end
+blud.phase3_text  = ""
+blud.phase3_append= function(str)
+    blud.phase3_text = blud.phase2_text .. str .. "\n"
+end
+blud.phase2       = function ()
+    print(blud.phase2_text)
+    for line in blud.lines(blud.phase2_text) do
+        print("Line is: " .. line )
+        local macro_name, operator, text = blud.match_macro_assign(line)
+        if macro_name then
+            print(macro_name .. operator .. text)
+        end
+    end
+end
 blud.current_time = os.time()
 blud.shallow_copy = function (original)
     local copy = {}
@@ -315,8 +402,9 @@ function atoms_to_string(atoms)
 end
 
 function line_is_lua(line)
+    local result     = true
     local keywords   = {
-        ["do"]     = true,
+        ["do"]       = true,
         ["else"]     = true,
         ["elseif"]   = true,
         ["end"]      = true,
@@ -329,14 +417,137 @@ function line_is_lua(line)
         ["until"]  = true,
         ["while"]  = true,
     }
-    local result     = true
     local first_word = line:match("^%a+")
     if first_word ~= nil then
         if keywords[first_word] == nil then
             result = false
         end
     end
+    return result
 end
+
+function match_macro_assign(line)
+    local operators = {
+        ["="]   = true,
+        [":="]  = true,
+        ["+="]  = true,
+    }
+--    print("match_macro_assign(\"" .. line .. "\")")
+    local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
+    macro_name, operator, remainder = line:match(pattern)
+    if macro_name and operator then
+        if operators[operator] == true then
+            return macro_name, operator, remainder
+        end
+    end
+    return nil
+end
+
+function lua_quote(str)
+    -- Escape backslashes and double quotes
+    str = str:gsub("\\", "\\\\"):gsub('"', '\\"')
+    
+    -- Replace special characters
+    str = str:gsub("\n", "\\n")
+            :gsub("\r", "\\r")
+            :gsub("\t", "\\t")
+            :gsub("\b", "\\b")
+            :gsub("\f", "\\f")
+    
+    -- Wrap the string in double quotes
+    return '"' .. str .. '"'
+end
+
+function emit_macro_assign(macro_name, operator, remainder)
+    local variables = {
+        macro_name = lua_quote(macro_name),
+        operator   = lua_quote(operator),
+        remainder  = lua_quote(remainder)
+        }
+    local script = [[
+blud.macro_assign({macro_name}, {operator}, {remainder})
+]]
+    local var =  script:gsub("{(.-)}", variables)
+    print(var)
+end
+
+function leading_keyword(line)
+    local result = nil
+    local keywords   = {
+        ["do"]       = true,
+        ["else"]     = true,
+        ["elseif"]   = true,
+        ["end"]      = true,
+        ["for"]      = true,
+        ["function"] = true,
+        ["if"]       = true,
+        ["local"]    = true,
+        ["repeat"]   = true,
+        ["until"]    = true,
+        ["while"]    = true,
+    }
+
+    local keyword = line:match("^%a+")
+    if keyword == "local" and line:match("local%s+function%s+") then
+        keyword = "function"
+    end
+    if keywords[keyword] then result = keyword end
+    return result
+end
+
+function syntax_error(line_number, format_string, ...)
+    local args = {...}
+    local message = format_string:gsub("#(%d+)", function(n)
+        return tostring(args[tonumber(n)])
+    end)
+    error("Line " .. line_number .. ": " .. message)
+end
+
+-- handle a Lua line that might have embedded make code
+-- ??? does not handle embedded $(name a b "c" "d()")
+function phase1_embedded_make(line)
+    local code = line:match("^%s*$ (.*)$")
+    if code then
+        line = "blud.phase2_append(" .. lua_quote(code) .. ")"
+    end
+    return line
+end
+
+function phase1_pass(get_line)
+    local line_number   = 0
+    local text          = ""
+    local open_keyword  = nil
+    while true do
+        line_number = line_number + 1
+        local line = get_line(false)
+        if line == nil then break end -- end of file
+        local keyword = leading_keyword(line)
+        if not keyword then
+            if open_keyword then   -- copying Lua code ??? handle embedded make code
+                line = phase1_embedded_make(line)
+            else -- copying non-Lua code
+                line = "blud.phase2_append(" .. lua_quote(line) .. ")"
+            end
+        elseif keyword == "do" or keyword == "function" or keyword == "if" or keyword == "repeat" then
+            if open_keyword then syntax_error(line_number, "already inside '#1'", open_keyword) end
+            open_keyword = keyword
+        elseif keyword == "end" then
+            if not open_keyword then syntax_error(line_number, "Unexpected 'end'") end
+            open_keyword = nil
+        elseif keyword == "elseif" or keyword == "else" then
+            if open_keyword ~= "if" and open_keyword ~= "elseif" then
+                syntax_error(line_number, "Unexpected '#1' doesn't match open '#2'", keyword, open_keyword)
+            else
+                open_keyword = keyword
+            end
+        else
+            line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
+        end
+        text = text .. line .. "\n"
+    end
+    return text
+end
+
 
 function preprocess(get_line)
     local previous_indent   = 0
@@ -344,7 +555,13 @@ function preprocess(get_line)
     while true do     -- for line in file:lines() do
         local line = get_line(false)
         if line == nil then break end
-        if line:match(makeRulePattern) then
+        local macro_name, operator, remainder = match_macro_assign(line)
+        if macro_name then
+            emit_macro_assign(macro_name, operator, remainder)
+        else
+        end
+        if false then
+        if not line_is_lua(line) then
             blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
             local targets, prerequisites = process_make_rule(line) 
             local indent = calculate_indent(line)
@@ -362,6 +579,7 @@ function preprocess(get_line)
             blud_user_code = blud_user_code .. "end "
         else
             blud_user_code = blud_user_code .. line .. '\n'
+        end
         end
     end
 end
@@ -417,8 +635,12 @@ file:close()
 ]]
 
 file = io.stdin
-preprocess(buffered_line_io(file))
+--preprocess(buffered_line_io(file))
+local str = phase1_pass(buffered_line_io(file))
 file:close()
+print(blud_module_code)
+print(str)
+print("blud.phase2()\n")
 
 
 
@@ -429,8 +651,7 @@ end
 blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
 
-print(blud_module_code)
-print(blud_user_code);
+--print(blud_user_code);
 
 --[[
 function lines_length(input, line_number)

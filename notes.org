@@ -15,7 +15,24 @@ So the atom name will be ".AFTER". The bound name will remove the quotes.
 *** .SILENT
 
 
+** Phase 1
+We are just copying input to output except there is a small transformation
+for non-Lua lines. This is simplified because we don't let the user put
+Lua code in column 1 unless it is the beginning of a compound statement:
+    do/end
+    (local) function/end
+    if/else/elseif/end
+    for/do/end
+    while/do/end
+    repeat/until
+    local
+
+
 ** Parsing
+
+A line is non-Lua if it starts in column 1 unless it
+starts with one of:
+    if    else   elseif then end do for repeat until while function local
 
 A line is non-Lua if it starts in column 1 and:
     a) contains a '$' that is not '${'or
@@ -35,9 +52,131 @@ sufficient.
 
 A line is also non-lua if it is non-blank, indented, and follows
 a rule.
-    
+
+** Secondary Expansion
+
+Seems mostly about being able to modify rules with information not
+available until all the rules have been parsed. Things probably better
+done in Lua.
+
+.POSTPARSE: a b
+    function (target)
+        print("Got called for each target. This one is: " .. target.NAME)
+    end
+
+Problems:
+    a) just want a function call independent of any targets
+    b) want function called with a list of targets
+
+Waitaminute, "second expansion" is really kind of a subset of the :: operator.
+Take all-too-tricksy example from page 18 of GNU make manual:
+
+.SECONDEXPANSION
+main_OBJS := main.o try.o test.o
+lib_OBJS  := lib.o api.o
+
+main lib : $$($$(@_OBJS))
+<><><><><>
+main_OBJS := main.o try.o test.o
+lib_OBJS  := lib.o api.o
+
+main lib :AddObjs: _OBJS
+
+function AddObjs(target, prerequisites, action)
+    $ $@ : $($@_OBJS)
+end
+<><><><><>
+
+
 
 * log
+** <2024-05-29 Wed>
+
+1) parse blud file, create .luab
+   non-Lua lines call function to append to text variable
+2) run .luab, which creates variable with text of macros/rules
+3) then expands text macros into another text variable
+4) then parses text to create the graph
+5) then uses the graph to update one or more targets
+
+** <2024-05-28 Tue>
+
+PROG = $(PROGNAME) : file1 $(OTHER)
+PROGNAME = foo
+
+if ${OS} == "Windows" then
+    $ $(PROG)
+end
+fee : LATE = $(PROGNAME).exe
+<><><><><><><><>
+blud.append("PROG = $(PROGNAME) : file $(OTHER)\n")
+blud.append("PROGNAME = foo\n")
+blud.append("\n")
+if blud.value("OS") == "Windows" then
+    blud.append("$(PROG)")
+end
+blud.append("fee : LATE = $(PROGNAME).exe")
+<><><><><><>
+OK, have to write macro parser.
+
+
+
+** <2024-05-27 Mon>
+I started by parsing the blud file and converting it to Lua. But this cannot be
+done in general at "compile" time, because of macros. Macros can introduce a runtime
+requirement to do any sort of parsing I was trying to do at compile time. Worse, they
+require character-by-character parsing because of:
+
+objs = foo.$(OBJ)  -- can't tokenize until after macro expansion!
+
+Actually, can avoid char-by-char processing if I first do a pass that expands
+all the macros. Try some examples:
+
+$(STUFF)
+<><><><><><>
+do
+    local str = expand([=[
+$(STUFF)
+]=]
+    parse(str)
+end
+<><><><><>
+But that doesn't work either. Consider:
+STUFF = a : b
+$(STUFF)
+    echo "Doing action"
+Parser can't operate on each line independently, so when it hits echo line,
+it needs to know previous line was a rule.
+Also consider:
+a : b
+if ${OS} == "Windows" then
+    $     echo "Doing Windows-only action"
+end
+
+It should help simplify if $ always identifies non-Lua code.
+${} can still be used inside Lua code for convenient access to macros.
+
+<><><><><><><>
+We convert the blud text into Lua. We execute the Lua, which produces
+the text of blud directives. We then parse the directives to create
+macros and a dependency graph.  Finally, we use the graph to update
+one or more targets.
+
+STUFF = a : b
+$(STUFF)
+    echo "Doing action"
+<><><><><><><>
+do -- STUFF = a : b
+    blud.macro_assign("STUFF", "a : b")
+end
+do -- $(STUFF)
+    blud.append_text(blud.macro_expand("STUFF"))
+    blud.append_text("\n")
+end
+do -- echo "Doing action"
+    blud.append_text("    echo \"Doing action\"\n")
+end
+
 ** <2024-05-25 Sat>
 
 can blud rules be indented? e.g.:
