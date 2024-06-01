@@ -99,6 +99,7 @@ blud.phase3_text  = ""
 blud.phase3_append= function(str)
     blud.phase3_text = blud.phase2_text .. str .. "\n"
 end
+
 blud.phase2       = function ()
     print(blud.phase2_text)
     for line in blud.lines(blud.phase2_text) do
@@ -109,6 +110,7 @@ blud.phase2       = function ()
         end
     end
 end
+
 blud.current_time = os.time()
 blud.shallow_copy = function (original)
     local copy = {}
@@ -540,6 +542,8 @@ function phase1_pass(get_line)
             else
                 open_keyword = keyword
             end
+        elseif keyword == "local" then
+            -- just copy the line
         else
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         end
@@ -641,6 +645,7 @@ file:close()
 print(blud_module_code)
 print(str)
 print("blud.phase2()\n")
+print("blud.phase3()\n")
 
 
 

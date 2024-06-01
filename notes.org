@@ -26,7 +26,10 @@ Lua code in column 1 unless it is the beginning of a compound statement:
     while/do/end
     repeat/until
     local
-
+** Phase 2
+Now we execute the Lua program created by Phase 1 to create blud.phase2_text
+and parse blud.phase2_text to create make variables and the
+make dependency graph. In this parse, macros must be expanded.
 
 ** Parsing
 
@@ -90,6 +93,41 @@ end
 
 
 * log
+** <2024-05-31 Fri>
+Phase 2. Can I expand macros on a per-line basis? Is macro expansion
+different inside an action--do they all take place when the action
+is executed? I think they must, else target-local variables would
+not work.
+
+So can Phase 2 just be macro expansion? Not quite, since it has to
+know when it's in an action and not expand those macros.
+
+Now is the time to fix macro problems!
+What are macros for?
+1) create values that can be referenced (list of filenames, command-line options, etc.)
+2) create values that can be overridden on a target-scope basis
+3) create values that can be overridden by command-line options
+4) create multi-line values for actions that can be reused
+5) create values with syntax friendly to space-separated lists
+6) create delayed binding value references, so values can be built out of order
+   IOW, this is value references
+
+
+Now, you could always escape to Lua to make any variable you want:
+do
+    blud.macro_define("FOO", "Text of macro")
+end
+
+Ugh. See no wonderful improvements on macros and their "two flavors" ala GNU make.
+
+Phase 2 must expand AND execute make code as it goes? Don't understand
+expansion in actions.
+
+
+a : b
+$(ACTION)
+
+
 ** <2024-05-29 Wed>
 
 1) parse blud file, create .luab
