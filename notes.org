@@ -93,6 +93,107 @@ end
 
 
 * log
+** <2024-06-02 Sun>
+Thinking of the dreaded implicit rule tangle. Was gonna say the "::" operator
+is just hard-coded function that tries to generate the right rules from list
+of source file prerequisites. But I think I've seen at least one make that
+consistently had the user refer to source, not object, prerequisites.
+
+program : a.c b.c
+
+This has to eventually get translated to:
+
+program : a.o b.o
+    <linker command>
+
+In a way, the "::" operator does what tools like CMAKE does, translating
+a higher-level directive into detailed make rules.
+
+This is relevant to the implicit rule problem, because the user writes:
+
+program.exe : a.obj b.obj
+
+which leaves the make utility to guess what the source files were for
+a.obj and b.obj, even though the user knows perfectly well they were
+.c files and would prefer to work with those names.
+
+OTOH, there is the much less frequent case like this:
+
+tool_name : a.c b.c   -- tool_name is a directory!
+    cp $^ tool_name
+
+Returning to this:
+
+program : a.c b.c
+
+It really should get translated to this:
+
+program : a.o(a.c) b.o(b.c)
+    <linker command>
+
+where the parens indicate exactly what file the .o name was derived from.
+GNU Make implicit rules for linking only really work if you happen to be
+writing in C, since the object file dependencies lose the information
+about what the source file extension was.
+
+So, maybe the syntax should allow specifying which prerequisites are
+source prerequisites, and what object files should be made from them.
+So what would this mean:
+
+program : <a.c <b.c
+
+It means "a.c is a source file, look up what it should create". Hopefully,
+the lookup finds a rule that says:
+
+%.o : %.c
+    $(CC) $(CFLAGS) -o $@ $<
+
+<><><><><><><>
+Meh, start over. User wants to write this:
+
+program : a.c b.c
+
+period. User types "blud program". blud updates "program", which first updates
+"a.c". We don't know how to make a.c. In normal make, we see "a.c" exists and
+has no recipe, so we just return its timestamp. But let's be different. Because
+there is no recipe for "a.c", it's a "source". So let's look up our source
+patterns and find that "a.c" matches "%.c", which is part of a rule that
+says .c files produce .o files. So we "reflavor" a.c so it has two
+components: source ("a.c") and output components ("a.o").
+
+How/when do we know we have to build "a.o"? We kind of want to know that
+"program" is of a TYPE that requires object files. But if "program"
+does not exist, all we have to go on is its name, which (except under Windows)
+will not typically contain a ".exe". 
+
+
+** <2024-06-01 Sat>
+I see the light! Can and should do away with macros. Let's say that this:
+
+VAR = a $(B) c
+
+translates to:
+
+blud.set_var("VAR", function()
+return "a " .. blud.get_var("B") .. " c"
+end)
+
+<><><><><>
+OK, so we keep Phase 1, which does no macro expansion, just produces all the
+non-lua lines of code. This allows Lua to control conditional appearance of
+make rules and variable statements.
+
+The resulting lines must be in one of the following two forms:
+name <op> text
+
+<text>* <colon_op> <text>*
+(<indent><text>)*
+
+Only <text> can contain variable expansions.
+
+
+
+
 ** <2024-05-31 Fri>
 Phase 2. Can I expand macros on a per-line basis? Is macro expansion
 different inside an action--do they all take place when the action

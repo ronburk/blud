@@ -1,4 +1,30 @@
 # test makefile
+program : blud.lua
+
+
+SET = A = you da man
+$(SET) = foober
+
+a :
+	echo $(A)
+	echo $(SET)
+
+define ACTION
+	echo action!!!
+endef
+define RULE
+x :
+$(ACTION)
+endef
+define RULE2
+y :
+endef
+
+$(RULE)
+$(RULE2)
+
+a :
+
 FOO:=$$
 GLOBAL_VAR = $(FOO)x
 FEE=$(GLOBAL_VAR)
