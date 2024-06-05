@@ -1,12 +1,9 @@
-# test makefile
-program : blud.lua
+COLON = :
+a $(COLON) b
 
-
-SET = A = you da man
-$(SET) = foober
+b : ; echo making b
 
 a :
-	echo $(A)
 	echo $(SET)
 
 define ACTION

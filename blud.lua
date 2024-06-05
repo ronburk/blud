@@ -27,8 +27,23 @@ local function dump(o)
 end
 
 blud              = {}
+
 blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
+blud.var_metatable= {
+    __tostring = function(var)
+        return "Need to write var_metatable.__tostring!"
+    end
+    }
+blud.var_get      = function(var_name)
+    -- ??? only works on global right now!
+    return blud.public_env[var_name]
+end
+blud.var_set      = function(var_name, var_value)
+
+end
+
+
 blud.match_macro_assign = function(line)
     local operators = {
         ["="]   = true,
@@ -91,6 +106,31 @@ blud.macro_expand = function (text)
     end
     return result
 end
+blud.macro_assign = function(macro_name, operator, input)
+    local chunks = {}
+    local pattern = "()(%$%(%w+%))()"
+    local last_pos = 1
+
+    for start_pos, macro, end_pos in input:gmatch(pattern) do
+        if start_pos > last_pos then
+            table.insert(chunks, string.format("%q", input:sub(last_pos, start_pos - 1)))
+        end
+        local macro_name = macro:sub(3, -2)  -- Extract macro name without $()
+        table.insert(chunks, macro_name .. "()")
+        last_pos = end_pos
+    end
+
+    if last_pos <= #input then
+        table.insert(chunks, string.format("%q", input:sub(last_pos)))
+    end
+
+    local code = "return function() return " .. table.concat(chunks, " .. ") .. " end"
+    print("code is " .. code)
+    return assert(loadstring(code))()
+end
+
+
+
 blud.phase2_text  = ""
 blud.phase2_append= function(str)
     blud.phase2_text = blud.phase2_text .. str .. "\n"
@@ -106,6 +146,7 @@ blud.phase2       = function ()
         print("Line is: " .. line )
         local macro_name, operator, text = blud.match_macro_assign(line)
         if macro_name then
+            blud.macro_assign(macro_name, operator, text)
             print(macro_name .. operator .. text)
         end
     end
@@ -552,6 +593,56 @@ function phase1_pass(get_line)
     return text
 end
 
+-- When processing Lua code, it could have text in column 1 due to
+-- a string constant or a comment. Here, we check for that possibility
+-- and return nil if it's not true, else a string that signifies the end
+-- of the multi-line string/comment
+function skip_long_quote_lua(line, pos)
+    local match = line:match("=*%[", pos)
+    if not match then return nil end -- wasn't start of long quote after all
+    local count = #match - 2
+    assert(count >= 0);
+    local end_quote = "]" .. string.rep("=", count) .. "]"
+    pos = line:find(end_quote, pos, true)
+    if pos then
+        return pos + #end_quote
+    else
+        return end_quote
+    end
+end
+
+function find_multiline_start_lua(line, pos)
+    pos = line:find("['\"-[]", pos)
+    while pos do
+        local hit = line:sub(pos, 1)
+        if hit == '[' then
+            pos = skip_long_quote_lua(line, pos)
+        elseif hit == '-' then
+            pos = skip_comment_lua(line, pos)
+        elseif hit == '"' or hit == "'" then
+            pos = skip_short_quote_lua(line, pos, hit)
+        else
+            assert(false)
+        end
+        if not pos then break end
+        pos = line:find("['\"-[]", pos)
+    end
+    return pos
+end
+
+function find_multiline_lua(line)
+    local pos = line:find("['\"-[]")
+    while pos do
+        local hit = line:sub(pos, 1)
+        if hit == '"' then
+            --
+        elseif hit == "'" then
+            --
+        elseif hit == '[' then
+            --
+        end
+    end
+end
 
 function preprocess(get_line)
     local previous_indent   = 0
@@ -581,8 +672,10 @@ function preprocess(get_line)
             end
             
             blud_user_code = blud_user_code .. "end "
-        else
-            blud_user_code = blud_user_code .. line .. '\n'
+        else -- line is Lua, but could be extended by comment or quoted string
+            while true do
+                blud_user_code = blud_user_code .. line .. '\n'
+            end
         end
         end
     end
