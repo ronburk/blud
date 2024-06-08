@@ -15,6 +15,16 @@ So the atom name will be ".AFTER". The bound name will remove the quotes.
 *** .SILENT
 
 
+** quoted pathnames
+We need quotes, since for example:
+
+if : a.c b.c
+
+would be mis-interpreted as a Lua IF statement. However,
+we can't have the backslash be the escape character in quotes
+because of Windows path conventions.
+
+
 ** Appending to macro
 GNU Make says you can't do this:
 
@@ -171,6 +181,141 @@ end
 
 
 * log
+** <2024-06-07 Fri>
+to expand macros, must also a) execute macro definitions as they appear and
+b) detect indented actions so we don't expand them. And c) detecting indented
+actions requires detecting dependency lines. Can't cleanly separate macro
+expansion from parsing!
+
+State 0: expand all macros, char by char
+    
+    got 1st "name"
+
+UGH! Implausible to ever generate good error messages! Back to restricting
+use of macros.
+
+Name <assignop> macros_OK
+macros_OK <depend_op> macros_OK
+    macros_OK
+
+special:
+
+build <name>
+end
+define <name>
+end
+define /<name>
+end
+
+Macro expansion pass:
+1) if looks like macro assign op, do the operation, line won't appear in output
+2) if looks like dependency line, expand all macros (multi-line not ok), copy to output
+3) if indented, just copy to output
+
+example:
+
+define ACTION
+cp $^ foo
+echo foo!
+end
+OBJS = a.o b.o c.o
+program : $(OBJS)
+    $(ACTION)
+<><><><><>
+program : a.o b.o c.o
+    $(ACTION)
+
+
+
+** <2024-06-06 Thu>
+
+
+** <2024-06-05 Wed>
+
+OK, let's make phase 2? 3? expand macros. We assume that we can
+rigorously identify non-lua lines even in the face of macros. Phase 1
+was creating the Lua code that only has to be regenerated if the
+bludfile changes.  Phase 2 executes that code to create
+blud.phase2_text.
+
+Should we expand macros while appending to blud.phase2_text, or in a
+separate pass? Separate pass! Make things as clear as possible. Want
+access to text output of phase 2 that shows what (including macros)
+is the "real" input to the graph construction. Let's see problems:
+
+FOO = FEE = a.c
+$(FOO)
+
+This is an example GNU Make fails on. We see $(FOO), we're not
+in a macro definition, we're not in an action, so we expand it.
+Ah, that's why GNU Make fails, I bet. Maybe. You have to not
+only expand it, but then execute it (phase 4?).
+
+So, the trick in a macro expansion pass is that there are two
+contexts where macros should not be expanded: macro definitions
+and actions. But those contexts cannot always be identified
+in a single-pass macro expansion:
+
+NAME   = Foo
+VALUE  = Fee
+MACDEF = $(NAME) = 
+$(MACDEF) $(VALUE)
+-- expands to
+Foo = Fee
+
+Well, maybe the only problem is knowing we're in an action:
+
+X = foo!
+RULE = a : b
+define ACTION
+    echo $(X)
+end
+$(RULE)
+$(ACTION)
+-- expands to
+X = foo!
+RULE = a : b
+define ACTION
+    echo $(X)
+end
+a : b
+    echo $(X)
+
+
+Really, really want to think in terms of variables instead of macros.
+If you want to do weird stuff, do it in Lua!
+
+What if: variables are only expanded in lhs/rhs of rule or in actions?
+If you want them expanded anywhere else, you have to explicitly
+say so.
+
+Or maybe we just support simple macros and if you get into trouble
+it's your own fault for not switching to Lua.
+
+Do we recognize a macro definition in the expansion of a
+macro? That is, the exact case where GNU make fails:
+
+SET = A = you da man
+$(SET)
+a :
+	echo $(A)
+	echo $(SET)
+
+OK, let's go back to variables, not macros. Variable/function
+invocations can only happen inside variable definition,
+inside variable invocation, or inside action. THEN can I have
+a simple expansion pass?
+
+And... also want to handle spaces inside filenames. Two main
+uses for variables are actions (command flags) and filenames.
+What if I DO have two flavors of variable, but they are:
+array of filenames, and text.
+
+OBJS      = { "file with space.txt" a.c b.c c.c }
+EXTRA_OBJ = d.c
+program   : $(OBJS) $(EXTRA_OBJ)
+
+
 ** <2024-06-04 Tue>
 
 Why am I stuck? Little things. What are the exact rules for where

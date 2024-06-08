@@ -1,10 +1,10 @@
-COLON = :
-a $(COLON) b
-
-b : ; echo making b
+SET = A = you da man
+$(SET)
 
 a :
+	echo $(A)
 	echo $(SET)
+
 
 define ACTION
 	echo action!!!

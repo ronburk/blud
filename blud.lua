@@ -140,14 +140,67 @@ blud.phase3_append= function(str)
     blud.phase3_text = blud.phase2_text .. str .. "\n"
 end
 
-blud.phase2       = function ()
+blud.string_stack = function(str, pos)
+    return {
+        { str, pos },
+        push = function(str, pos)
+            table.insert(this, {str=str,pos=pos})
+        end,
+        pop = function()
+            table.remove(this)
+            return #this
+        end,
+        get_char = function(expanding)
+            while #this do
+                local finger = this[#this]
+                if finger.pos >= #finger.str then
+                    table.remove(this)
+                else
+                    while true do
+                        local result = finger.str:sub(finger.pos, 1)
+                        finger.pos = finger.pos + 1
+                        if result ~= '$' then return result end
+                        if not expanding then return result end
+                        -- oh oh, possible macro invocation
+                        local next_char = this:get_char(false)
+                        if next_char == nil or next_char == '$' then return '$' end
+                        error("need to handle macro invocation!")
+                    end
+                end
+            end
+            return nil
+        end
+    }
+end
+
+blud.phase3       = function ()
     print(blud.phase2_text)
+    local input_stack = blud.string_stack(blud.phase_text, 1)
+    local state = "START"
+    while true do
+        local char = input_stack:get_char()
+        if not char then break end
+        if state == "START" then
+            if 
+        end
+    end
+    while input_stack do
+        local input = input
+    end
+
+    for i = 1, #blud.phase2_text do
+        local c = blud.phase2_text:sub(i, 1)
+--        if c == '$' then
+    end
+
     for line in blud.lines(blud.phase2_text) do
         print("Line is: " .. line )
         local macro_name, operator, text = blud.match_macro_assign(line)
         if macro_name then
             blud.macro_assign(macro_name, operator, text)
             print(macro_name .. operator .. text)
+        elseif blud.match_dependency(line) then
+            
         end
     end
 end
