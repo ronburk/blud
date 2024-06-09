@@ -137,7 +137,8 @@ blud.phase2_append= function(str)
 end
 blud.phase3_text  = ""
 blud.phase3_append= function(str)
-    blud.phase3_text = blud.phase2_text .. str .. "\n"
+    if str == nil then str = "" end
+    blud.phase3_text = blud.phase3_text .. str .. "\n"
 end
 
 blud.string_stack = function(str, pos)
@@ -175,9 +176,12 @@ end
 
 blud.phase3       = function ()
     print(blud.phase2_text)
-    local input_stack = blud.string_stack(blud.phase_text, 1)
-    local state = "START"
-    while true do
+    local get_line          = blud.lins(blud.phase2_text)
+    local previous_was_rule = false
+    local line              = get_line()
+    while line do
+        if 
+
         local char = input_stack:get_char()
         if not char then break end
         if state == "START" then

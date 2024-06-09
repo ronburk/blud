@@ -181,6 +181,17 @@ end
 
 
 * log
+** <2024-06-08 Sat>
+Another day, another run at progress.  Phase 1 produced a Lua program.
+Phase 2 produces blud.phase2_text, the actual bludfile directives
+that will be read in this invocation of blud. Phase 3 takes each line,
+performs any required variable substitution, then executes that line
+(which either performs variable assignment, a dependency rule, or
+associates action text). No multi-line variables allowed except in
+actions, so can really do this line-by-line, no input stacking.
+Every line in will be a line out.
+
+
 ** <2024-06-07 Fri>
 to expand macros, must also a) execute macro definitions as they appear and
 b) detect indented actions so we don't expand them. And c) detecting indented
