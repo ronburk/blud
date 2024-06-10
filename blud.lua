@@ -174,13 +174,18 @@ blud.string_stack = function(str, pos)
     }
 end
 
+function looks_like_macro_assign(text)
+    local match = text.match("^%a+%s*[=+:]"
+end
+
 blud.phase3       = function ()
     print(blud.phase2_text)
-    local get_line          = blud.lins(blud.phase2_text)
+    local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
     while line do
-        if 
+        if line:match("^%a+%s*[=+:]") then
+            
 
         local char = input_stack:get_char()
         if not char then break end
