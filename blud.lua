@@ -177,7 +177,7 @@ end
 blud.phase3       = function ()
     print(blud.phase2_text)
     local get_line          = blud.lins(blud.phase2_text)
-    local previous_was_rule = false
+    local action_legal_here = false
     local line              = get_line()
     while line do
         if 
