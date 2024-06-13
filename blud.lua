@@ -87,25 +87,37 @@ blud.get_macro_call = function (text, pos)
     return pos, macro
 end
 
-blud.macro_expand = function (text)
+-- macro_expand: given text and the offset of a '$', recursively expand
+-- just that macro. Return the expansion text and the position just after
+-- the macro invocation, where the caller can resume scanning.
+-- note the mutual recursion between blud.macro_expand and blud.macro_expand_text
+blud.macro_expand = function (text, pos)
     local result = ""
-    local pos    = 1
     local max_pos= #text
-    while pos <= max_pos do
-        local char = text:sub(pos, 1)
-        if char == '$' and pos < max_pos then
-            local macro_name = nil
-            pos  = pos + 1
-            char = text:sub(pos, 1)
-            if char == '$' then result = result .. char
-            elseif char == '(' then
-            end
+    assert(pos <= max_pos)
+    assert(text:sub(pos, pos) == "$")
+    pos = pos + 1
+    if pos >= max_pos then
+        error("Unexpected '$' at end of line.")
+    end
+    local macro_name = ""
+    local char = text:sub(pos, pos)  -- examine char after '$'
+    if char == '$' then -- if literal '$'
+        return "$", pos + 1
+    elseif char ~= '(' then
+        macro_name = char
+        pos = pos + 1
+    else
+        macro_name = text:match("^%((%a%w+)%)", pos)
+        if not macro_name then
+            error("bad macro name: " ..  text:sub(pos))
         else
-            result = result .. char
+            pos = pos + 2 + #macro_name -- skip name + enclosing parens
         end
     end
-    return result
+    return "<" .. macro_name .. ">", pos
 end
+
 blud.macro_assign = function(macro_name, operator, input)
     local chunks = {}
     local pattern = "()(%$%(%w+%))()"
@@ -174,17 +186,132 @@ blud.string_stack = function(str, pos)
     }
 end
 
-function looks_like_macro_assign(text)
-    local match = text.match("^%a+%s*[=+:]"
+blud.phase3 = {}
+function blud.phase3:looks_like_macro_assign(text)
+    local name, operator, operator_pos = text:match("^(%a[%w_]*)%s*([=+:])()")
+    if name and operator and operator_pos then
+        local next_char = text:sub(operator_pos, operator_pos)
+        if operator == ":" then
+            if next_char ~= '=' then return nil end
+            operator = ":="
+            operator_pos = operator_pos + 1
+        elseif operator == "+" then
+            if next_char ~= '=' then
+                 error("Unexpected '+': " .. text )
+            end
+            operator = "+="
+            operator_pos = operator_pos + 1
+        elseif operator == '=' then
+            -- ok
+        else
+            assert(false)
+        end
+        local macro_body = text:sub(operator_pos)
+        return { text=text, name=name, operator=operator, body=macro_body }
+    end
+    return nil
 end
 
+function blud.phase3:macro_assign(macro)
+    print("expand_macro_assign got: ", dump(macro))
+    return macro.name .. macro.operator .. macro.body
+end
+
+function blud.phase3:looks_like_dependency_line(text)
+    -- ??? make better!
+    local match = text:match("^[^%s].*:")
+    return match ~= nil
+end
+-- macro_expand_text: return a copy of the supplied text, with
+-- each macro invocation recursively expanded.
+function blud.macro_expand_text(text)
+    local result = {}
+    local pos = 1
+    local len = #text
+
+    while pos <= len do
+        local dollarPos = string.find(text, "%$", pos)
+
+        if dollarPos then
+            table.insert(result, string.sub(text, pos, dollarPos - 1))
+            local newText, newPos = blud.macro_expand(text, dollarPos)
+            table.insert(result, newText)
+            pos = newPos
+        else
+            -- No more "$" found, accumulate the remaining text
+            table.insert(result, string.sub(text, pos, len))
+            break
+        end
+    end
+
+    -- Concatenate all accumulated parts and return the final result
+    return table.concat(result)
+
+end
+
+function blud.phase3:looks_like_empty_line(text)
+    -- handle comments
+    match = string.find(text, "^%s*$")
+    return match ~= nil
+end
+
+function blud.phase3:looks_like_action_line(text)
+    -- handle comments
+    match = string.find(text, "^%s+")
+    return match ~= nil
+end
+
+function blud.phase3:execute_dependency_line(line)
+    print("execute: ", line)
+end
+
+function blud.phase3:parse()
+    print(blud.phase2_text)
+    local get_line          = blud.lines(blud.phase2_text)
+    local action_legal_here = false
+    local line              = get_line()
+    self.text = {}
+    while line do
+        assert(line ~= nil)
+        local macro = self:looks_like_macro_assign(line)
+        if macro then
+            line = self:macro_assign(macro)
+            table.insert(self.text, line .. "\n")
+            print("    becomes: '" .. line .. ".")
+            line = get_line()
+        elseif self:looks_like_dependency_line(line) then
+            line = blud.macro_expand_text(line)
+            table.insert(self.text, line .. "\n")
+            local targets = self:execute_dependency_line(line)
+            local action = ""
+            line = get_line()
+            if line then
+                while self:looks_like_action_line(line) do
+                    action = action .. line .. "\n"
+                    table.insert(self.text, line .. "\n")
+                    line = get_line()
+                    if not line then break end
+                end
+            end
+        elseif self:looks_like_empty_line(line) then
+            table.insert(self.text, line .. "\n")
+            line = get_line()
+        else
+            error("wtf: '" .. line .. "'")
+        end
+    end
+    print(table.concat(self.text))
+end
+
+
+--[=[
 blud.phase3       = function ()
     print(blud.phase2_text)
     local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
     while line do
-        if line:match("^%a+%s*[=+:]") then
+        if looks_like_macro_assign(line) then
             
 
         local char = input_stack:get_char()
@@ -213,6 +340,7 @@ blud.phase3       = function ()
         end
     end
 end
+]=]
 
 blud.current_time = os.time()
 blud.shallow_copy = function (original)
@@ -799,8 +927,8 @@ local str = phase1_pass(buffered_line_io(file))
 file:close()
 print(blud_module_code)
 print(str)
-print("blud.phase2()\n")
-print("blud.phase3()\n")
+--print("blud.phase2()\n")
+print("blud.phase3:parse()\n")
 
 
 
