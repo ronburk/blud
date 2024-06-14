@@ -181,6 +181,18 @@ end
 
 
 * log
+** <2024-06-13 Thu>
+Make macros do something. Why am I so slow?  Let a macro always
+be a function that returns a string. If it was a ":=" style macro,
+the string is constant. Otherwise, the string is generated from
+an array of string constants and references to other macros
+(functions). Don't worry about macros with arguments for now.
+
+Simpler: always reparse late-binding macro. Then, a macro is
+always a string, just have to keep track of whether it needs
+expanding or not when you ask for its value.
+
+
 ** <2024-06-08 Sat>
 Another day, another run at progress.  Phase 1 produced a Lua program.
 Phase 2 produces blud.phase2_text, the actual bludfile directives

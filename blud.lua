@@ -28,6 +28,7 @@ end
 
 blud              = {}
 
+blud.macros       = {}
 blud.public_env   = {}
 blud.private_env  = { __index = blud.public_env }
 blud.var_metatable= {
@@ -115,30 +116,57 @@ blud.macro_expand = function (text, pos)
             pos = pos + 2 + #macro_name -- skip name + enclosing parens
         end
     end
-    return "<" .. macro_name .. ">", pos
+    local macro_value = blud.macros[macro_name]
+    print(dump(blud.macros))
+    if macro_value then
+        result = macro_value()
+    end
+    return result, pos
+end
+-- macro_expand_text: return a copy of the supplied text, with
+-- each macro invocation recursively expanded.
+function blud.macro_expand_text(text)
+    local result = {}
+    local pos = 1
+    local len = #text
+
+    while pos <= len do
+        local dollar_pos = string.find(text, "%$", pos)
+
+        if dollar_pos then
+            table.insert(result, string.sub(text, pos, dollar_pos - 1))
+            local new_text, newPos = blud.macro_expand(text, dollar_pos)
+            table.insert(result, new_text)
+            pos = newPos
+        else
+            -- No more "$" found, accumulate the remaining text
+            table.insert(result, string.sub(text, pos, len))
+            break
+        end
+    end
+
+    return table.concat(result)
 end
 
-blud.macro_assign = function(macro_name, operator, input)
-    local chunks = {}
-    local pattern = "()(%$%(%w+%))()"
-    local last_pos = 1
-
-    for start_pos, macro, end_pos in input:gmatch(pattern) do
-        if start_pos > last_pos then
-            table.insert(chunks, string.format("%q", input:sub(last_pos, start_pos - 1)))
+-- the value of a macro will always be a function which returns either
+-- a string, or the macro-expanded value of a string.
+blud.macro_assign = function(macro_name, operator, input, target)
+    input = input:match("^%s*(.*)")
+    local macro_value;
+    local result = input
+    if operator == "=" then
+        macro_value = function()
+            return blud.macro_expand_text(input)
         end
-        local macro_name = macro:sub(3, -2)  -- Extract macro name without $()
-        table.insert(chunks, macro_name .. "()")
-        last_pos = end_pos
+    elseif operator == ":=" then
+        result = blud.macro_expand_text(input)
+        macro_value = function () return result end
+    else
+        assert(false)
     end
+    blud.macros[macro_name] = macro_value
+    return result
 
-    if last_pos <= #input then
-        table.insert(chunks, string.format("%q", input:sub(last_pos)))
-    end
-
-    local code = "return function() return " .. table.concat(chunks, " .. ") .. " end"
-    print("code is " .. code)
-    return assert(loadstring(code))()
 end
 
 
@@ -222,32 +250,6 @@ function blud.phase3:looks_like_dependency_line(text)
     local match = text:match("^[^%s].*:")
     return match ~= nil
 end
--- macro_expand_text: return a copy of the supplied text, with
--- each macro invocation recursively expanded.
-function blud.macro_expand_text(text)
-    local result = {}
-    local pos = 1
-    local len = #text
-
-    while pos <= len do
-        local dollarPos = string.find(text, "%$", pos)
-
-        if dollarPos then
-            table.insert(result, string.sub(text, pos, dollarPos - 1))
-            local newText, newPos = blud.macro_expand(text, dollarPos)
-            table.insert(result, newText)
-            pos = newPos
-        else
-            -- No more "$" found, accumulate the remaining text
-            table.insert(result, string.sub(text, pos, len))
-            break
-        end
-    end
-
-    -- Concatenate all accumulated parts and return the final result
-    return table.concat(result)
-
-end
 
 function blud.phase3:looks_like_empty_line(text)
     -- handle comments
@@ -275,9 +277,8 @@ function blud.phase3:parse()
         assert(line ~= nil)
         local macro = self:looks_like_macro_assign(line)
         if macro then
-            line = self:macro_assign(macro)
+            line = blud.macro_assign(macro.name, macro.operator, macro.body)
             table.insert(self.text, line .. "\n")
-            print("    becomes: '" .. line .. ".")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
             line = blud.macro_expand_text(line)
