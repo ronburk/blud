@@ -174,13 +174,30 @@ lib_OBJS  := lib.o api.o
 main lib :AddObjs: _OBJS
 
 function AddObjs(target, prerequisites, action)
-    $ $@ : $($@_OBJS)
+    $ $@ : ${ $@ .. "_OBJS" }
 end
 <><><><><>
 
 
 
 * log
+** <2024-06-14 Fri>
+OK, macros do something. Should I implement "build" keyword next?
+build <name>
+...
+end
+
+is really same as:
+
+if $(BUILD) == <name> then
+    $ ...
+end
+
+except we throw some default behavior in there. We make sure
+the <name> is a directory or can be created as a directory.
+We set the output working directory (OWD).
+
+
 ** <2024-06-13 Thu>
 Make macros do something. Why am I so slow?  Let a macro always
 be a function that returns a string. If it was a ":=" style macro,
