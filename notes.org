@@ -181,6 +181,38 @@ end
 
 
 * log
+** <2024-06-15 Sat>
+
+Argh.  build/end is ambiguous:
+
+if ...
+build debug
+end   <-- end of 'build' or end of 'if'?
+
+Now, you could say "you should really indent that anyway" like so:
+
+if ...
+    $ build debug
+    $ ...
+    $ end
+end
+
+Well, this is not so bad if you say "blud code inside lua must be marked by $".
+Philosophy: $ is already a special character in make, and not a special character
+in Lua.
+
+build debug
+    $ CFLAGS = -g
+end
+<><><><><><>><>
+OK, kind of want to stop and handle Lua comments, because my first
+test file has them. Is it easy? Maybe just allow Lua-style comments
+and quoted strings everywhere.
+
+1) line that starts with <whitespace>*-- is single-line comment we can skip
+2) line that contains
+
+
 ** <2024-06-14 Fri>
 OK, macros do something. Should I implement "build" keyword next?
 build <name>

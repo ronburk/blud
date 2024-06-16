@@ -747,14 +747,29 @@ function phase1_embedded_make(line)
     return line
 end
 
+function phase1_line_is_empty(line)
+    if line:find("^%s*$") then
+        return true
+    elseif line:find("^%s*%-%-[^[]") then
+        return true
+    elseif line:find("^%s*%-%-") then
+        return true
+    else
+        return false
+    end
+end
+
 function phase1_pass(get_line)
     local line_number   = 0
     local text          = ""
     local open_keyword  = nil
+
     while true do
+        ::NEXT::
         line_number = line_number + 1
         local line = get_line(false)
         if line == nil then break end -- end of file
+        if phase1_line_is_empty(line) then goto NEXT end
         local keyword = leading_keyword(line)
         if not keyword then
             if open_keyword then   -- copying Lua code ??? handle embedded make code
@@ -786,8 +801,8 @@ end
 
 -- When processing Lua code, it could have text in column 1 due to
 -- a string constant or a comment. Here, we check for that possibility
--- and return nil if it's not true, else a string that signifies the end
--- of the multi-line string/comment
+-- and return nil if it's not true, else a string that signifies what the end
+-- of the multi-line string/comment should look like
 function skip_long_quote_lua(line, pos)
     local match = line:match("=*%[", pos)
     if not match then return nil end -- wasn't start of long quote after all
