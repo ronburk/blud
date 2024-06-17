@@ -145,6 +145,7 @@ function blud.macro_expand_text(text)
         end
     end
 
+print("macro_expand_text of ", text, "returns ", table.concat(result))
     return table.concat(result)
 end
 
@@ -263,8 +264,76 @@ function blud.phase3:looks_like_action_line(text)
     return match ~= nil
 end
 
-function blud.phase3:execute_dependency_line(line)
-    print("execute: ", line)
+
+function match_quoted_string(text, start_pos)
+    local quote_char = text:sub(start_pos, start_pos)
+    if quote_char ~= '"' and quote_char ~= "'" then
+        return nil, "Not a quote character at start_pos"
+    end
+
+    local i = start_pos + 1
+    local len = #text
+    local escaped = false
+
+    while i <= len do
+        local char = text:sub(i, i)
+        
+        if char == "\\" and not escaped then
+            escaped = true
+        elseif char == quote_char and not escaped then
+            return text:sub(start_pos, i), i + 1
+        else
+            escaped = false
+        end
+
+        i = i + 1
+    end
+
+    return nil, "Unterminated quoted string"
+end
+
+function match_colon_operator(text, pos)
+    local match = text:match("^:%a*:", pos)
+    if match then
+        return text:sub(pos, pos+#match)
+    end
+    return ":"
+end
+
+function blud.phase3:tokenize(line)
+    local pos = 0
+    local token
+    local tokens = {}    
+    while pos < #line do
+        pos = pos + 1
+        local char = line:sub(pos, pos)
+        if char:find("%s") then   -- if char is white space
+            -- skip white space
+        elseif char:find("[\'\"]") then -- if char is a quote
+            token = match_quoted_string(line, pos)
+            table.insert(tokens, token)
+print("token = ", token)
+        elseif char == ":" then
+            token = match_colon_operator(line, pos)
+            table.insert(tokens, token)
+print("token = ", token)
+        else
+            local pattern = "^[^%s:\"\']*"
+            token   = line:match(pattern, pos)
+            table.insert(tokens, token)
+print("token = ", token)
+            assert(#token > 0)
+            pos = pos + #token - 1
+        end
+    end
+    return tokens
+end
+
+-- variables have been expanded, we have line of the form <targets> <colon_operator> <prerequisites>
+function blud.phase3:compile_rule(dependency_line, action)
+    print("dependency_line ='" .. dependency_line, "'")
+--    print("COmPILE RULE: ", line, action)
+    local tokens = blud.phase3:tokenize(dependency_line)
 end
 
 function blud.phase3:parse()
@@ -281,9 +350,8 @@ function blud.phase3:parse()
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
-            line = blud.macro_expand_text(line)
-            table.insert(self.text, line .. "\n")
-            local targets = self:execute_dependency_line(line)
+            local dependency_line = blud.macro_expand_text(line)
+            table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()
             if line then
@@ -294,6 +362,8 @@ function blud.phase3:parse()
                     if not line then break end
                 end
             end
+            blud.phase3:compile_rule(dependency_line, action)
+            line = get_line()
         elseif self:looks_like_empty_line(line) then
             table.insert(self.text, line .. "\n")
             line = get_line()
