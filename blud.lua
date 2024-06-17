@@ -277,7 +277,6 @@ function match_quoted_string(text, start_pos)
 
     while i <= len do
         local char = text:sub(i, i)
-        
         if char == "\\" and not escaped then
             escaped = true
         elseif char == quote_char and not escaped then
@@ -285,7 +284,6 @@ function match_quoted_string(text, start_pos)
         else
             escaped = false
         end
-
         i = i + 1
     end
 
@@ -334,6 +332,35 @@ function blud.phase3:compile_rule(dependency_line, action)
     print("dependency_line ='" .. dependency_line, "'")
 --    print("COmPILE RULE: ", line, action)
     local tokens = blud.phase3:tokenize(dependency_line)
+print(dump(tokens))
+    local targets = {}
+    local prerequisites = {}
+    local token_pos = 1
+    local token     = ""
+    while token_pos <= #tokens do
+        token = tokens[token_pos]
+        if token:sub(1,1) == ':' then
+print("Hit colon")
+            break
+        else
+            table.insert(targets, token)
+        end
+        token_pos = token_pos + 1
+    end
+    print("token is '", token)
+    assert(token:sub(1,1) == ":")
+    local colon_operator = token
+    token_pos = token_pos + 1
+    while token_pos < #tokens do
+        token = tokens[token_pos]
+        if token:sub(1,1) == ":" then
+            error("more than one colon operator on line!")
+        else
+            table.insert(prerequisites, token)
+        end
+        token_pos = token_pos + 1
+    end
+    print(dump(targets), colon_operator, dump(prerequisites))
 end
 
 function blud.phase3:parse()

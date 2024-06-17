@@ -181,6 +181,8 @@ end
 
 
 * log
+** <2024-06-17 Mon>
+
 ** <2024-06-15 Sat>
 
 Argh.  build/end is ambiguous:
