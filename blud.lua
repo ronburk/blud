@@ -535,7 +535,7 @@ blud.super_atom = {
     end,
     DO_ACTION = function(target)
         print("DO_ACTION in super atom for " .. target.NAME)
-        local action = blud.macro_expand(target.ACTION)
+        local action = blud.macro_expand_text(target.ACTION)
         status, exit_code = os.execute(action)
         assert(status)
         if exit_code then
