@@ -26,12 +26,12 @@ local function dump(o)
     end
 end
 
-blud              = {}
-
-blud.macros       = {}
-blud.public_env   = {}
-blud.private_env  = { __index = blud.public_env }
-blud.var_metatable= {
+blud                 = {}
+blud.primary_targets = nil
+blud.macros          = {}
+blud.public_env      = {}
+blud.private_env     = { __index = blud.public_env }
+blud.var_metatable   = {
     __tostring = function(var)
         return "Need to write var_metatable.__tostring!"
     end
@@ -123,6 +123,7 @@ blud.macro_expand = function (text, pos)
     end
     return result, pos
 end
+
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
 function blud.macro_expand_text(text)
@@ -310,16 +311,13 @@ function blud.phase3:tokenize(line)
         elseif char:find("[\'\"]") then -- if char is a quote
             token = match_quoted_string(line, pos)
             table.insert(tokens, token)
-print("token = ", token)
         elseif char == ":" then
             token = match_colon_operator(line, pos)
             table.insert(tokens, token)
-print("token = ", token)
         else
             local pattern = "^[^%s:\"\']*"
             token   = line:match(pattern, pos)
             table.insert(tokens, token)
-print("token = ", token)
             assert(#token > 0)
             pos = pos + #token - 1
         end
@@ -329,10 +327,7 @@ end
 
 -- variables have been expanded, we have line of the form <targets> <colon_operator> <prerequisites>
 function blud.phase3:compile_rule(dependency_line, action)
-    print("dependency_line ='" .. dependency_line, "'")
---    print("COmPILE RULE: ", line, action)
     local tokens = blud.phase3:tokenize(dependency_line)
-print(dump(tokens))
     local targets = {}
     local prerequisites = {}
     local token_pos = 1
@@ -340,18 +335,16 @@ print(dump(tokens))
     while token_pos <= #tokens do
         token = tokens[token_pos]
         if token:sub(1,1) == ':' then
-print("Hit colon")
             break
         else
             table.insert(targets, token)
         end
         token_pos = token_pos + 1
     end
-    print("token is '", token)
     assert(token:sub(1,1) == ":")
     local colon_operator = token
     token_pos = token_pos + 1
-    while token_pos < #tokens do
+    while token_pos <= #tokens do
         token = tokens[token_pos]
         if token:sub(1,1) == ":" then
             error("more than one colon operator on line!")
@@ -360,7 +353,8 @@ print("Hit colon")
         end
         token_pos = token_pos + 1
     end
-    print(dump(targets), colon_operator, dump(prerequisites))
+--    print(dump(targets), colon_operator, dump(prerequisites))
+    blud.add_rules(targets, prerequisites, action)
 end
 
 function blud.phase3:parse()
@@ -390,7 +384,7 @@ function blud.phase3:parse()
                 end
             end
             blud.phase3:compile_rule(dependency_line, action)
-            line = get_line()
+--            line = get_line()
         elseif self:looks_like_empty_line(line) then
             table.insert(self.text, line .. "\n")
             line = get_line()
@@ -541,10 +535,11 @@ blud.super_atom = {
     end,
     DO_ACTION = function(target)
         print("DO_ACTION in super atom for " .. target.NAME)
-        status, exit_code = os.execute(target.ACTION)
+        local action = blud.macro_expand(target.ACTION)
+        status, exit_code = os.execute(action)
         assert(status)
         if exit_code then
-            error("command failed: " .. target.ACTION)
+            error("command failed: " .. action)
         end
     end,
 }
@@ -639,6 +634,9 @@ print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites
     end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
+        if blud.primary_targets == nil then
+            blud.primary_targets = { target }
+        end
         target.ADD_RULE(target, prereq_atoms, action)
     end
 end
@@ -1042,6 +1040,15 @@ print(blud_module_code)
 print(str)
 --print("blud.phase2()\n")
 print("blud.phase3:parse()\n")
+print([[
+if blud.primary_targets == nil then
+    error("No targets to build!")
+else
+    for _, target in ipairs(blud.primary_targets) do
+        target:BUILD()
+    end
+end
+]])
 
 
 
