@@ -1,0 +1,12 @@
+-- test0004
+--
+-- Simple build directive
+
+build release
+end
+
+CMD = touch test0004.out
+
+all: 
+    $(CMD)
+

@@ -70,10 +70,17 @@ Lua code in column 1 unless it is the beginning of a compound statement:
     while/do/end
     repeat/until
     local
+
+The result of Phase 1 is a Lua program that, when executed, produces
+blud.phase2_text. This is the set of blud (not Lua) statements that
+must be parsed and executed to create the dependency graph.
+
 ** Phase 2
 Now we execute the Lua program created by Phase 1 to create blud.phase2_text
 and parse blud.phase2_text to create make variables and the
-make dependency graph. In this parse, macros must be expanded.
+make dependency graph. Macros
+
+In this parse, macros must be expanded.
 
 ** Parsing
 

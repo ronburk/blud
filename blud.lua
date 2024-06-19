@@ -27,6 +27,7 @@ local function dump(o)
 end
 
 blud                 = {}
+blud.build_name      = nil
 blud.primary_targets = nil
 blud.macros          = {}
 blud.public_env      = {}
@@ -60,6 +61,13 @@ blud.match_macro_assign = function(line)
         end
     end
     return nil
+end
+
+blud.build_init = function()
+    if blud.build_name then
+        os.execute("mkdir " .. blud.build_name)
+    end
+    blud.macros["OWD"] = function () return blud.build_name end
 end
 
 blud.lines        = function (str)
@@ -265,6 +273,14 @@ function blud.phase3:looks_like_action_line(text)
     return match ~= nil
 end
 
+function blud.phase3:looks_like_build_line(text)
+    -- handle comments
+    if text:find("^build%s*$") or text:find("^build%s+") then
+        return true
+    else
+        return valse
+    end
+end
 
 function match_quoted_string(text, start_pos)
     local quote_char = text:sub(start_pos, start_pos)
@@ -358,10 +374,13 @@ function blud.phase3:compile_rule(dependency_line, action)
 end
 
 function blud.phase3:parse()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     print(blud.phase2_text)
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!END phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
+    local inside_build      = false
     self.text = {}
     while line do
         assert(line ~= nil)
@@ -387,6 +406,28 @@ function blud.phase3:parse()
 --            line = get_line()
         elseif self:looks_like_empty_line(line) then
             table.insert(self.text, line .. "\n")
+            line = get_line()
+        elseif self:looks_like_build_line(line) then
+            local build_name = line:match("^build%s+(%a+)")
+            if not build_name then
+                error("Bad build directive syntax: " .. line)
+            end
+            if inside_build then error("Can't nest 'build' directives.") end
+            if not blud.build_name then
+                blud.build_name = build_name
+            end
+            line = get_line()
+            if build_name ~= blud.build_name then
+                while line and not line:find("^end%s*$") do
+                    line = get_line()
+                end
+                if not line then error("Missing 'end' for build directive.") end
+            else
+                inside_build = true
+            end
+        elseif line:find("^end%s*$") then
+            if not inside_build then error("extraneous 'end'") end
+            inside_build = false
             line = get_line()
         else
             error("wtf: '" .. line .. "'")
@@ -803,10 +844,11 @@ end
 function leading_keyword(line)
     local result = nil
     local keywords   = {
+        ["build"]    = true,  -- blud keyword
         ["do"]       = true,
         ["else"]     = true,
         ["elseif"]   = true,
-        ["end"]      = true,
+        ["end"]      = true,  -- blud AND Lua keyword
         ["for"]      = true,
         ["function"] = true,
         ["if"]       = true,
@@ -858,6 +900,8 @@ function phase1_pass(get_line)
     local line_number   = 0
     local text          = ""
     local open_keyword  = nil
+    local open_build    = nil
+    local default_build = nil
 
     while true do
         ::NEXT::
@@ -876,8 +920,14 @@ function phase1_pass(get_line)
             if open_keyword then syntax_error(line_number, "already inside '#1'", open_keyword) end
             open_keyword = keyword
         elseif keyword == "end" then
-            if not open_keyword then syntax_error(line_number, "Unexpected 'end'") end
-            open_keyword = nil
+            if open_build then
+                line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
+                open_build = false
+            elseif not open_keyword then
+                syntax_error(line_number, "Unexpected 'end'")
+            else
+                open_keyword = nil
+            end
         elseif keyword == "elseif" or keyword == "else" then
             if open_keyword ~= "if" and open_keyword ~= "elseif" then
                 syntax_error(line_number, "Unexpected '#1' doesn't match open '#2'", keyword, open_keyword)
@@ -886,6 +936,25 @@ function phase1_pass(get_line)
             end
         elseif keyword == "local" then
             -- just copy the line
+        elseif keyword == "build" then
+            if open_keyword then
+                error("build directive inside Lua code: " .. line)
+            elseif open_build then
+                error("build directives can't be nested: " .. line)
+            end
+            local build_name = line:match("^build%s+(%a+)")
+            if build_name == nil then
+                error("build directive missing build name: " .. line)
+            end
+            if not default_build then
+--                text = text .. string.format("blud.phase2_append(%q)\n",
+--                                             "blud.build_name =" .. lua_quote(build_name))
+                default_build = build_name
+            end
+            
+--            blud.build_name = blud.build_name or build_name
+            open_build = true
+            line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         else
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         end
@@ -1034,16 +1103,17 @@ file:close()
 
 file = io.stdin
 --preprocess(buffered_line_io(file))
-local str = phase1_pass(buffered_line_io(file))
+local phase1_text = phase1_pass(buffered_line_io(file))
 file:close()
 print(blud_module_code)
-print(str)
+print(phase1_text)
 --print("blud.phase2()\n")
 print("blud.phase3:parse()\n")
 print([[
 if blud.primary_targets == nil then
     error("No targets to build!")
 else
+    blud.build_init()
     for _, target in ipairs(blud.primary_targets) do
         target:BUILD()
     end

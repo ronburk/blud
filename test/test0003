@@ -1,0 +1,9 @@
+-- test0003
+--
+-- set a variable and use it in action
+
+CMD = touch test0003.out
+
+all: 
+    $(CMD)
+
