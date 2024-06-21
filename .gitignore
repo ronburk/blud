@@ -3,6 +3,9 @@
 *~
 .\#*
 .emacs.desktop*
+./luajit
+foo.*
+
 
 # Prerequisites
 *.d

@@ -1,0 +1,98 @@
+-- variables are scoped, from the environment down to individual instances of atoms
+-- attributes are attached to atoms or rules
+
+-- the basics: assign an attribute to an atom:
+-- This is done by putting the attribute on the left
+
+name: .BINARYATOM .ALSO
+.BINARYATOM: a b c d
+
+-- the basics: assign an attribute value to an atom
+
+name: .ONLYONEATOM = some stuff in make style
+name: .ONLYONEATOM = { true --[[ final expression of Lua block ]] }
+a b c : .ONLYONEATOM = { false }
+
+-- the basics assign a variable, which is always a string
+
+name : VAR = a b c d
+
+-- let's say that Lua inside make rules is identified by {}
+
+{this.PHONY = true} : a b c d
+
+-- assign to a target attribute
+debug:virtual={true}
+debug:virtual=true
+debug:OWD=debug
+
+debug : a b
+-- is same as:
+debug:: 
+
+-- debugging output
+debug :
+      {
+      
+      }
+-- 
+
+debug : {./debug} program CFLAGS += -g
+
+-- same as:
+
+debug : {./debug} program { env.CFLAGS = env.CLFAGS .. " -g" }
+
+-- same as:
+
+{debug} : program CFLAGS += -g
+
+
+-- same as:
+debug : OWD = ./debug
+debug : CFLAGS += -g
+debug : program
+-- same as:
+debug : {OWD = ./debug} {CFLAGS += -g} program
+
+
+
+
+debug:.CC.DEBUG: -g
+
+
+debug: program function(env)
+    env.DEBUG_FLAG = "-g"
+    env.PRODUCT_DIR = "debug"
+end
+
+debug: program
+{debug/program}
+
+release:  program function(env)
+    env.DEBUG_FLAG = ""
+    env.PRODUCT_DIR = "release"
+end
+
+program: program.c
+    cc -o program program.c
+--------
+-- I want the OWD to be the CWD during shell
+{debug} : program
+program : *.c
+    gcc $> -o $<
+
+
+
+
+--------------
+{debug} : program
+-- same as:
+debug {
+    blud.mkdir("./debug")
+    
+}
+
+-- how to do conditionals
+if $(willexpand to string) == "foob" then
+    $ CFLAGS = -g    

@@ -297,6 +297,9 @@ test002
 test003
 ]]
 
+Or, waitaminute, what if when expanding macro in a rule, we automatically
+treat newlines as spaces?
+
 ** <2024-06-17 Mon>
 
 ** <2024-06-15 Sat>
