@@ -14,6 +14,70 @@ So the atom name will be ".AFTER". The bound name will remove the quotes.
 *** .PRECIOUS
 *** .SILENT
 
+** implicit directories
+Maybe it's better to think of three different implicit directories, not just
+two. The source directory is where we look for for our atom binding to files.
+The output directory is where we expect to create targets. Finally, the
+current working directory is where we expect to be when executing actions,
+which causes pathnames in the action to be relative-adjusted. Or perhaps
+even a fourth directory: the bludfile directory.
+
+Should the bludfile directory matter? Probably not. The bludfile would
+normally contain relative pathnames, and those would be relative to the
+CWD of the user running the blud command. If nothing else, really want
+to allow bludfile to exist elsewhere for testing.
+
+** command-line target references
+Besides "-t <test_name>" and "-b <build_name>" maybe allow it like this:
+    blud debug:util
+so a:b means target "b" inside defined unit (test/build) "a".
+
+** for-each actions
+The normal rule looks like this:
+    target : prereq1 ... prereqN
+        action
+and action is executed once for the target and has access to all the
+prerequisite atom names. But in testing, we want to execute the same
+action against a big list of tests.  The make way of handling this is
+an implicit rule so that, e.g., test%.out depends on test%, and target
+depends on test*.out. Which is... OK.
+
+But that's not really identical to: perform this action for-each
+of the following specific "prerequisites".
+
+
+I guess the problem I'm getting at is I don't want the complexity of
+defining an implicit rule if I can avoid it. But it's also the complexity
+of naming "object" files instead of the source files.
+
+define test
+all :TEST: test*
+    blud -f $<
+end
+
+In this example, the :TEST: operator knows it is inside a "test". It knows what
+the associated build is and its OWD. And, uniquely, it will execute the action
+once for each of the prerequisites.
+
+Inside a "test", all the atoms are presumed relative to the test directory.
+But actions are presumed relative to the OWD set by the associated build.
+So in this example. blud will cd to the build directory (e.g., ./debug),
+then execute "blud -f $<", where the $< will automatically expand
+to "../test/testxxxx".
+
+A "build" directive changes the OWD from its default of ".". But a "test"
+directive changes both the source directory AND OWD from their defaults.
+It gets the OWD from the associated build.
+
+
+** virtual atoms
+Atoms (targets/prerequisites) are assumed to be files, but they could
+really be Lua functions. For example, the "output file" of a test
+could be a Lua function that checks to see if that file meets certain
+requirements. The default atom would be a Lua function that returns
+the timestamp for the named file.
+
+
 
 ** quoted pathnames
 We need quotes, since for example:
@@ -188,6 +252,51 @@ end
 
 
 * log
+** <2024-06-20 Thu>
+4am thought of new approach for "build". Make "define" directive able to
+define: macro or build or test. A "build" is a set of directives and a directory
+(for output files).
+
+A "test" is likewise a set of directives and a directory where test data
+can be found. But a "test" is essentially orthogonal to a "build", since
+it always is executed in the context of some "build".
+
+If you list the names of tests and builds on the blud command line, it will
+first build the builds, then run each of the tests against each of the builds:
+    blud test debug release
+
+The case we expect to be the default is a directory that contains one file
+per test. Therefore, we don't want this to require for loops or anything
+fancy. The syntax for the default case must be simple and intuitive.
+
+
+Example:
+
+define build debug
+CFLAGS = -g
+end
+define build release end
+
+define test -- defaults to ./test
+# OWD is set by context of associated build
+all :TEST: test*
+end
+
+<><><><><><><>
+Using "define" for multiple things. Maybe don't use it for macros, only test/build.
+Multiline macro:
+FOO = [[
+a list
+of things
+]]
+
+Multiline definition of macro that transforms newlines into spaces:
+FOO = /[[
+test001
+test002
+test003
+]]
+
 ** <2024-06-17 Mon>
 
 ** <2024-06-15 Sat>

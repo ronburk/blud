@@ -69,6 +69,11 @@ std::optional<std::string> Lua::getfieldstr(Lua::index table_index, const char* 
 int Lua::loadstring(const char* lua_code){
     assert(lua_state != nullptr);
     int result = luaL_loadstring(lua_state, lua_code);
+    if(result != 0){
+        const char* error_message = tostring(TOS);
+        fprintf(stderr, "%s\n", error_message);
+    }
+    return result;
 }
 
 int  Lua::loadfile(const char* filename){

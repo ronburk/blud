@@ -24,6 +24,7 @@ int main(int /*arg_count*/, char** /*args*/){
     printf("There will be blud!\n");
 
     auto error_code = L.loadstring(blud_source);
-    
+    assert(error_code == 0);
+
     return 0;
 }
