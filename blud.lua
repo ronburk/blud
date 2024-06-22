@@ -1101,15 +1101,35 @@ local blud_file_text = file:read("*a")
 file:close()
 ]]
 
-file = io.stdin
+function get_bludfile_path()
+    local path = "bludfile"
+    local args = COMMAND_LINE
+    local option = "-f"
+    for i = 1, #args do
+        if args[i] == option then
+            -- Check if there's a next argument to be the value
+            if i < #args then
+                return args[i + 1]
+            else
+                return path
+            end
+        end
+    end
+    return path
+end
+
+
+print("start executing")
+file = io.open(get_bludfile_path())
+--file = io.stdin
 --preprocess(buffered_line_io(file))
 local phase1_text = phase1_pass(buffered_line_io(file))
 file:close()
-print(blud_module_code)
-print(phase1_text)
---print("blud.phase2()\n")
-print("blud.phase3:parse()\n")
-print([[
+--print(blud_module_code)
+
+--print(phase1_text)
+local final_code = [[
+blud.phase3:parse()
 if blud.primary_targets == nil then
     error("No targets to build!")
 else
@@ -1118,8 +1138,8 @@ else
         target:BUILD()
     end
 end
-]])
-
+]]
+local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
 
 if not blud_primary_target_name  then

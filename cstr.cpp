@@ -170,7 +170,7 @@ int     main(int ArgCount, char**Args)
 #ifdef __cplusplus
 #include <cstring>
 #else
-#include <cstring.h>
+#include <string.h>
 #endif
 )");
 

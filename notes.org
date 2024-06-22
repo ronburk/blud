@@ -281,6 +281,19 @@ define test -- defaults to ./test
 # OWD is set by context of associated build
 all :TEST: test*
 end
+<><><><><>
+anyways.  So, a "build" sets the output directory. A "test" sets the working
+directory to the output directory of the "build", and the output directory
+to something, probably relative to the output directory of the "build".
+
+Should we unify the build/test concepts? It's not just about setting default
+directories, because we want a "test" to be applicable to any particular
+build. That really just involves setting implicit directories, but we
+would like to refer to them by their build name.
+
+What if you want to run blud from a build output directory? Maybe
+command-line option
+
 
 <><><><><><><>
 Using "define" for multiple things. Maybe don't use it for macros, only test/build.
