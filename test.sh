@@ -1,22 +1,17 @@
 #!/bin/bash
 
-LUA="luajit"
+LUA="../blud"
 cd ./test || { echo "Failed to change directory to ./test"; exit 1; }
 
 run_test() {
     local test_name=$1
 
-    rm -f "${test_name}.out" "${test_name}.lua" 
+    rm -f "${test_name}.out" "${test_name}.luac" 
 
-    if ! $LUA ../blud.lua  < "${test_name}" > "${test_name}.lua" ; then
-        echo "Test compile failed: ${test_name}.lua"
+    if ! $LUA -f "${test_name}" ; then
+        echo "$LUA  failed on: ${test_name}"
         exit 2
     fi
-    if ! $LUA "${test_name}.lua" < "${test_name}" ; then
-        echo "Test compile failed: ${test_name}.lua"
-        exit 2
-    fi
-
     # Check if the output file was created
     if [ ! -f "${test_name}.out" ]; then
         echo "Output file missing after test: ${test_name}"

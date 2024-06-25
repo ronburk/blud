@@ -252,6 +252,80 @@ end
 
 
 * log
+** <2024-06-24 Mon>
+Why is it so hard to find abstractions?  GNU make ties what to make
+together with the macros that specify *how* to make it. The workaround
+is command-line definitions, which let you specify the macros controlling
+*how* independently of *what* targets you ask to build.
+
+It also moves the *how* onto the command-line--but the point of a build
+language is to have specifications that have *all* the information about
+*how* to build.
+
+Also, overloading the colon operator to do assignments makes things more
+verbose.
+
+You can do this in GNU make:
+
+debug : CFLAGS += -g
+debug : all
+
+In this case "debug" is really a name for setting one or more macros.
+But it cannot be applied via the command-line. If 'all' depends on 'foo.obj',
+you can't ask for the debug version of 'foo.obj' to be built. Again, this
+is the problem of separating what from how.
+
+So what is the primitive that gets us there? Targets whose macro
+assignments alter the top of the macro chain. Then, if you "build"
+that target, you are altering *how* any remaining targets get built.
+Now, you could achieve this with the addition of one keyword to Gnu make:
+add "global" to the "override", "private", and "export" modifiers:
+
+debug : global CFLAGS += -g
+
+Then if you did "make debug all", you would be specifying a *how* in front
+of a *what*.
+
+So, what we're really adding *functionally* to GNU make is:
+    1) implicit directories (output, action, source)
+    2) global macro assignments
+
+But that still leaves the problem of *syntax*, because it needs to be
+dead easy to define a debug and release build (and preferably also to
+run tests).
+
+debug :{
+CFLAGS += -g
+}
+
+We are essentially assigning a bunch of attributes to a target.
+That is advantage of "define <type> <name>" syntax, lets us
+succinctly have different types of targets we are defining.
+
+define build debug
+    CFLAGS += -g
+end
+
+equivalent to:
+
+.GLOBAL_ASSIGN : debug
+debug : OWD = ./debug
+debug : CFLAGS += -g
+
+Can we generalize the "type" mechanism?
+
+define type build name path
+    if name == nil then
+        error("Missing build name")
+    elseif path == nil then
+        path = name
+    end
+    -- make sure directory exists
+    -- make 'name' a target with GLOBAL_ASSIGN
+    $ OWD = ${path}
+end
+
+
 ** <2024-06-20 Thu>
 4am thought of new approach for "build". Make "define" directive able to
 define: macro or build or test. A "build" is a set of directives and a directory

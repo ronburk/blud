@@ -1,5 +1,21 @@
 -- blud.lua
 
+local function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            if v ~= "__index" then
+            s = s .. '['..k..'] = ' .. dump(v) .. ','
+            end
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
+
 function template(str, values)
     return (str:gsub("{(.-)}", function(key)
         return values[key] or "{" .. key .. "}"
@@ -1119,13 +1135,21 @@ function get_bludfile_path()
 end
 
 
-print("start executing")
-file = io.open(get_bludfile_path())
+print("start executing phase 1")
+local bludfile_path = get_bludfile_path()
+local luac_path = bludfile_path .. ".luac"
+local bludfile_timestamp = get_path_timestamp(bludfile_path)
+local luac_timestamp     = get_path_timestamp(luac_path)
+
+print(bludfile_timestamp .. " vs " .. luac_timestamp)
+
+file = io.open(bludfile_path)
 --file = io.stdin
 --preprocess(buffered_line_io(file))
 local phase1_text = phase1_pass(buffered_line_io(file))
 file:close()
 --print(blud_module_code)
+print("phase 1 complete")
 
 --print(phase1_text)
 local final_code = [[
@@ -1144,9 +1168,62 @@ local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final
 
 if not blud_primary_target_name  then
     print("No target given to build")
+else
+    print("building " ,  blud_primary_target_name)
+    print( dump( blud_primary_target_name))
+    print( "tyupe is: " .. type(blud_primary_target_name))
 end
 
 blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
+
+-- Compile the source code to bytecode
+local compiled_function, err = loadstring(code_to_compile)
+if not compiled_function then
+    print("Failed to compile source code: " .. err)
+    return
+end
+
+local bytecode = string.dump(compiled_function, false) -- true to strip debugging info
+
+-- Save the bytecode to a file
+local luac_path = bludfile_path .. ".luac"
+local file = io.open(luac_path, "wb")
+if file then
+    file:write(bytecode)
+    file:close()
+    print("Bytecode saved to " .. luac_path)
+else
+    print("Failed to open file for writing")
+end
+
+function execute_bytecode(file_path)
+    -- Open the bytecode file
+    local file, err = io.open(file_path, "rb")
+    if not file then
+        print("Failed to open file: " .. err)
+        return
+    end
+
+    -- Read the bytecode
+    local bytecode = file:read("*all")
+    file:close()
+
+    -- Load the bytecode
+    local func, load_err = load(bytecode)
+    if not func then
+        print("Failed to load bytecode: " .. load_err)
+        return
+    end
+
+    -- Execute the bytecode and trap errors
+    local status, exec_err = pcall(func)
+    if not status then
+        print("Error executing bytecode: " .. exec_err)
+    end
+end
+
+-- Example usage
+execute_bytecode(luac_path)
 
 
 --print(blud_user_code);
