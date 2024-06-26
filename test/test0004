@@ -2,11 +2,11 @@
 --
 -- Simple build directive
 
-build release
+define build release
 end
 
 CMD = touch test0004.out
 
-all: 
+all: test0004.out
     $(CMD)
-
+test0004.out : 

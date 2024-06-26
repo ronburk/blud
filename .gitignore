@@ -5,6 +5,7 @@
 .emacs.desktop*
 ./luajit
 foo.*
+test/*.luac
 
 
 # Prerequisites

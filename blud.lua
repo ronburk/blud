@@ -511,6 +511,7 @@ blud.dump_atom = function (atom)
 end
 
 -- define super atom (a metatable), which contains defaults for all atoms
+
 blud.global = {
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
@@ -556,6 +557,12 @@ blud.super_atom = {
         for _, prerequisite in ipairs(prerequisites) do
             
         end
+    end,
+    -- BIND: associate an atom with an actual filename
+    BIND  = function(atom)
+        --
+        print("bind atom: " .. dump(atom))
+        return atom
     end,
     BUILD = function(target)
         print("BUILD('" .. blud.dump_atom(target) .. "')")
@@ -860,7 +867,7 @@ end
 function leading_keyword(line)
     local result = nil
     local keywords   = {
-        ["build"]    = true,  -- blud keyword
+        ["define"]   = true,  -- blud keyword
         ["do"]       = true,
         ["else"]     = true,
         ["elseif"]   = true,
@@ -882,12 +889,19 @@ function leading_keyword(line)
     return result
 end
 
-function syntax_error(line_number, format_string, ...)
-    local args = {...}
-    local message = format_string:gsub("#(%d+)", function(n)
-                                           return tostring(args[tonumber(n)])
-    end)
-    error("Line " .. line_number .. ": " .. message)
+function syntax_error(line, line_number, format_string, ...)
+    io.stderr:write(line)
+    io.stderr:write("\n^^^^\n")
+    io.stderr:write(string.format("Error on line %d: ", line_number))
+    if format_string then
+        local args = {...}
+        local message = format_string:gsub("#(%d+)", function(n)
+                                               return tostring(args[tonumber(n)])
+        end)
+        io.stderr:write(message)
+    end
+    io.stderr:write("\n")
+    os.exit(1)
 end
 
 -- handle a Lua line that might have embedded make code
@@ -914,15 +928,19 @@ end
 
 function phase1_pass(get_line)
     local line_number   = 0
+    local line
     local text          = ""
     local open_keyword  = nil
-    local open_build    = nil
+    local open_define   = nil
     local default_build = nil
+    local error = function (...)
+        syntax_error(line, line_number, ...)
+    end
 
     while true do
         ::NEXT::
         line_number = line_number + 1
-        local line = get_line(false)
+        line = get_line(false)
         if line == nil then break end -- end of file
         if phase1_line_is_empty(line) then goto NEXT end
         local keyword = leading_keyword(line)
@@ -933,43 +951,43 @@ function phase1_pass(get_line)
                 line = "blud.phase2_append(" .. lua_quote(line) .. ")"
             end
         elseif keyword == "do" or keyword == "function" or keyword == "if" or keyword == "repeat" then
-            if open_keyword then syntax_error(line_number, "already inside '#1'", open_keyword) end
+            if open_keyword then error("already inside '#1'", open_keyword) end
             open_keyword = keyword
         elseif keyword == "end" then
-            if open_build then
+            if open_define then
                 line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
-                open_build = false
+                open_define = false
             elseif not open_keyword then
-                syntax_error(line_number, "Unexpected 'end'")
+                error("Unexpected 'end'")
             else
                 open_keyword = nil
             end
         elseif keyword == "elseif" or keyword == "else" then
             if open_keyword ~= "if" and open_keyword ~= "elseif" then
-                syntax_error(line_number, "Unexpected '#1' doesn't match open '#2'", keyword, open_keyword)
+                error("Unexpected '#1' doesn't match open '#2'", keyword, open_keyword)
             else
                 open_keyword = keyword
             end
         elseif keyword == "local" then
             -- just copy the line
-        elseif keyword == "build" then
+        elseif keyword == "define" then
             if open_keyword then
-                error("build directive inside Lua code: " .. line)
-            elseif open_build then
-                error("build directives can't be nested: " .. line)
+                error("define directive inside Lua code: " .. line)
+            elseif open_define then
+                error("define directives can't be nested: " .. line)
             end
-            local build_name = line:match("^build%s+(%a+)")
-            if build_name == nil then
-                error("build directive missing build name: " .. line)
+            local define_type = line:match("^define%s+(%a+)")
+            if define_type == nil then
+                error("define directive missing define type: " .. line)
             end
-            if not default_build then
+--            if not default_build then
                 --                text = text .. string.format("blud.phase2_append(%q)\n",
                 --                                             "blud.build_name =" .. lua_quote(build_name))
-                default_build = build_name
-            end
+--                default_build = build_name
+--            end
             
             --            blud.build_name = blud.build_name or build_name
-            open_build = true
+            open_define = true
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         else
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
@@ -1141,7 +1159,12 @@ local luac_path = bludfile_path .. ".luac"
 local bludfile_timestamp = get_path_timestamp(bludfile_path)
 local luac_timestamp     = get_path_timestamp(luac_path)
 
-local bludfile_has_changed = bludfile_timestamp and luac_timestamp and bludfile_timestamp > luac_timestamp
+local luac_needs_building = true
+if (bludfile_timestamp ~= nil) and (luac_timestamp ~= nil) and (bludfile_timestamp <= luac_timestamp) then
+    luac_needs_building = false
+end
+print(bludfile_timestamp, luac_timestamp)
+print("luac_needs_building = ", luac_needs_building)
 
 --print(phase1_text)
 local final_code = [[
@@ -1157,7 +1180,7 @@ end
 ]]
 
 
-if bludfile_has_changed then
+if luac_needs_building then
 
     file = io.open(bludfile_path)
     --file = io.stdin

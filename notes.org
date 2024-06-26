@@ -27,6 +27,34 @@ normally contain relative pathnames, and those would be relative to the
 CWD of the user running the blud command. If nothing else, really want
 to allow bludfile to exist elsewhere for testing.
 
+OTOH, if the bludfile directory is ignored when determining the "base"
+directory, then you can't look in the bludfile and determine where
+things are going -- it will depend on what directory the blud invoker
+was in at the time. Also, having the bludfile directory be the "base"
+directory for binding its relative pathnames is fairly required to
+make sense of sub-projects (which I haven't really worked out yet).
+
+So, suppose the bludfile directory is the "base". A 'build' sets
+the output directory.
+
+
+** define
+The define keyword helps us avoid cluttering up the atom namespace and
+also lets us generalize a mechanism. The syntax is:
+
+define <type> name [args]
+...  -- optional rules and macro assignments
+end
+
+In phase 1, this is translated into the Lua code:
+
+
+It all begins with a <type> of "type":
+
+define type build
+end
+
+
 ** command-line target references
 Besides "-t <test_name>" and "-b <build_name>" maybe allow it like this:
     blud debug:util
