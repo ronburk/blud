@@ -6,10 +6,11 @@ cd ./test || { echo "Failed to change directory to ./test"; exit 1; }
 run_test() {
     local test_name=$1
 
-    rm -f "${test_name}.out" "${test_name}.luac" 
+    # rm -f "${test_name}.out" "${test_name}.luac" 
 
+    echo "$LUA -f ${test_name}"
     if ! $LUA -f "${test_name}" ; then
-        echo "$LUA  failed on: ${test_name}"
+        echo "$LUA -f ${test_name}  failed on: ${test_name}"
         exit 2
     fi
     # Check if the output file was created
@@ -31,6 +32,8 @@ else
 
         # Run the test
         run_test "$test_name"
+#        echo "breaking after test 1"
+#        break
     done
 fi
 

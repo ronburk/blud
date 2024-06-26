@@ -13,7 +13,48 @@
     #include <sys/stat.h>
     #include <time.h>
     #include <errno.h>
+    #include <unistd.h>
 #endif
+
+
+char* get_cwd() {
+    char *buffer;
+    size_t size = 256;
+
+    while (1) {
+        buffer = (char*)malloc(size);
+        if (buffer == NULL) {
+            return NULL; // Allocation failed
+        }
+
+#ifdef _WIN32
+        if (GetCurrentDirectory(size, buffer) != 0) {
+            return buffer;
+        }
+#else
+        if (getcwd(buffer, size) != NULL) {
+            return buffer;
+        }
+#endif
+
+        free(buffer); // Free the buffer if it was too small
+        size *= 2; // Double the buffer size and try again
+    }
+}
+
+static int lua_get_cwd(lua_State *L) {
+    char *cwd = get_cwd();
+    if (cwd == NULL) {
+        lua_pushnil(L);
+        lua_pushstring(L, "Failed to get current working directory");
+        return 2;
+    }
+
+    lua_pushstring(L, cwd);
+    free(cwd);
+    return 1;
+}
+
 
 // Returns microseconds since Unix epoch, or -1 on error
 int64_t get_high_res_timestamp(const char* path) {
@@ -106,6 +147,7 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 
 int luaopen_mylib(lua_State *L) {
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
+    lua_register(L, "get_cwd", lua_get_cwd);
     return 0;
 }
 
@@ -121,7 +163,7 @@ int main(int argc, char** argv) {
     execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
 
     // Optional: Print the Lua table for verification
-    luaL_dostring(L, "for i, v in ipairs(COMMAND_LINE) do print(i, v) end");
+//    luaL_dostring(L, "for i, v in ipairs(COMMAND_LINE) do print(i, v) end");
 
     lua_close(L);
     return 0;

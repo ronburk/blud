@@ -6,7 +6,7 @@ local function dump(o)
         for k,v in pairs(o) do
             if type(k) ~= 'number' then k = '"'..k..'"' end
             if v ~= "__index" then
-            s = s .. '['..k..'] = ' .. dump(v) .. ','
+                s = s .. '['..k..'] = ' .. dump(v) .. ','
             end
         end
         return s .. '} '
@@ -18,7 +18,7 @@ end
 
 function template(str, values)
     return (str:gsub("{(.-)}", function(key)
-        return values[key] or "{" .. key .. "}"
+                         return values[key] or "{" .. key .. "}"
     end))
 end
 
@@ -774,7 +774,7 @@ function calculate_indent(line)
             break
         end
     end
---    print("indent of '" .. line .. "' = " .. indent);
+    --    print("indent of '" .. line .. "' = " .. indent);
     return indent
 end
 
@@ -818,7 +818,7 @@ function match_macro_assign(line)
         [":="]  = true,
         ["+="]  = true,
     }
---    print("match_macro_assign(\"" .. line .. "\")")
+    --    print("match_macro_assign(\"" .. line .. "\")")
     local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
     macro_name, operator, remainder = line:match(pattern)
     if macro_name and operator then
@@ -835,10 +835,10 @@ function lua_quote(str)
     
     -- Replace special characters
     str = str:gsub("\n", "\\n")
-            :gsub("\r", "\\r")
-            :gsub("\t", "\\t")
-            :gsub("\b", "\\b")
-            :gsub("\f", "\\f")
+        :gsub("\r", "\\r")
+        :gsub("\t", "\\t")
+        :gsub("\b", "\\b")
+        :gsub("\f", "\\f")
     
     -- Wrap the string in double quotes
     return '"' .. str .. '"'
@@ -849,12 +849,12 @@ function emit_macro_assign(macro_name, operator, remainder)
         macro_name = lua_quote(macro_name),
         operator   = lua_quote(operator),
         remainder  = lua_quote(remainder)
-        }
+    }
     local script = [[
 blud.macro_assign({macro_name}, {operator}, {remainder})
 ]]
-    local var =  script:gsub("{(.-)}", variables)
-    print(var)
+local var =  script:gsub("{(.-)}", variables)
+print(var)
 end
 
 function leading_keyword(line)
@@ -885,7 +885,7 @@ end
 function syntax_error(line_number, format_string, ...)
     local args = {...}
     local message = format_string:gsub("#(%d+)", function(n)
-        return tostring(args[tonumber(n)])
+                                           return tostring(args[tonumber(n)])
     end)
     error("Line " .. line_number .. ": " .. message)
 end
@@ -963,12 +963,12 @@ function phase1_pass(get_line)
                 error("build directive missing build name: " .. line)
             end
             if not default_build then
---                text = text .. string.format("blud.phase2_append(%q)\n",
---                                             "blud.build_name =" .. lua_quote(build_name))
+                --                text = text .. string.format("blud.phase2_append(%q)\n",
+                --                                             "blud.build_name =" .. lua_quote(build_name))
                 default_build = build_name
             end
             
---            blud.build_name = blud.build_name or build_name
+            --            blud.build_name = blud.build_name or build_name
             open_build = true
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         else
@@ -1042,27 +1042,27 @@ function preprocess(get_line)
         else
         end
         if false then
-        if not line_is_lua(line) then
-            blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
-            local targets, prerequisites = process_make_rule(line) 
-            local indent = calculate_indent(line)
-            local action = ""
-            while calculate_indent(get_line(true)) > indent do
-                action = action .. get_line(false) .. "\n"
+            if not line_is_lua(line) then
+                blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
+                local targets, prerequisites = process_make_rule(line) 
+                local indent = calculate_indent(line)
+                local action = ""
+                while calculate_indent(get_line(true)) > indent do
+                    action = action .. get_line(false) .. "\n"
+                end
+                blud_user_code = blud_user_code .. "    blud.add_rules(targets, prerequisites, "
+                if action == nil then
+                    blud_user_code = blud_user_code .. "nil)\n"
+                else
+                    blud_user_code = blud_user_code .. "[[" .. action .. "]])\n"
+                end
+                
+                blud_user_code = blud_user_code .. "end "
+            else -- line is Lua, but could be extended by comment or quoted string
+                while true do
+                    blud_user_code = blud_user_code .. line .. '\n'
+                end
             end
-            blud_user_code = blud_user_code .. "    blud.add_rules(targets, prerequisites, "
-            if action == nil then
-                blud_user_code = blud_user_code .. "nil)\n"
-            else
-                blud_user_code = blud_user_code .. "[[" .. action .. "]])\n"
-            end
-            
-            blud_user_code = blud_user_code .. "end "
-        else -- line is Lua, but could be extended by comment or quoted string
-            while true do
-                blud_user_code = blud_user_code .. line .. '\n'
-            end
-        end
         end
     end
 end
@@ -1091,19 +1091,19 @@ function process_make_rule(line)
     end
     blud_user_code = blud_user_code .. " }\n"
 
---[=[
-    local code = [[    blud.add_dependents(targets, prerequisites)
-]]
+    --[=[
+        local code = [[    blud.add_dependents(targets, prerequisites)
+        ]]
 
-    for _, target in ipairs(targets) do
+        for _, target in ipairs(targets) do
         local atom_list = ""
         for _, prerequisite in ipairs(prerequisites) do
-            atom_list = atom_list .. "," .. prerequisite
+        atom_list = atom_list .. "," .. prerequisite
         end
         code = code:gsub("{target}", target);
         code = code:gsub("{atom_list}", atom_list);
         blud_user_code = blud_user_code .. code
-    end
+        end
     ]=]
 
     return targets, prerequisites
@@ -1111,10 +1111,10 @@ end
 
 
 --[[
-local file = io.open("blud", "r")
-assert(file)
-local blud_file_text = file:read("*a")
-file:close()
+    local file = io.open("blud", "r")
+    assert(file)
+    local blud_file_text = file:read("*a")
+    file:close()
 ]]
 
 function get_bludfile_path()
@@ -1141,15 +1141,7 @@ local luac_path = bludfile_path .. ".luac"
 local bludfile_timestamp = get_path_timestamp(bludfile_path)
 local luac_timestamp     = get_path_timestamp(luac_path)
 
-print(bludfile_timestamp .. " vs " .. luac_timestamp)
-
-file = io.open(bludfile_path)
---file = io.stdin
---preprocess(buffered_line_io(file))
-local phase1_text = phase1_pass(buffered_line_io(file))
-file:close()
---print(blud_module_code)
-print("phase 1 complete")
+local bludfile_has_changed = bludfile_timestamp and luac_timestamp and bludfile_timestamp > luac_timestamp
 
 --print(phase1_text)
 local final_code = [[
@@ -1163,37 +1155,52 @@ else
     end
 end
 ]]
-local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
 
-if not blud_primary_target_name  then
-    print("No target given to build")
-else
-    print("building " ,  blud_primary_target_name)
-    print( dump( blud_primary_target_name))
-    print( "tyupe is: " .. type(blud_primary_target_name))
-end
+if bludfile_has_changed then
 
-blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
-
--- Compile the source code to bytecode
-local compiled_function, err = loadstring(code_to_compile)
-if not compiled_function then
-    print("Failed to compile source code: " .. err)
-    return
-end
-
-local bytecode = string.dump(compiled_function, false) -- true to strip debugging info
-
--- Save the bytecode to a file
-local luac_path = bludfile_path .. ".luac"
-local file = io.open(luac_path, "wb")
-if file then
-    file:write(bytecode)
+    file = io.open(bludfile_path)
+    --file = io.stdin
+    --preprocess(buffered_line_io(file))
+    local phase1_text = phase1_pass(buffered_line_io(file))
     file:close()
-    print("Bytecode saved to " .. luac_path)
+    --print(blud_module_code)
+    print("phase 1 complete")
+
+    local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
+
+
+    if not blud_primary_target_name  then
+        print("No target given to build")
+    else
+        print("building " ,  blud_primary_target_name)
+        print( dump( blud_primary_target_name))
+        print( "tyupe is: " .. type(blud_primary_target_name))
+    end
+
+    blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
+
+    -- Compile the source code to bytecode
+    local compiled_function, err = loadstring(code_to_compile)
+    if not compiled_function then
+        print("Failed to compile source code: " .. err)
+        return
+    end
+
+    local bytecode = string.dump(compiled_function, false) -- true to strip debugging info
+
+    -- Save the bytecode to a file
+    local luac_path = bludfile_path .. ".luac"
+    local file = io.open(luac_path, "wb")
+    if file then
+        file:write(bytecode)
+        file:close()
+        print("Bytecode saved to " .. luac_path)
+    else
+        print("Failed to open file for writing")
+    end
 else
-    print("Failed to open file for writing")
+    print("using pre-compiled bludfile!")
 end
 
 function execute_bytecode(file_path)
@@ -1229,68 +1236,68 @@ execute_bytecode(luac_path)
 --print(blud_user_code);
 
 --[[
-function lines_length(input, line_number)
+    function lines_length(input, line_number)
     if line_number >= 1 then
-        local current_line = 1
-        local position = 1
+    local current_line = 1
+    local position = 1
 
-        -- Repeat finding new lines until the desired line
-        while true do
-            if current_line == line_number then
-                return position
-            end
-            local start_pos, end_pos = string.find(input, "\n", position)
-            if not start_pos then
-                break  -- No more newlines found
-            end
-            current_line = current_line + 1
-            position     = end_pos + 1
-        end
+    -- Repeat finding new lines until the desired line
+    while true do
+    if current_line == line_number then
+    return position
+    end
+    local start_pos, end_pos = string.find(input, "\n", position)
+    if not start_pos then
+    break  -- No more newlines found
+    end
+    current_line = current_line + 1
+    position     = end_pos + 1
+    end
     end
     return nil  -- Line number does not exist in the input
-end
+    end
 
 
-function parse_blud_file_text(source_text)
+    function parse_blud_file_text(source_text)
     local lua_text  = ""
     local func, error_message = loadstring(source_text)
     local line, message = error_message:match(":(%d+):%s*(.*)")
     if error_message then
-        print("line " .. line .. ": " .. message)
-        assert(false)
+    print("line " .. line .. ": " .. message)
+    assert(false)
     end
-end
-parse_blud_file_text(blud_file_text)
-assert(false)
+    end
+    parse_blud_file_text(blud_file_text)
+    assert(false)
 ]]
 
 --[[
-function report_error(error_message, code)
+    function report_error(error_message, code)
     print("Error ", error_message)
-   -- Extracting the line number from the error message
+    -- Extracting the line number from the error message
     local lineNumber = tonumber(error_message:match(":(%d+):"))
     if lineNumber then
-        -- Splitting the code into lines and printing the problematic line
-        local lines = {}
-        for line in code:gmatch("([^\n]*)\n?") do
-            table.insert(lines, line)
-        end
-        print("Error at line", lineNumber, ":", lines[lineNumber])
+    -- Splitting the code into lines and printing the problematic line
+    local lines = {}
+    for line in code:gmatch("([^\n]*)\n?") do
+    table.insert(lines, line)
+    end
+    print("Error at line", lineNumber, ":", lines[lineNumber])
     end
 
-end
+    end
 
 
-local program = blud_module_code .. blud_user_code
-local func, err = loadstring(program)
-print("back from loadstring")
-if func then
+    local program = blud_module_code .. blud_user_code
+    local func, err = loadstring(program)
+    print("back from loadstring")
+    if func then
     status, err = pcall(func)
     if not status then
-        report_error(err, program);
-    end
-else
     report_error(err, program);
-end
+    end
+    else
+    report_error(err, program);
+    end
 ]]
 
