@@ -1,31 +1,3 @@
--- blud.lua
-
-local function dump(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k,v in pairs(o) do
-            if type(k) ~= 'number' then k = '"'..k..'"' end
-            if v ~= "__index" then
-                s = s .. '['..k..'] = ' .. dump(v) .. ','
-            end
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-end
-
-
-function template(str, values)
-    return (str:gsub("{(.-)}", function(key)
-                         return values[key] or "{" .. key .. "}"
-    end))
-end
-
-
-
-blud_primary_target_name = ""
-
 blud_module_code = [==[
 local function dump(o)
     if type(o) == 'table' then
@@ -42,7 +14,20 @@ local function dump(o)
     end
 end
 
+function errorf(format_string, ...)
+    if format_string then
+        local args = {...}
+        local message = format_string:gsub("#(%d+)", function(n)
+                                               return tostring(args[tonumber(n)])
+        end)
+        io.stderr:write(message)
+    end
+    io.stderr:write("\n")
+    os.exit(1)
+end
+
 blud                 = {}
+blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
 blud.macros          = {}
@@ -574,7 +559,7 @@ blud.super_atom = {
         target.BUILDING = true
         target.BUILD_PREREQUISITES(target)
         local timestamp = blud.get_fs_timestamp(target.NAME)
-        print("timestamp is " .. timestamp)
+        print("timestamp for '" .. target.NAME .. "' is " .. timestamp)
         if timestamp < blud.current_time then
             if target.ACTION then
                 print("execute: '" .. target.ACTION .. "'")
@@ -693,7 +678,8 @@ blud.add_rule = function(target, prerequisites, action)
 end
 
 blud.add_rules = function(colon_operator, targets, prerequisites, action)
-print("blud.add_rules targets = " .. dump(targets) .. colon_operator .. dump(prerequisites))
+
+print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
 
     local prereq_atoms = {}
     for _, prereq_name in ipairs(prerequisites) do
@@ -705,7 +691,12 @@ print("blud.add_rules targets = " .. dump(targets) .. colon_operator .. dump(pre
         if blud.primary_targets == nil then
             blud.primary_targets = { target }
         end
-        target.ADD_RULE(target, prereq_atoms, action)
+        local operator = blud.operators[colon_operator]
+        if operator == nil then
+            errorf("'#1': undefined operator.", colon_operator)
+        end
+        blud.operators[colon_operator](colon_operator, target, prereq_atoms, action)
+--        target.ADD_RULE(target, prereq_atoms, action)
     end
 end
 
@@ -740,6 +731,33 @@ blud.run_build = function(primary_target)
 end
 
 ]==]
+
+local function dump(o)
+    if type(o) == 'table' then
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            if v ~= "__index" then
+                s = s .. '['..k..'] = ' .. dump(v) .. ','
+            end
+        end
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
+
+function template(str, values)
+    return (str:gsub("{(.-)}", function(key)
+                         return values[key] or "{" .. key .. "}"
+    end))
+end
+
+
+
+blud_primary_target_name = ""
+
 
 blud_user_code = ""
 
@@ -935,7 +953,6 @@ function phase1_pass(get_line)
     local line
     local text          = ""
     local open_keyword  = nil
-    local open_define   = nil
     local default_build = nil
     local error = function (...)
         syntax_error(line, line_number, ...)
@@ -958,10 +975,7 @@ function phase1_pass(get_line)
             if open_keyword then error("already inside '#1'", open_keyword) end
             open_keyword = keyword
         elseif keyword == "end" then
-            if open_define then
-                line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
-                open_define = false
-            elseif not open_keyword then
+            if not open_keyword then
                 error("Unexpected 'end'")
             else
                 open_keyword = nil
@@ -974,25 +988,6 @@ function phase1_pass(get_line)
             end
         elseif keyword == "local" then
             -- just copy the line
-        elseif keyword == "define" then
-            if open_keyword then
-                error("define directive inside Lua code: " .. line)
-            elseif open_define then
-                error("define directives can't be nested: " .. line)
-            end
-            local define_type = line:match("^define%s+(%a+)")
-            if define_type == nil then
-                error("define directive missing define type: " .. line)
-            end
---            if not default_build then
-                --                text = text .. string.format("blud.phase2_append(%q)\n",
-                --                                             "blud.build_name =" .. lua_quote(build_name))
---                default_build = build_name
---            end
-            
-            --            blud.build_name = blud.build_name or build_name
-            open_define = true
-            line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         else
             line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
         end
