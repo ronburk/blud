@@ -2,8 +2,7 @@
 --
 -- Simple build directive
 
-define build release
-end
+release :BUILD: 
 
 CMD = touch test0004.out
 

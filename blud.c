@@ -1,7 +1,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-
+#include <assert.h>
 
 
 #include <stdio.h>
@@ -15,6 +15,46 @@
     #include <errno.h>
     #include <unistd.h>
 #endif
+
+
+
+static int lua_get_executable_path(lua_State *L) {
+    int         result_count = 2;
+    size_t      size         = PATH_MAX;
+    ssize_t     bytes_read   = 0;
+    char*       path;
+    const char* error_message = "Failed to get executable path for some reason.";
+
+#ifdef _WIN32
+    path            = _strdup(_pgmptr);
+    result_count    = 1;
+#else
+    for(;;){
+        path = (char*)malloc(size);
+        assert(path != 0);
+        bytes_read = readlink("/proc/self/exe", path, size);
+        if (bytes_read == -1) // if error
+            break;
+        else if(bytes_read < (ssize_t)(size)){
+            path[bytes_read] = '\0';
+            result_count     = 1;
+            break;
+        } else{
+            size *= 2;
+            free(path);
+        }
+    }
+#endif
+
+    if(result_count == 2){
+        lua_pushnil(L);
+        lua_pushstring(L, error_message);
+    } else
+        lua_pushstring(L, path);
+    free(path);
+    return result_count;
+}
+
 
 
 char* get_cwd() {
@@ -148,6 +188,7 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 int luaopen_mylib(lua_State *L) {
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "get_cwd", lua_get_cwd);
+    lua_register(L, "get_executable_path", lua_get_executable_path);
     return 0;
 }
 
@@ -157,8 +198,8 @@ int main(int argc, char** argv) {
     luaL_openlibs(L);
     luaopen_mylib(L);
 
-    fprintf(stderr, "before set_command_line\n");
     set_command_line(L, argc, argv);
+
     fprintf(stderr, "before execute_lua_code\n");
     execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
 

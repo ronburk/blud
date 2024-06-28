@@ -40,7 +40,12 @@ the output directory.
 
 ** define
 The define keyword helps us avoid cluttering up the atom namespace and
-also lets us generalize a mechanism. The syntax is:
+also lets us generalize a mechanism. Define creates a target that you
+can "build" to execute its associated code. Define can take extra
+arguments that alter the behavior of the associated code. Define can
+also contain Lua and/or blud statements that may or may not get executed.
+
+The syntax is:
 
 define <type> name [args]
 ...  -- optional rules and macro assignments
@@ -48,10 +53,21 @@ end
 
 In phase 1, this is translated into the Lua code:
 
+if blud.DEFINE_TYPES[<type>] then
+    (function (name, args)
+    end)()
+end
+
+But "define type <name>" does NOT create a target, but rather a
+name that can only be used as the typename for another define.
+
 
 It all begins with a <type> of "type":
 
 define type build
+do
+
+end
 end
 
 
@@ -280,6 +296,45 @@ end
 
 
 * log
+** <2024-06-27 Thu>
+Alright, I know roughly where I'm going with the syntax.
+
+** <2024-06-26 Wed>
+
+Insight: we already have a block-structured syntax, which is a block
+of indented lines in the action.
+<><><><><><>
+
+But if define really creates a target, maybe we should just extend the
+target syntax instead of creating the new define syntax. We want:
+
+a) Ability to say target-specific macros are actually global
+b) Ability for target to be ignored/hidden if not explicitly built by user
+c) Ability to execute code before building
+d) Ability to group multiple target-specific macros together (not really fundamental)
+
+crazy idea: could expand the notion of macro scope to execution sequence.
+IOW, you look up a macro definition starting with the current target,
+then up the current build stack, then the "temporal scope", then finally
+the global scope.
+
+release :BUILD:
+    $ global CFLAGS += -O2
+
+debug :BUILD:
+    $ global CFLAGS += -g
+
+And :BUILD: was created by:
+
+BUILD  :OPERATOR:
+    do
+        local path = $1
+        if path == nil then path = $< end
+        blud.make_dir(path)
+        $ $< : 
+    end
+
+
 ** <2024-06-24 Mon>
 Why is it so hard to find abstractions?  GNU make ties what to make
 together with the macros that specify *how* to make it. The workaround

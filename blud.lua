@@ -326,7 +326,7 @@ end
 function match_colon_operator(text, pos)
     local match = text:match("^:%a*:", pos)
     if match then
-        return text:sub(pos, pos+#match)
+        return text:sub(pos, pos + #match - 1)
     end
     return ":"
 end
@@ -339,7 +339,7 @@ function blud.phase3:tokenize(line)
         pos = pos + 1
         local char = line:sub(pos, pos)
         if char:find("%s") then   -- if char is white space
-            -- skip white space
+            token = " "
         elseif char:find("[\'\"]") then -- if char is a quote
             token = match_quoted_string(line, pos)
             table.insert(tokens, token)
@@ -347,18 +347,20 @@ function blud.phase3:tokenize(line)
             token = match_colon_operator(line, pos)
             table.insert(tokens, token)
         else
-            local pattern = "^[^%s:\"\']*"
+            local pattern = "^[^%s:\"\']*"  -- match an atom/path
             token   = line:match(pattern, pos)
             table.insert(tokens, token)
             assert(#token > 0)
-            pos = pos + #token - 1
         end
+        pos = pos + #token - 1
     end
+    print("tokenized line: " .. dump(tokens))
     return tokens
 end
 
 -- variables have been expanded, we have line of the form <targets> <colon_operator> <prerequisites>
 function blud.phase3:compile_rule(dependency_line, action)
+print("********************* compile_rule")
     local tokens = blud.phase3:tokenize(dependency_line)
     local targets = {}
     local prerequisites = {}
@@ -379,6 +381,7 @@ function blud.phase3:compile_rule(dependency_line, action)
     while token_pos <= #tokens do
         token = tokens[token_pos]
         if token:sub(1,1) == ":" then
+print("******************* wat the fuk")
             error("more than one colon operator on line!")
         else
             table.insert(prerequisites, token)
@@ -1156,12 +1159,19 @@ end
 print("start executing phase 1")
 local bludfile_path = get_bludfile_path()
 local luac_path = bludfile_path .. ".luac"
+local blud_exe_path = get_executable_path()
+assert(blud_exe_path ~= nil)
+local blud_exe_timestamp = get_path_timestamp(blud_exe_path)
 local bludfile_timestamp = get_path_timestamp(bludfile_path)
 local luac_timestamp     = get_path_timestamp(luac_path)
 
 local luac_needs_building = true
-if (bludfile_timestamp ~= nil) and (luac_timestamp ~= nil) and (bludfile_timestamp <= luac_timestamp) then
-    luac_needs_building = false
+if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
+    if blud_exe_timestamp < bludfile_timestamp and blud_exe_timestamp < luac_timestamp then
+        if bludfile_timestamp < luac_timestamp then
+            luac_needs_building = false
+        end
+    end
 end
 print(bludfile_timestamp, luac_timestamp)
 print("luac_needs_building = ", luac_needs_building)
