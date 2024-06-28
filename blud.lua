@@ -381,15 +381,13 @@ print("********************* compile_rule")
     while token_pos <= #tokens do
         token = tokens[token_pos]
         if token:sub(1,1) == ":" then
-print("******************* wat the fuk")
             error("more than one colon operator on line!")
         else
             table.insert(prerequisites, token)
         end
         token_pos = token_pos + 1
     end
---    print(dump(targets), colon_operator, dump(prerequisites))
-    blud.add_rules(targets, prerequisites, action)
+    blud.add_rules(colon_operator, targets, prerequisites, action)
 end
 
 function blud.phase3:parse()
@@ -683,6 +681,9 @@ blud.add_rule = function(target, prerequisites, action)
             target.ACTION = action
         end
     end
+    -- target may already have prerequisites, these will be added
+    -- note that we do not dedup, since duplicates could be significant
+    -- in the general case.
     local prerequisites = target.PREREQUISITES or {}
     for _, dep in ipairs(prerequisites) do
         print("    ." .. dep)
@@ -691,8 +692,8 @@ blud.add_rule = function(target, prerequisites, action)
     target.PREREQUISITES = prerequisites
 end
 
-blud.add_rules = function(targets, prerequisites, action)
-print("blud.add_rules targets = " .. dump(targets) .. ": " .. dump(prerequisites))
+blud.add_rules = function(colon_operator, targets, prerequisites, action)
+print("blud.add_rules targets = " .. dump(targets) .. colon_operator .. dump(prerequisites))
 
     local prereq_atoms = {}
     for _, prereq_name in ipairs(prerequisites) do
@@ -1173,8 +1174,6 @@ if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
         end
     end
 end
-print(bludfile_timestamp, luac_timestamp)
-print("luac_needs_building = ", luac_needs_building)
 
 --print(phase1_text)
 local final_code = [[
@@ -1206,7 +1205,7 @@ if luac_needs_building then
     if not blud_primary_target_name  then
         print("No target given to build")
     else
-        print("building " ,  blud_primary_target_name)
+        print("building '" ..  blud_primary_target_name .. "'")
         print( dump( blud_primary_target_name))
         print( "tyupe is: " .. type(blud_primary_target_name))
     end
