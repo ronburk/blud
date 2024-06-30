@@ -635,6 +635,10 @@ blud.TARGETS = {
             blud.set_callback(target.PARENT, "DO_ACTION", after)
             return true
         end
+    },
+    [ ".GLOBAL_MACRO" ] = {
+        NAME = ".GLOBAL_MACRO",
+        ATTRIBUTE = true,
     }
 }
 
@@ -677,6 +681,19 @@ blud.add_rule = function(target, prerequisites, action)
     target.PREREQUISITES = prerequisites
 end
 
+blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
+    return target:ADD_RULE(prereq_atoms, action)
+end
+blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)
+    print("Do :BUILD: for target " .. target.NAME .. " with " .. #prereq_atoms .. " args ")
+    -- determine value of OWD
+    local owd = target.NAME
+    if #prereq_atoms > 0 then
+        owd = prereq_atoms[1].NAME
+    end
+    -- need to give .GLOBAL_MACRO attribute to target
+end
+
 blud.add_rules = function(colon_operator, targets, prerequisites, action)
 
 print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
@@ -695,7 +712,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
         if operator == nil then
             errorf("'#1': undefined operator.", colon_operator)
         end
-        blud.operators[colon_operator](colon_operator, target, prereq_atoms, action)
+        operator(colon_operator, target, prereq_atoms, action)
 --        target.ADD_RULE(target, prereq_atoms, action)
     end
 end
