@@ -155,7 +155,6 @@ function blud.macro_expand_text(text)
         end
     end
 
-print("macro_expand_text of ", text, "returns ", table.concat(result))
     return table.concat(result)
 end
 
@@ -515,7 +514,9 @@ blud.super_atom = {
         else
             target.PREREQUISITES = { prerequisite }
         end
+        -- an attribute gets inserted into the prototype chain of its prerequisite
         if target.ATTRIBUTE == true then
+            -- a copy, because attributes are not singletons
             local target_copy = blud.shallow_copy(target)
             target_copy.ATTRIBUTE_TARGET = prerequisite
             setmetatable(target_copy, getmetatable(prerequisite))
