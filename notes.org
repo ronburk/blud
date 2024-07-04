@@ -296,6 +296,23 @@ end
 
 
 * log
+** <2024-07-03 Wed>
+
+Current thinking is a "build" is a target that sets environment
+variables and whatnot. That then affects any targets that follow.
+But if you want to do two builds in the same run, they might interfere
+with each other. Already have hierarchical scope, which is not quite
+what we want, because that requires the top of the hierarchy to specify
+what is to be built--the problem of separating *what* and *how*.
+
+What if we introduce a new scope, which is the "build scope". This scope
+exists until the parent of the build is built, or until a new build is "built".
+Fairly important. Suppose the debug and release builds have a rich set of
+differences. Can't build both in one line unless each accounts for environment
+changes the other may have made.
+
+
+
 ** <2024-07-01 Mon>
 Attribute values. Attributes are simple if they are boolean:
 

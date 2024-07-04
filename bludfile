@@ -8,7 +8,7 @@ FOO = $(FOO)2$(FOO)
 macro :
     echo $(FOO)
 
--- debug release :BUILD:
+debug release :BUILD:
 
 -- blud :: blud.c
 

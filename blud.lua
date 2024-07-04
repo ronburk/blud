@@ -94,7 +94,6 @@ end
             end
         end
     end
-print("extract pos= ", pos, "fromtext ", text, "name is ", macro_name)
     return {name = macro_name}, pos
 end
 
@@ -139,7 +138,6 @@ blud.match_macro_assign = function(line)
         [":="]  = true,
         ["+="]  = true,
     }
---    print("match_macro_assign(\"" .. line .. "\")")
     local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
     macro_name, operator, remainder = line:match(pattern)
     if macro_name and operator then
@@ -186,7 +184,6 @@ end
 -- ??? elaborate to handle context
 blud.macro_from_name = function(name)
     assert(name ~= nil)
-    print("macro_from_name(",name,") is ",dump(blud.macros[name]))
     return blud.macros[name]
 end
 
@@ -197,7 +194,6 @@ blud.macro_expand = function(macro)
     local result = ""
     
     for _, element in ipairs(macro) do
-print("_ = ", _, " element = ", element )
         if type(element) == "string" then
             result = result .. element
         elseif type(element) == "table" then
@@ -208,7 +204,6 @@ assert(element["name"] ~= nil)
         end
     end
     
-print("macro_expand returns: ", result, " from ", dump(macro))
     return result
 end
 
@@ -229,11 +224,9 @@ blud.macro_expand_from_text = function (text, pos)
     macro_ref, pos = blud.macro_extract(text, pos-1)
     local macro = blud.macro_from_name(macro_ref.name)
     if macro then
-        print("expand macro! ", dump(macro))
 assert(macro["name"] ~= nil)
-        blud.macro_expand(macro)
+        result = blud.macro_expand(macro)
     end
-print("return pos=",pos," '", text, "'")
     return result, pos
 end
 
@@ -276,7 +269,6 @@ blud.macro_assign = function(macro_name, operator, input, target)
         for _, element in ipairs(macro_value) do
             if type(element) == "table" and element.name == macro_name then
                 local referenced_macro = blud.macro_from_name(macro_name)
-print("RECURSIONNNNNNNNNNNNNNNNNNNNNNNNNN ", dump(element))
                 for __, other in ipairs(referenced_macro) do
                     table.insert(temp, other)
                 end
@@ -284,6 +276,12 @@ print("RECURSIONNNNNNNNNNNNNNNNNNNNNNNNNN ", dump(element))
                 table.insert(temp, element)
             end
         end
+        for k, v in pairs(macro_value) do
+            if type(k) ~= "number" then
+                temp[k] = v
+            end
+        end
+
         macro_value = temp
     elseif operator == ":=" then
         macro_value = {blud.macro_expand_text(input)}
@@ -706,6 +704,7 @@ blud.super_atom = {
     DO_ACTION = function(target)
         print("DO_ACTION in super atom for " .. target.NAME)
         local action = blud.macro_expand_text(target.ACTION)
+print("expanded action is ", action)
         status, exit_code = os.execute(action)
         assert(status)
         if exit_code then
@@ -812,6 +811,12 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
     if #prereq_atoms > 0 then
         owd = prereq_atoms[1].NAME
     end
+    -- is this the default build (first one mentioned?)
+    if blud.BUILD_DEFAULT == nil then
+        blud.BUILD_DEFAULT = target
+        print("default build is: ", blud.BUILD_DEFAULT.NAME)
+    end
+
     -- need to give .GLOBAL_MACRO attribute to target
 end
 
