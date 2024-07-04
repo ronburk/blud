@@ -1,8 +1,14 @@
 -- bludfile for building/testing blud
 
-all : blud
+all : macro blud
 
-debug release :BUILD:
+FOO = 1
+FOO = $(FOO)2$(FOO)
 
-blud :: blud.c
+macro :
+    echo $(FOO)
+
+-- debug release :BUILD:
+
+-- blud :: blud.c
 

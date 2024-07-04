@@ -296,6 +296,15 @@ end
 
 
 * log
+** <2024-07-01 Mon>
+Attribute values. Attributes are simple if they are boolean:
+
+.PHONY : clean all test
+
+This simply assigns a true .PHONY attribute to each of its "prerequisites".
+What if we want to have a non-boolean attribute.
+
+
 ** <2024-06-27 Thu>
 Alright, I know roughly where I'm going with the syntax.
 

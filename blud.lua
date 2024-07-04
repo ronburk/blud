@@ -31,8 +31,29 @@ blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
 blud.macros          = {}
-blud.public_env      = {}
-blud.private_env     = { __index = blud.public_env }
+blud.scope_base          = {}
+blud.scope_environment   = {
+    __index = function(table, key)
+        if table[key] == nil then
+            local value = os.getenv(key)
+            if value ~= nil then
+                table[key] = value
+                return value
+            else
+                return blud.scope_base[key]
+            end
+        end
+    end,
+    __newindex = function(table, key, value)
+        error("Can't change environment (yet?)")
+    end
+    }
+setmetatable(blud.scope_environment, blud.scope_environment)
+
+blud.scope_global        = {}
+blud.scope_cmdline       = {}
+blud.scope_automatic     = {}
+
 blud.var_metatable   = {
     __tostring = function(var)
         return "Need to write var_metatable.__tostring!"
@@ -46,6 +67,71 @@ blud.var_set      = function(var_name, var_value)
 
 end
 
+
+-- macro_extract:
+--     extract macro invocation from text at pos. No error return,
+-- if it's not looking like a macro, we just skip the '$'
+-- returns a symbolic macro reference, including any actual parameters
+blud.macro_extract = function(text, pos)
+    local macro_name = nil
+    local max_pos= #text
+    assert(pos < max_pos)
+if text:sub(pos,pos) ~= "$" then
+    error("error message", 2)
+end
+    assert(text:sub(pos, pos) == "$")
+    pos = pos + 1
+    if pos < max_pos then
+        local char = text:sub(pos, pos)  -- examine char after '$'
+        assert(char ~= '$')    -- caller should have handled literal '$'
+        if char ~= '(' then    -- if single-character macro, no parens
+            macro_name = char
+            pos = pos + 1
+        else
+            macro_name = text:match("^%((%a%w+)%)", pos)
+            if macro_name then
+                pos = pos + 2 + #macro_name -- skip name + enclosing parens
+            end
+        end
+    end
+print("extract pos= ", pos, "fromtext ", text, "name is ", macro_name)
+    return {name = macro_name}, pos
+end
+
+-- macro_table_from_text: compile a macro body into a table
+--    A macro body is stored as a table. Each entry in the table
+-- is either a substring that contains no macro invocations,
+-- or else a table that describes a macro invocation.
+blud.macro_table_from_text = function(name, text)
+    local result = {name=name}
+    local pos = 1
+    local len = #text
+
+    while pos <= len do
+        local dollar_pos = text:find("%$", pos)
+        
+        if not dollar_pos or dollar_pos == len then
+            -- No more macros or end of string
+            table.insert(result, text:sub(pos))
+            break
+        elseif text:sub(dollar_pos, dollar_pos + 1) == "$$" then
+            -- Escaped dollar sign
+            table.insert(result, text:sub(pos, dollar_pos))
+            pos = dollar_pos + 2
+        else
+            -- Macro found
+            if dollar_pos > pos then
+                table.insert(result, text:sub(pos, dollar_pos - 1))
+            end
+
+            local macro, new_pos = blud.macro_extract(text, dollar_pos)
+            table.insert(result, macro)
+            pos = new_pos
+        end
+    end
+
+    return result
+end
 
 blud.match_macro_assign = function(line)
     local operators = {
@@ -97,11 +183,40 @@ blud.get_macro_call = function (text, pos)
     return pos, macro
 end
 
+-- ??? elaborate to handle context
+blud.macro_from_name = function(name)
+    assert(name ~= nil)
+    print("macro_from_name(",name,") is ",dump(blud.macros[name]))
+    return blud.macros[name]
+end
+
+blud.macro_expand = function(macro)
+    assert(macro ~= nil)
+    assert(macro["name"] ~= nil)
+
+    local result = ""
+    
+    for _, element in ipairs(macro) do
+print("_ = ", _, " element = ", element )
+        if type(element) == "string" then
+            result = result .. element
+        elseif type(element) == "table" then
+assert(element["name"] ~= nil)
+            result = result .. blud.macro_expand(element)
+        else
+            error("Invalid element type in macro: " .. type(element))
+        end
+    end
+    
+print("macro_expand returns: ", result, " from ", dump(macro))
+    return result
+end
+
 -- macro_expand: given text and the offset of a '$', recursively expand
 -- just that macro. Return the expansion text and the position just after
 -- the macro invocation, where the caller can resume scanning.
 -- note the mutual recursion between blud.macro_expand and blud.macro_expand_text
-blud.macro_expand = function (text, pos)
+blud.macro_expand_from_text = function (text, pos)
     local result = ""
     local max_pos= #text
     assert(pos <= max_pos)
@@ -110,42 +225,32 @@ blud.macro_expand = function (text, pos)
     if pos >= max_pos then
         error("Unexpected '$' at end of line.")
     end
-    local macro_name = ""
-    local char = text:sub(pos, pos)  -- examine char after '$'
-    if char == '$' then -- if literal '$'
-        return "$", pos + 1
-    elseif char ~= '(' then
-        macro_name = char
-        pos = pos + 1
-    else
-        macro_name = text:match("^%((%a%w+)%)", pos)
-        if not macro_name then
-            error("bad macro name: " ..  text:sub(pos))
-        else
-            pos = pos + 2 + #macro_name -- skip name + enclosing parens
-        end
+    local macro_ref
+    macro_ref, pos = blud.macro_extract(text, pos-1)
+    local macro = blud.macro_from_name(macro_ref.name)
+    if macro then
+        print("expand macro! ", dump(macro))
+assert(macro["name"] ~= nil)
+        blud.macro_expand(macro)
     end
-    local macro_value = blud.macros[macro_name]
-    print(dump(blud.macros))
-    if macro_value then
-        result = macro_value()
-    end
+print("return pos=",pos," '", text, "'")
     return result, pos
 end
 
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
-function blud.macro_expand_text(text)
+function blud.macro_expand_text(text, stack)
     local result = {}
-    local pos = 1
-    local len = #text
+    local pos    = 1
+    local len    = #text
+    if stack == nil then stack = {} end
 
     while pos <= len do
         local dollar_pos = string.find(text, "%$", pos)
 
         if dollar_pos then
             table.insert(result, string.sub(text, pos, dollar_pos - 1))
-            local new_text, newPos = blud.macro_expand(text, dollar_pos)
+            local new_text, newPos = blud.macro_expand_from_text(text, dollar_pos, stack)
             table.insert(result, new_text)
             pos = newPos
         else
@@ -158,6 +263,7 @@ function blud.macro_expand_text(text)
     return table.concat(result)
 end
 
+-- ???
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
 blud.macro_assign = function(macro_name, operator, input, target)
@@ -165,18 +271,31 @@ blud.macro_assign = function(macro_name, operator, input, target)
     local macro_value;
     local result = input
     if operator == "=" then
-        macro_value = function()
-            return blud.macro_expand_text(input)
+        macro_value = blud.macro_table_from_text(macro_name, input)
+        local temp = {}
+        for _, element in ipairs(macro_value) do
+            if type(element) == "table" and element.name == macro_name then
+                local referenced_macro = blud.macro_from_name(macro_name)
+print("RECURSIONNNNNNNNNNNNNNNNNNNNNNNNNN ", dump(element))
+                for __, other in ipairs(referenced_macro) do
+                    table.insert(temp, other)
+                end
+            else
+                table.insert(temp, element)
+            end
         end
+        macro_value = temp
     elseif operator == ":=" then
-        result = blud.macro_expand_text(input)
-        macro_value = function () return result end
+        macro_value = {blud.macro_expand_text(input)}
     else
         assert(false)
     end
+    if blud.macros[macro_name] then
+        print("replacing table ", blud.macros[macro_name], " = ", dump(blud.macros[macro_name]))
+    end
     blud.macros[macro_name] = macro_value
+print("macro assign ", macro_name, " table ", macro_value, " with value ", dump(macro_value))
     return result
-
 end
 
 
@@ -338,7 +457,7 @@ function blud.phase3:tokenize(line)
         end
         pos = pos + #token - 1
     end
-    print("tokenized line: " .. dump(tokens))
+--    print("tokenized line: " .. dump(tokens))
     return tokens
 end
 
@@ -685,6 +804,7 @@ end
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
     return target:ADD_RULE(prereq_atoms, action)
 end
+
 blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)
     print("Do :BUILD: for target " .. target.NAME .. " with " .. #prereq_atoms .. " args ")
     -- determine value of OWD
@@ -1220,7 +1340,6 @@ if luac_needs_building then
     else
         print("building '" ..  blud_primary_target_name .. "'")
         print( dump( blud_primary_target_name))
-        print( "tyupe is: " .. type(blud_primary_target_name))
     end
 
     blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
