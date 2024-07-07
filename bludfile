@@ -10,5 +10,5 @@ macro :
 
 debug release :BUILD:
 
--- blud :: blud.c
+blud :: blud.c
 

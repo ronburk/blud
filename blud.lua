@@ -149,10 +149,12 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
+    blud.macros["OWD"] = {[1] = ".", ["name"] = "OWD"}
     if blud.build_name then
         os.execute("mkdir " .. blud.build_name)
+        blud.macros["OWD"] = { [1] = blud.build_name, ["name"] = "OWD" }
     end
-    blud.macros["OWD"] = function () return blud.build_name end
+
 end
 
 blud.lines        = function (str)
@@ -656,6 +658,32 @@ blud.super_atom = {
             end
         end
     end,
+    SOURCE_RULE = function(target, prerequisites, action)
+        print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
+        if type(action) == 'string' and action ~= '' then
+            if target.ACTION then
+                error("Target " .. target.NAME .. " already has an action: " .. target.ACTION)
+            else
+                target.ACTION = action
+            end
+        end
+        if prerequisites ~= nil then
+            for _, prerequisite in ipairs(prerequisites) do
+                if prerequisite.NAME:sub(-2) == ".c" then
+                    print("handle source ", prerequisite.NAME)
+                    local obj = prerequisite.NAME:gsub("%.c$", ".o")
+                    local obj_target = blud.get_or_create_target(obj)
+                    target.ADD_RULE(target, { obj_target } )
+                    target.ADD_RULE(obj_target, {prerequisite}, [[
+$(CC) $(CFLAGS) -o $(OWD)/$>
+]])
+                else
+                    error("don't know how to handle " .. prerequisite.NAME)
+                end
+--                target.ADD_PREREQUISITE(target, prerequisite)
+            end
+        end
+    end,
     APPLY_SPECIAL = function(atom, prerequisites)
         print("APPLY_SPECIAL " .. dump(atom))
         for _, prerequisite in ipairs(prerequisites) do
@@ -702,11 +730,11 @@ blud.super_atom = {
 
     end,
     DO_ACTION = function(target)
+        local exit_code
         print("DO_ACTION in super atom for " .. target.NAME)
         local action = blud.macro_expand_text(target.ACTION)
 print("expanded action is ", action)
-        status, exit_code = os.execute(action)
-        assert(status)
+        print( [[ exit_code = os.execute(action) ]] )
         if exit_code then
             error("command failed: " .. action)
         end
@@ -802,6 +830,10 @@ end
 
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
     return target:ADD_RULE(prereq_atoms, action)
+end
+
+blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
+    return target:SOURCE_RULE(prereq_atoms, action)
 end
 
 blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)

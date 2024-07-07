@@ -296,6 +296,20 @@ end
 
 
 * log
+** <2024-07-04 Thu>
+
+What happens if you nest builds:
+
+debug :BUILD:
+other :BUILD:
+all :  other foo
+foo :: *.c
+
+And then "blud debug". Well, you could push/pop the "build" environment when
+encountering nesting. We could also generalize environments
+
+
+
 ** <2024-07-03 Wed>
 
 Current thinking is a "build" is a target that sets environment
