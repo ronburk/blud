@@ -296,6 +296,48 @@ end
 
 
 * log
+** <2024-07-11 Thu>
+
+If the output directory is beneath the current directory, we get
+command like "gcc -o ./build/foo.o", which is uglier than referring
+to "build/foo.o". Could clean this up if OWD (or whatever it gets named)
+is a function macro like $(OWD $>.o). Or, could make a filename
+syntax for it like: "gcc -o @$>.o"
+
+Problem with latter is: have a new special character but really only want it
+to be special in limited circumstances.
+
+How about: $(OWD $<)?  Slightly less cryptic, doesn't create any new
+special characters.
+
+Back to macro lookup. Each scope is a function that calls its parent function
+when a search fails. You must pass the scope function to any function that
+expands macros. Let's use closure for this so you don't have to also
+pass along any extra arguments the scope function requires.
+<><><><><>
+
+
+
+** <2024-07-08 Mon>
+Macro lookup.  It would seem more functional to pass the relevant target, if any,
+to the macro lookup function. But that doesn't work if we want to use Lua
+metatable chains to implement the lookup chain, since the index operator
+can't take an extra argument.
+
+Maybe the metatable approach is a bad fit here. The order of scopes is
+fixed (although the target scopes are constructed at runtime). Only
+the first two scopes (target and automatic) need to have a target
+passed to them.
+
+Lookups happen when evaluating actions and when assigning "immediate"
+macros and when evaluating rule definitions
+
+
+** <2024-07-05 Fri>
+
+
+
+
 ** <2024-07-04 Thu>
 
 What happens if you nest builds:

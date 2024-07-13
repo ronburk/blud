@@ -1,12 +1,18 @@
 -- bludfile for building/testing blud
 
+CC = gcc
+CFLAGS = -g
+
 all : macro blud
+
 
 FOO = 1
 FOO = $(FOO)2$(FOO)
+FEE = $(FOO)
+FEE = $(FEE)3$(FEE)
 
 macro :
-    echo $(FOO)
+    echo $(FOO) and $(FEE)
 
 debug release :BUILD:
 

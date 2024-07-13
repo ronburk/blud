@@ -31,41 +31,54 @@ blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
 blud.macros          = {}
-blud.scope_base          = {}
-blud.scope_environment   = {
-    __index = function(table, key)
-        if table[key] == nil then
-            local value = os.getenv(key)
-            if value ~= nil then
-                table[key] = value
-                return value
-            else
-                return blud.scope_base[key]
-            end
+-- macro scopes
+blud.Scope = {}
+blud.Scope.__index = blud.Scope
+function blud.Scope:new(parent)
+    local instance = {
+        variables = {},
+        parent = parent or nil
+    }
+    setmetatable(instance, Scope)
+    return instance
+end
+function blud.Scope:set(name, value)
+    self.variables[name] = value
+end
+function blud.Scope:get(name)
+    if self.variables[name] ~= nil then
+        return self.variables[name]
+    elseif self.parent then
+        return self.parent:get(name)
+    else
+        return nil
+    end
+end
+-- per-target scope
+-- This handles automatic macros in its "get" function
+blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
+blud.ScopeTarget.__index = blud.ScopeTarget
+function blud.ScopeTarget:new(target)
+    local scope = blud.Scope:new(blud.scope_commandline)
+    setmetatable(scope, blud.ScopeTarget)
+    return scope
+end
+function blud.ScopeTarget:get(name)
+    if name == "<" then
+        error("Auto variables not implemented!")
+    else
+        local result = self.variables[name]
+        if result == nil and self.parent then
+            result = self.parent:get(name)
         end
-    end,
-    __newindex = function(table, key, value)
-        error("Can't change environment (yet?)")
+        return result
     end
-    }
-setmetatable(blud.scope_environment, blud.scope_environment)
-
-blud.scope_global        = {}
-blud.scope_cmdline       = {}
-blud.scope_automatic     = {}
-
-blud.var_metatable   = {
-    __tostring = function(var)
-        return "Need to write var_metatable.__tostring!"
-    end
-    }
-blud.var_get      = function(var_name)
-    -- ??? only works on global right now!
-    return blud.public_env[var_name]
 end
-blud.var_set      = function(var_name, var_value)
 
-end
+blud.scope_base        = blud.Scope:new()
+blud.scope_environment = blud.Scope:new(blud.scope_base)
+blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
+blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 
 
 -- macro_extract:
@@ -184,25 +197,31 @@ blud.get_macro_call = function (text, pos)
 end
 
 -- ??? elaborate to handle context
-blud.macro_from_name = function(name)
+blud.macro_from_name = function(name, target)
     assert(name ~= nil)
+--    local scope = 
+    if target ~= nil then
+    end
     return blud.macros[name]
 end
 
-blud.macro_expand = function(macro)
-    assert(macro ~= nil)
-    assert(macro["name"] ~= nil)
+blud.macro_expand = function(macro_name, scope)
+print(")))))))))))))))))macro_expand", macro_name, scope)
+    assert(macro_name ~= nil)
 
     local result = ""
-    
-    for _, element in ipairs(macro) do
-        if type(element) == "string" then
-            result = result .. element
-        elseif type(element) == "table" then
-assert(element["name"] ~= nil)
-            result = result .. blud.macro_expand(element)
-        else
-            error("Invalid element type in macro: " .. type(element))
+    local macro = scope(macro_name)
+    if macro then
+        assert(macro["name"] ~= nil)
+        for _, element in ipairs(macro) do
+            if type(element) == "string" then
+                result = result .. element
+            elseif type(element) == "table" then
+    assert(element["name"] ~= nil)
+                result = result .. blud.macro_expand(element.name, scope)
+            else
+                error("Invalid element type in macro: " .. type(element))
+            end
         end
     end
     
@@ -213,7 +232,8 @@ end
 -- just that macro. Return the expansion text and the position just after
 -- the macro invocation, where the caller can resume scanning.
 -- note the mutual recursion between blud.macro_expand and blud.macro_expand_text
-blud.macro_expand_from_text = function (text, pos)
+blud.macro_expand_from_text = function (text, pos, scope)
+    assert(scope ~= nil)
     local result = ""
     local max_pos= #text
     assert(pos <= max_pos)
@@ -224,10 +244,11 @@ blud.macro_expand_from_text = function (text, pos)
     end
     local macro_ref
     macro_ref, pos = blud.macro_extract(text, pos-1)
-    local macro = blud.macro_from_name(macro_ref.name)
+--    local macro = blud.macro_from_name(macro_ref.name)
+    local macro = scope(macro_ref.name)
     if macro then
 assert(macro["name"] ~= nil)
-        result = blud.macro_expand(macro)
+        result = blud.macro_expand(macro.name, scope)
     end
     return result, pos
 end
@@ -510,7 +531,7 @@ function blud.phase3:parse()
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
-            local dependency_line = blud.macro_expand_text(line)
+            local dependency_line = blud.macro_expand_text(line, blud.scope_global)
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()
