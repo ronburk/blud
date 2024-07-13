@@ -1,5 +1,27 @@
 blud_module_code = [==[
-local function dump(o)
+local function dump(o, seen)
+    seen = seen or {}  -- Initialize the seen table if it's not passed in
+    if type(o) == 'table' then
+        if seen[o] then  -- Check if this table has already been processed
+            return '"<circular reference>"'
+        end
+        seen[o] = true  -- Mark this table as processed
+        local s = '{ '
+        for k,v in pairs(o) do
+            if type(k) ~= 'number' then k = '"'..k..'"' end
+            if v ~= "__index" then
+                s = s .. '['..k..'] = ' .. dump(v, seen) .. ','
+            end
+        end
+        seen[o] = nil  -- Allow this table to be processed again in other contexts
+        return s .. '} '
+    else
+        return tostring(o)
+    end
+end
+
+
+local function dump_old(o)
     if type(o) == 'table' then
         local s = '{ '
         for k,v in pairs(o) do
@@ -67,8 +89,13 @@ end
 function blud.ScopeTarget:get(name)
 print("ScopeTarget:get(", name, ")")
     if name == "<" then
-        print(self.target)
-        error("Auto variables not implemented!")
+        local first_prereq = self.target.PREREQUISITES[1]
+        if first_prereq then
+--??? wrong, must create macro from text
+            return first_prereq.NAME
+        end
+--        print(dump(self.target.PREREQUISITES))
+
     else
         local result = self.variables[name]
         if result == nil and self.parent then
