@@ -30,7 +30,7 @@ blud                 = {}
 blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
-blud.macros          = {}
+--blud.macros          = {}
 -- macro scopes
 blud.Scope = {}
 blud.Scope.__index = blud.Scope
@@ -39,7 +39,7 @@ function blud.Scope:new(parent)
         variables = {},
         parent = parent or nil
     }
-    setmetatable(instance, Scope)
+    setmetatable(instance, blud.Scope)
     return instance
 end
 function blud.Scope:set(name, value)
@@ -59,12 +59,15 @@ end
 blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
 blud.ScopeTarget.__index = blud.ScopeTarget
 function blud.ScopeTarget:new(target)
-    local scope = blud.Scope:new(blud.scope_commandline)
+    local scope  = blud.Scope:new(blud.scope_commandline)
+    scope.target = target
     setmetatable(scope, blud.ScopeTarget)
     return scope
 end
 function blud.ScopeTarget:get(name)
+print("ScopeTarget:get(", name, ")")
     if name == "<" then
+        print(self.target)
         error("Auto variables not implemented!")
     else
         local result = self.variables[name]
@@ -162,15 +165,17 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
-    blud.macros["OWD"] = {[1] = ".", ["name"] = "OWD"}
+    local OWD = {[1] = ".", ["name"] = "OWD"}
+    blud.scope_base:set("OWD", OWD)
     if blud.build_name then
-        os.execute("mkdir " .. blud.build_name)
-        blud.macros["OWD"] = { [1] = blud.build_name, ["name"] = "OWD" }
+--        os.execute("mkdir " .. blud.build_name)
+print("simulate mkdir " .. blud.build_name)
+        OWD = { [1] = blud.build_name, ["name"] = "OWD" }
+        blud.scope_bludfile:set("OWD", OWD)
     end
-
 end
 
-blud.lines        = function (str)
+blud.lines  = function (str)
     local pos = 1
     return function()
         if pos > #str then return nil end
@@ -205,12 +210,12 @@ blud.macro_from_name = function(name, target)
     return blud.macros[name]
 end
 
-blud.macro_expand = function(macro_name, scope)
+blud.macro_expand = function(scope, macro_name)
 print(")))))))))))))))))macro_expand", macro_name, scope)
     assert(macro_name ~= nil)
 
     local result = ""
-    local macro = scope(macro_name)
+    local macro = scope:get(macro_name)
     if macro then
         assert(macro["name"] ~= nil)
         for _, element in ipairs(macro) do
@@ -218,7 +223,7 @@ print(")))))))))))))))))macro_expand", macro_name, scope)
                 result = result .. element
             elseif type(element) == "table" then
     assert(element["name"] ~= nil)
-                result = result .. blud.macro_expand(element.name, scope)
+                result = result .. blud.macro_expand(scope, element.name)
             else
                 error("Invalid element type in macro: " .. type(element))
             end
@@ -232,7 +237,7 @@ end
 -- just that macro. Return the expansion text and the position just after
 -- the macro invocation, where the caller can resume scanning.
 -- note the mutual recursion between blud.macro_expand and blud.macro_expand_text
-blud.macro_expand_from_text = function (text, pos, scope)
+blud.macro_expand_from_text = function (scope, text, pos)
     assert(scope ~= nil)
     local result = ""
     local max_pos= #text
@@ -245,17 +250,17 @@ blud.macro_expand_from_text = function (text, pos, scope)
     local macro_ref
     macro_ref, pos = blud.macro_extract(text, pos-1)
 --    local macro = blud.macro_from_name(macro_ref.name)
-    local macro = scope(macro_ref.name)
+    local macro = scope:get(macro_ref.name)
     if macro then
 assert(macro["name"] ~= nil)
-        result = blud.macro_expand(macro.name, scope)
+        result = blud.macro_expand(scope, macro.name)
     end
     return result, pos
 end
 
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
-function blud.macro_expand_text(text, stack)
+function blud.macro_expand_text(scope, text, stack)
     local result = {}
     local pos    = 1
     local len    = #text
@@ -266,7 +271,7 @@ function blud.macro_expand_text(text, stack)
 
         if dollar_pos then
             table.insert(result, string.sub(text, pos, dollar_pos - 1))
-            local new_text, newPos = blud.macro_expand_from_text(text, dollar_pos, stack)
+            local new_text, newPos = blud.macro_expand_from_text(scope, text, dollar_pos, stack)
             table.insert(result, new_text)
             pos = newPos
         else
@@ -282,7 +287,7 @@ end
 -- ???
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
-blud.macro_assign = function(macro_name, operator, input, target)
+blud.macro_assign = function(scope, macro_name, operator, input)
     input = input:match("^%s*(.*)")
     local macro_value;
     local result = input
@@ -291,7 +296,7 @@ blud.macro_assign = function(macro_name, operator, input, target)
         local temp = {}
         for _, element in ipairs(macro_value) do
             if type(element) == "table" and element.name == macro_name then
-                local referenced_macro = blud.macro_from_name(macro_name)
+                local referenced_macro = scope:get(macro_name)
                 for __, other in ipairs(referenced_macro) do
                     table.insert(temp, other)
                 end
@@ -307,14 +312,17 @@ blud.macro_assign = function(macro_name, operator, input, target)
 
         macro_value = temp
     elseif operator == ":=" then
-        macro_value = {blud.macro_expand_text(input)}
+        macro_value = {blud.macro_expand_text(scope, input)}
     else
         assert(false)
     end
-    if blud.macros[macro_name] then
-        print("replacing table ", blud.macros[macro_name], " = ", dump(blud.macros[macro_name]))
-    end
-    blud.macros[macro_name] = macro_value
+--    if blud.macros[macro_name] then
+--        print("replacing table ", blud.macros[macro_name], " = ", dump(blud.macros[macro_name]))
+--    end
+print(dump(macro_name), dump(macro_value))
+print(dump(scope))
+    scope:set(macro_name, macro_value)
+--    blud.macros[macro_name] = macro_value
 print("macro assign ", macro_name, " table ", macro_value, " with value ", dump(macro_value))
     return result
 end
@@ -527,11 +535,11 @@ function blud.phase3:parse()
         assert(line ~= nil)
         local macro = self:looks_like_macro_assign(line)
         if macro then
-            line = blud.macro_assign(macro.name, macro.operator, macro.body)
+            line = blud.macro_assign(blud.scope_bludfile, macro.name, macro.operator, macro.body)
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
-            local dependency_line = blud.macro_expand_text(line, blud.scope_global)
+            local dependency_line = blud.macro_expand_text(blud.scope_bludfile, line)
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()
@@ -696,7 +704,7 @@ blud.super_atom = {
                     local obj_target = blud.get_or_create_target(obj)
                     target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CC) $(CFLAGS) -o $(OWD)/$>
+$(CC) $(CFLAGS) -o $(OWD)/$<
 ]])
                 else
                     error("don't know how to handle " .. prerequisite.NAME)
@@ -751,9 +759,12 @@ $(CC) $(CFLAGS) -o $(OWD)/$>
 
     end,
     DO_ACTION = function(target)
+        if target.SCOPE == nil then
+            target.SCOPE = blud.ScopeTarget:new(target)
+        end
         local exit_code
         print("DO_ACTION in super atom for " .. target.NAME)
-        local action = blud.macro_expand_text(target.ACTION)
+        local action = blud.macro_expand_text(target.SCOPE, target.ACTION)
 print("expanded action is ", action)
         print( [[ exit_code = os.execute(action) ]] )
         if exit_code then
