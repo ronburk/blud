@@ -296,6 +296,15 @@ end
 
 
 * log
+** <2024-07-14 Sun>
+We end up with a pretty weird parsing process. Partly because we're mixing
+languages. If there were no Lua and the macro language was extended to
+handle control structures and expressions, then there might be a fairly clean
+separate macro pass.
+
+
+
+
 ** <2024-07-11 Thu>
 
 If the output directory is beneath the current directory, we get

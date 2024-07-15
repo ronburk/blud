@@ -91,8 +91,7 @@ print("ScopeTarget:get(", name, ")")
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
---??? wrong, must create macro from text
-            return first_prereq.NAME
+            return blud.macro_table_from_string(name, first_prereq.NAME)
         end
 --        print(dump(self.target.PREREQUISITES))
 
@@ -115,7 +114,7 @@ blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 --     extract macro invocation from text at pos. No error return,
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
-blud.macro_extract = function(text, pos)
+blud.macro_extract_call = function(text, pos)
     local macro_name = nil
     local max_pos= #text
     assert(pos < max_pos)
@@ -140,10 +139,14 @@ end
     return {name = macro_name}, pos
 end
 
+blud.macro_table_from_string = function(name, str)
+    return {name=name, [1] = str}
+end
+
 -- macro_table_from_text: compile a macro body into a table
 --    A macro body is stored as a table. Each entry in the table
 -- is either a substring that contains no macro invocations,
--- or else a table that describes a macro invocation.
+-- or else a table that describes a macro call.
 blud.macro_table_from_text = function(name, text)
     local result = {name=name}
     local pos = 1
@@ -166,7 +169,7 @@ blud.macro_table_from_text = function(name, text)
                 table.insert(result, text:sub(pos, dollar_pos - 1))
             end
 
-            local macro, new_pos = blud.macro_extract(text, dollar_pos)
+            local macro, new_pos = blud.macro_extract_call(text, dollar_pos)
             table.insert(result, macro)
             pos = new_pos
         end
@@ -194,10 +197,11 @@ end
 blud.build_init = function()
     local OWD = {[1] = ".", ["name"] = "OWD"}
     blud.scope_base:set("OWD", OWD)
-    if blud.build_name then
---        os.execute("mkdir " .. blud.build_name)
-print("simulate mkdir " .. blud.build_name)
-        OWD = { [1] = blud.build_name, ["name"] = "OWD" }
+--    if blud.build_name then
+    if blud.BUILD_DEFAULT then
+--        os.execute("mkdir " .. blud.BUILD_DEFAULT.NAME)
+print("simulate mkdir " .. blud.BUILD_DEFAULT.NAME)
+        OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
         blud.scope_bludfile:set("OWD", OWD)
     end
 end
@@ -237,12 +241,11 @@ blud.macro_from_name = function(name, target)
     return blud.macros[name]
 end
 
-blud.macro_expand = function(scope, macro_name)
-print(")))))))))))))))))macro_expand", macro_name, scope)
-    assert(macro_name ~= nil)
+blud.macro_expand = function(scope, macro_call)
+    assert(macro_call ~= nil)
 
     local result = ""
-    local macro = scope:get(macro_name)
+    local macro = scope:get(macro_call.name)
     if macro then
         assert(macro["name"] ~= nil)
         for _, element in ipairs(macro) do
@@ -260,7 +263,7 @@ print(")))))))))))))))))macro_expand", macro_name, scope)
     return result
 end
 
--- macro_expand: given text and the offset of a '$', recursively expand
+-- macro_expand_from_text: given text and the offset of a '$', recursively expand
 -- just that macro. Return the expansion text and the position just after
 -- the macro invocation, where the caller can resume scanning.
 -- note the mutual recursion between blud.macro_expand and blud.macro_expand_text
@@ -274,14 +277,9 @@ blud.macro_expand_from_text = function (scope, text, pos)
     if pos >= max_pos then
         error("Unexpected '$' at end of line.")
     end
-    local macro_ref
-    macro_ref, pos = blud.macro_extract(text, pos-1)
---    local macro = blud.macro_from_name(macro_ref.name)
-    local macro = scope:get(macro_ref.name)
-    if macro then
-assert(macro["name"] ~= nil)
-        result = blud.macro_expand(scope, macro.name)
-    end
+    local macro_call
+    macro_call, pos = blud.macro_extract_call(text, pos-1)
+    result = blud.macro_expand(scope, macro_call)
     return result, pos
 end
 
@@ -291,13 +289,14 @@ function blud.macro_expand_text(scope, text, stack)
     local result = {}
     local pos    = 1
     local len    = #text
-    if stack == nil then stack = {} end
+    stack = stack or {}
 
     while pos <= len do
         local dollar_pos = string.find(text, "%$", pos)
 
-        if dollar_pos then
-            table.insert(result, string.sub(text, pos, dollar_pos - 1))
+        if dollar_pos then -- if we found another macro invocation
+            -- first append text up to macro invocation
+            table.insert(result, string.sub(text, pos, dollar_pos - 1)) 
             local new_text, newPos = blud.macro_expand_from_text(scope, text, dollar_pos, stack)
             table.insert(result, new_text)
             pos = newPos
