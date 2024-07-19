@@ -296,6 +296,42 @@ end
 
 
 * log
+** <2024-07-18 Thu>
+
+I'm pointlessly insisting on making FOO = $(FOO) -g
+work, just because GNU Make doesn't support it.
+What a pain. Making a pass after the macro tokenization
+is turning into a pain. But passing the name into the
+tokenization process is a pain too. And decent error
+messages are triple pain.
+
+OK: if FOO is the target of the assignment, then we must find
+$(FOO) during tokenization to do anything different. What do we
+do different? We take the arg stack of the call and apply it to
+the body of FOO to produce an array of tokens that we insert
+into the result.
+
+Ugh: if you're going to pass macro name into tokenizer, then
+you have to pass scope too, since it may need to look up name.
+
+Vague feeling that I'm missing some great simplification here.
+Let it go.
+
+Anyway, notice that passing in the name of the potential self-reference
+to the tokenizer reduces the cost of handling self-references to
+almost nothing when they don't occur, which is the overwhelming
+majority of the time. So that wins. Just as well pass
+the macro itself, which will include its name and its token string.
+The macro will be nil if it does not already exist: easy to test
+for and skip the complications.
+
+When we detect self-reference, we must eval that macro using
+the call site arg stack (not guaranteed to be empty). Then
+we pretend the resulting token string was seen instead of
+the macro invocation. Is this a different flavor of eval
+than needed elsewhere? Hmmmm.
+
+
 ** <2024-07-14 Sun>
 We end up with a pretty weird parsing process. Partly because we're mixing
 languages. If there were no Lua and the macro language was extended to

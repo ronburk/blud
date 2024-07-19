@@ -1,4 +1,10 @@
 blud_module_code = [==[
+setmetatable(_G, {
+    __index = function(_, key)
+        error("Attempt to access undefined global variable: " .. tostring(key), 2)
+    end
+})
+
 local function dump(o, seen)
     seen = seen or {}  -- Initialize the seen table if it's not passed in
     if type(o) == 'table' then
@@ -91,7 +97,7 @@ print("ScopeTarget:get(", name, ")")
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            return blud.macro_table_from_string(name, first_prereq.NAME)
+            return blud.macro_tokens_from_string(name, first_prereq.NAME)
         end
 --        print(dump(self.target.PREREQUISITES))
 
@@ -110,72 +116,102 @@ blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
 blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 
 
--- macro_extract:
+blud.macro_simple_name_match = function(token, name)
+    if token and type(token) == "table" and token.macro == true then
+        -- it's a macro call stack, and [1] will be the tokens making up the name
+        local name_tokens = token[1]
+        -- we detect FOO = $(FOO) + 1, not FOO = $(F$(OO)) + 1
+        if #name_tokens == 1 then
+            return name_tokens[1][1] == name
+        end
+    end
+print("NO MATCH on ", name, dump(token))
+    return false
+end
+
+-- macro_extract_call:
 --     extract macro invocation from text at pos. No error return,
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
 blud.macro_extract_call = function(text, pos)
-    local macro_name = nil
-    local max_pos= #text
-    assert(pos < max_pos)
-if text:sub(pos,pos) ~= "$" then
-    error("error message", 2)
-end
+print("macro_extract_call: ", text, pos)
+    local arg_stack = {macro=true}
+    local len       = #text
+    assert(pos < len)
     assert(text:sub(pos, pos) == "$")
     pos = pos + 1
-    if pos < max_pos then
-        local char = text:sub(pos, pos)  -- examine char after '$'
-        assert(char ~= '$')    -- caller should have handled literal '$'
-        if char ~= '(' then    -- if single-character macro, no parens
-            macro_name = char
-            pos = pos + 1
-        else
-            macro_name = text:match("^%((%a%w+)%)", pos)
-            if macro_name then
-                pos = pos + 2 + #macro_name -- skip name + enclosing parens
-            end
+    if pos > len then
+        error("$ at end of line: " .. text)
+    end
+    local first_char = text:sub(pos,pos)
+
+    if first_char ~= '(' then    -- if single-char macro with no arguments
+        table.insert(arg_stack, {first_char})
+    else    -- else looks like full-syntax macro invocation
+        local arg
+        arg, pos = blud.macro_tokens_from_text(text, "[ )]", pos+1)
+        assert(next(arg))
+        assert(pos <= len)
+        local stop_char = text:sub(pos,pos)
+        table.insert(arg_stack, arg)
+        if stop_char == ' ' then
+            error("can't handle macro args yet")
+        elseif stop_char ~= ')' then
+            error("malformed macro call: " .. text)
+        else  -- else we hit closing paren of macro call
+            pos = pos + 1   -- skip over ')'
         end
     end
-    return {name = macro_name}, pos
+print(" extract returns ", dump(arg_stack), pos)
+    return arg_stack, pos
 end
 
-blud.macro_table_from_string = function(name, str)
+blud.macro_tokens_from_string = function(name, str)
     return {name=name, [1] = str}
 end
 
--- macro_table_from_text: compile a macro body into a table
+-- macro_tokens_from_text: compile a macro body into a table
 --    A macro body is stored as a table. Each entry in the table
 -- is either a substring that contains no macro invocations,
 -- or else a table that describes a macro call.
-blud.macro_table_from_text = function(name, text)
-    local result = {name=name}
-    local pos = 1
-    local len = #text
+blud.macro_tokens_from_text = function(text, stop_chars, pos)
+print("macro_tokens_from_text: ", text, stop_chars, pos)
+    stop_chars        = stop_chars or "%$"
+    stop_chars        = "(" .. stop_chars .. ")"
+    pos               = pos or 1
+    local result      = {}
+    local len         = #text
+print("    >macro_tokens_from_text: ", text, stop_chars, pos)
 
     while pos <= len do
-        local dollar_pos = text:find("%$", pos)
-        
-        if not dollar_pos or dollar_pos == len then
-            -- No more macros or end of string
+        local stop_pos,_,stop_char = text:find(stop_chars, pos)
+print("    >", pos, stop_pos, stop_char)        
+        -- if no more stop_chars to find
+        -- (also treat $ at end of text as literal)
+        if not stop_pos or (stop_char == '$' and stop_pos == len) then
             table.insert(result, text:sub(pos))
             break
-        elseif text:sub(dollar_pos, dollar_pos + 1) == "$$" then
-            -- Escaped dollar sign
-            table.insert(result, text:sub(pos, dollar_pos))
-            pos = dollar_pos + 2
-        else
-            -- Macro found
-            if dollar_pos > pos then
-                table.insert(result, text:sub(pos, dollar_pos - 1))
+        -- else if it is a macro invocation
+        elseif stop_char == '$' then
+            -- add any text up to the macro invocation
+            if stop_pos > pos then
+                table.insert(result, text:sub(pos, stop_pos - 1))
             end
-
-            local macro, new_pos = blud.macro_extract_call(text, dollar_pos)
-            table.insert(result, macro)
+            local macro_call, new_pos = blud.macro_extract_call(text, stop_pos)
+            table.insert(result, macro_call)
             pos = new_pos
+        -- else it's a char that stops our scan (space, comma, right paren)
+        else
+            if stop_pos > pos+1 then
+                table.insert(result, text:sub(pos, stop_pos - 1))
+                pos = stop_pos
+            end
+            break
         end
     end
 
-    return result
+print(" tokens_from returns ", dump(result), pos)
+    return result, pos
 end
 
 blud.match_macro_assign = function(line)
@@ -310,19 +346,21 @@ function blud.macro_expand_text(scope, text, stack)
     return table.concat(result)
 end
 
--- ???
+-- macro_assign: assign a body to a macro
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
-blud.macro_assign = function(scope, macro_name, operator, input)
-    input = input:match("^%s*(.*)")
-    local macro_value;
-    local result = input
+blud.macro_assign = function(line, scope, macro)
+print("macro_assign: ", line, macro.name, macro.operator, macro.body_pos)
+    local macro_tokens = blud.macro_tokens_from_text(line, nil, macro.body_pos);
+    local result   = line
+    local operator = macro.operator
     if operator == "=" then
-        macro_value = blud.macro_table_from_text(macro_name, input)
         local temp = {}
-        for _, element in ipairs(macro_value) do
-            if type(element) == "table" and element.name == macro_name then
-                local referenced_macro = scope:get(macro_name)
+        for _, element in ipairs(macro_tokens) do
+print("name: ", macro.name, "for: ", _, dump(element) )
+            if blud.macro_simple_name_match(element, macro.name) then
+print("    MATCH!")
+                local referenced_macro = scope:get(macro.name)
                 for __, other in ipairs(referenced_macro) do
                     table.insert(temp, other)
                 end
@@ -330,26 +368,26 @@ blud.macro_assign = function(scope, macro_name, operator, input)
                 table.insert(temp, element)
             end
         end
-        for k, v in pairs(macro_value) do
+        -- copy over non-array elements
+        for k, v in pairs(macro_tokens) do
             if type(k) ~= "number" then
                 temp[k] = v
             end
         end
 
-        macro_value = temp
+        macro_tokens = temp
     elseif operator == ":=" then
-        macro_value = {blud.macro_expand_text(scope, input)}
+        macro_tokens = {blud.macro_expand_text(scope, input)}
     else
+        error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
         assert(false)
     end
 --    if blud.macros[macro_name] then
 --        print("replacing table ", blud.macros[macro_name], " = ", dump(blud.macros[macro_name]))
 --    end
-print(dump(macro_name), dump(macro_value))
-print(dump(scope))
-    scope:set(macro_name, macro_value)
---    blud.macros[macro_name] = macro_value
-print("macro assign ", macro_name, " table ", macro_value, " with value ", dump(macro_value))
+print("scope: ", dump(scope))
+    scope:set(macro.name, macro_tokens)
+print("macro assign ", macro.name, " table ", macro_tokens, " with value ", dump(macro_tokens))
     return result
 end
 
@@ -399,27 +437,27 @@ blud.string_stack = function(str, pos)
 end
 
 blud.phase3 = {}
-function blud.phase3:looks_like_macro_assign(text)
-    local name, operator, operator_pos = text:match("^(%a[%w_]*)%s*([=+:])()")
-    if name and operator and operator_pos then
-        local next_char = text:sub(operator_pos, operator_pos)
+function blud.phase3:looks_like_macro_assign(line)
+    local name, operator, body_pos = line:match("^(%a[%w_]*)%s*([=+:])()")
+    if name and operator and body_pos then
+        local next_char = line:sub(body_pos, body_pos)
         if operator == ":" then
             if next_char ~= '=' then return nil end
             operator = ":="
-            operator_pos = operator_pos + 1
+            body_pos = body_pos + 1
         elseif operator == "+" then
             if next_char ~= '=' then
-                 error("Unexpected '+': " .. text )
+                 error("Unexpected '+': " .. line )
             end
             operator = "+="
-            operator_pos = operator_pos + 1
+            body_pos = body_pos + 1
         elseif operator == '=' then
-            -- ok
+            -- it's just a simple '=' operator (anything after is part of body!)
         else
             assert(false)
         end
-        local macro_body = text:sub(operator_pos)
-        return { text=text, name=name, operator=operator, body=macro_body }
+        local _, _, body_pos = line:find("^[ \t]*()", body_pos)
+        return { line=line, name=name, operator=operator, body_pos=body_pos }
     end
     return nil
 end
@@ -443,7 +481,7 @@ end
 
 function blud.phase3:looks_like_action_line(text)
     -- handle comments
-    match = string.find(text, "^%s+")
+    local match = string.find(text, "^%s+")
     return match ~= nil
 end
 
@@ -561,7 +599,7 @@ function blud.phase3:parse()
         assert(line ~= nil)
         local macro = self:looks_like_macro_assign(line)
         if macro then
-            line = blud.macro_assign(blud.scope_bludfile, macro.name, macro.operator, macro.body)
+            line = blud.macro_assign(line, blud.scope_bludfile, macro)
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then

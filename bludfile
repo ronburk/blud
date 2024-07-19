@@ -3,7 +3,8 @@
 CC = gcc
 CFLAGS = -g
 
-all : macro blud
+-- all : macro blud
+all : macro
 
 
 FOO = 1
