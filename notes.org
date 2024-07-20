@@ -296,6 +296,10 @@ end
 
 
 * log
+** <2024-07-19 Fri>
+
+
+
 ** <2024-07-18 Thu>
 
 I'm pointlessly insisting on making FOO = $(FOO) -g
@@ -330,6 +334,10 @@ the call site arg stack (not guaranteed to be empty). Then
 we pretend the resulting token string was seen instead of
 the macro invocation. Is this a different flavor of eval
 than needed elsewhere? Hmmmm.
+
+Yes it is, because you have to traverse macro tokens,
+only expanding one particular macro, and producing macro
+tokens instead of a single string.
 
 
 ** <2024-07-14 Sun>
