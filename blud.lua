@@ -117,6 +117,7 @@ blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 
 
 blud.macro_simple_name_match = function(token, name)
+print("simple name match ", name, dump(token))
     if token and type(token) == "table" and token.macro == true then
         -- it's a macro call stack, and [1] will be the tokens making up the name
         local name_tokens = token[1]
