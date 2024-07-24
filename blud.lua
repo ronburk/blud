@@ -134,7 +134,7 @@ end
 --     extract macro invocation from text at pos. No error return,
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
-blud.macro_extract_call = function(text, pos)
+blud.macro_extract_call = function(text, pos, self_reference)
 print("macro_extract_call: ", text, pos)
     local arg_stack = {macro=true}
     local len       = #text
@@ -163,6 +163,10 @@ print("macro_extract_call: ", text, pos)
             pos = pos + 1   -- skip over ')'
         end
     end
+    if self_reference then
+        arg_stack = self_reference(arg_stack)
+print(" self_reference returns ", dump(arg_stack), pos)
+    end
 print(" extract returns ", dump(arg_stack), pos)
     return arg_stack, pos
 end
@@ -175,7 +179,7 @@ end
 --    A macro body is stored as a table. Each entry in the table
 -- is either a substring that contains no macro invocations,
 -- or else a table that describes a macro call.
-blud.macro_tokens_from_text = function(text, stop_chars, pos)
+blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
 print("macro_tokens_from_text: ", text, stop_chars, pos)
     stop_chars        = stop_chars or "%$"
     stop_chars        = "(" .. stop_chars .. ")"
@@ -198,7 +202,7 @@ print("    >", pos, stop_pos, stop_char)
             if stop_pos > pos then
                 table.insert(result, text:sub(pos, stop_pos - 1))
             end
-            local macro_call, new_pos = blud.macro_extract_call(text, stop_pos)
+            local macro_call, new_pos = blud.macro_extract_call(text, stop_pos, self_reference)
             table.insert(result, macro_call)
             pos = new_pos
         -- else it's a char that stops our scan (space, comma, right paren)
@@ -329,17 +333,17 @@ function blud.macro_expand_text(scope, text, stack)
     stack = stack or {}
 
     while pos <= len do
-        local dollar_pos = string.find(text, "%$", pos)
+        local dollar_pos = text:find("%$", pos)
 
         if dollar_pos then -- if we found another macro invocation
             -- first append text up to macro invocation
-            table.insert(result, string.sub(text, pos, dollar_pos - 1)) 
+            table.insert(result, text:sub(pos, dollar_pos - 1)) 
             local new_text, newPos = blud.macro_expand_from_text(scope, text, dollar_pos, stack)
             table.insert(result, new_text)
             pos = newPos
         else
             -- No more "$" found, accumulate the remaining text
-            table.insert(result, string.sub(text, pos, len))
+            table.insert(result, text:sub(pos, len))
             break
         end
     end
@@ -347,36 +351,67 @@ function blud.macro_expand_text(scope, text, stack)
     return table.concat(result)
 end
 
+blud.is_positive_integer = function(n)
+    if type(n) == "string" then
+        n = tonumber(n)
+    end
+    return type(n) == "number" and n >= 0 and n%1 == 0
+end
+
+blud.macro_is_arg_reference = function(macro_token)
+    local result = -1 -- -1 means "no", other positive integers indicate arg #
+    if type(macro_token) == "table" and macro_token.macro then
+        local macro_name_tokens = macro_token[1]
+        if #macro_name_tokens == 1 then
+            local macro_name_token = macro_name_tokens[1]
+            if blud.is_positive_integer(macro_name_token) then
+                result = tonumber(macro_name_token)+1
+            end
+        end
+    end
+    return result
+end
+
+-- given:
+--     FOO = $(FOO a,b) xxx
+-- we must expand the self-reference using the body of FOO
+-- only arguments will be expanded (so usually nothing gets expanded at all!)
+blud.macro_expand_self_reference = function(macro_call, macro_tokens)
+    local result = {}
+    -- copy tokens, looking for $(N args) macro invocations
+    for _, element in ipairs(macro_tokens) do
+        local arg_number = blud.macro_is_arg_reference(element)
+        if arg_number > 0 then
+            error("can't handle self-ref args yet!")
+        else
+            table.insert(result, element)
+        end
+    end
+    return result
+end
+
 -- macro_assign: assign a body to a macro
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
 blud.macro_assign = function(line, scope, macro)
 print("macro_assign: ", line, macro.name, macro.operator, macro.body_pos)
-    local macro_tokens = blud.macro_tokens_from_text(line, nil, macro.body_pos);
+    local referenced_macro = scope:get(macro.name)
+    print("macro is: ", dump(referenced_macro))
+    local self_reference = function(macro_call)
+        print("self-reference wrapper on macro ", macro.name, dump(macro_call))
+        local macro_name_tokens = macro_call[1]
+        if #macro_name_tokens == 1 and macro_name_tokens[1] == macro.name then
+            return blud.macro_expand_self_reference(macro_call, referenced_macro)
+        else
+            return macro_call
+        end
+    end
+    local macro_tokens = blud.macro_tokens_from_text(line, nil, macro.body_pos, self_reference);
     local result   = line
     local operator = macro.operator
+    
     if operator == "=" then
-        local temp = {}
-        for _, element in ipairs(macro_tokens) do
-print("name: ", macro.name, "for: ", _, dump(element) )
-            if blud.macro_simple_name_match(element, macro.name) then
-print("    MATCH!")
-                local referenced_macro = scope:get(macro.name)
-                for __, other in ipairs(referenced_macro) do
-                    table.insert(temp, other)
-                end
-            else
-                table.insert(temp, element)
-            end
-        end
-        -- copy over non-array elements
-        for k, v in pairs(macro_tokens) do
-            if type(k) ~= "number" then
-                temp[k] = v
-            end
-        end
-
-        macro_tokens = temp
+        -- do nothing
     elseif operator == ":=" then
         macro_tokens = {blud.macro_expand_text(scope, input)}
     else
