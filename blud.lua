@@ -1,4 +1,59 @@
 blud_module_code = [==[
+local debugInfo
+local function printCurrentLine()
+    if debugInfo then
+        local source = debugInfo.short_src
+        local line = debugInfo.currentline
+        print(string.format("Stepping into %s at line %d", source, line))
+    end
+end
+
+local function stepHook(event, line)
+    if event == "line" then
+        debugInfo = debug.getinfo(2)
+        printCurrentLine()
+        debug.sethook() -- Remove the hook after printing
+    end
+end
+
+local function customDebugger(prompt, customHandler)
+    local debugActive = true
+    while debugActive do
+        io.write(prompt)
+        local input = io.read()
+        local command, arg = input:match("^(%S+)%s*(.*)")
+
+        if command == "quit" then
+            os.exit()
+        elseif command == "resume" then
+            break
+        elseif command == "eval" then
+            local chunk, err = load(arg)
+            if chunk then
+                local status, result = pcall(chunk)
+                if status then
+                    print(result)
+                else
+                    print("Error during evaluation: " .. result)
+                end
+            else
+                print("Compilation error: " .. err)
+            end
+        elseif command == "step" then
+            debug.sethook(stepHook, "l")
+            break -- Step out of the debugger to execute the next line
+        else
+            customHandler(command, arg)
+        end
+    end
+end
+
+-- Example custom command handler
+local function customHandler(command, arg)
+    print("Custom handler received command: " .. command .. " with argument: " .. arg)
+end
+
+
 setmetatable(_G, {
     __index = function(_, key)
         error("Attempt to access undefined global variable: " .. tostring(key), 2)
@@ -327,6 +382,22 @@ end
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
 function blud.macro_expand_text(scope, text, stack)
+print("--------------------")
+customDebugger("Debug> ")
+
+    local tokens = blud.macro_tokens_from_text(text)
+    local result = {}
+    for _, token in ipairs(tokens) do
+        if type(token) == "string" then
+            table.insert(result, token)
+        elseif type(token) == "table" then
+            assert(token.macro)
+            table.insert(result, token.expand(scope, stack))
+        end
+    end
+    return table.concat(result)
+
+--[===[
     local result = {}
     local pos    = 1
     local len    = #text
@@ -349,6 +420,7 @@ function blud.macro_expand_text(scope, text, stack)
     end
 
     return table.concat(result)
+]===]
 end
 
 blud.is_positive_integer = function(n)
