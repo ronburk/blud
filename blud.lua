@@ -198,26 +198,28 @@ function blud.Macro:assign_late(new_body)
     elseif type(new_body) == "string" then
         self.body = { new_body }      -- store string as array of macro tokens
     else
-        error("assign_late was passed a " .. type(new_body))
+        error("assign_late was passed a " .. type(new_body) .. "instead of a string or table")
     end
 end
 
 -- append to an existing macro of either type
-function blud.Macro:append(scope, new_body)
+-- caller has already handled any self references
+function blud.Macro:append(scope, more_body)
     if type(self.body) == "table" then  -- if I am a late-binding macro
         if type(new_body) == "string" then
-            new_body = { new_body }  -- turn string into array of macro tokens
+            more_body = { more_body }  -- turn string into array of macro tokens
         else
-            assert(type(new_body) == "table")
+            assert(type(more_body) == "table")
         end
-        for _, token in ipairs(new_body) do
+        for _, token in ipairs(more_body) do
             table.insert(self.body, token)
         end
-    elseif type(self.body) == "string" then -- else I am an early-binding macro
-        if type(new_body) == "table" then
-            new_body = self.expand(
+    elseif type(self.body) == "string" then -- else if I am an early-binding macro
+        if type(more_body) == "table" then
+            more_body = self.expand(scope, more_body)
+        end
     else
-        assert(false)
+        error("Macro:append was passed a " .. type(more_body) .. "instead of a string or table")
     end
 end
 
