@@ -171,6 +171,57 @@ blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
 blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 
 
+-- macro class
+blud.Macro = {}
+blud.Macro.__index = blud.Scope
+function blud.Macro:new(body)
+    assert(type(body) == "string" or type(body) == "table")
+    local instance = {
+        body      = body
+    }
+    setmetatable(instance, blud.Macro)
+    return instance
+end
+
+function blud.Macro:assign_early(scope, new_body)
+    if type(new_body) == "table" then -- if we are being given macro tokens
+        new_body = self.expand(scope, new_body)  -- expand into string
+    end
+    assert(type(new_body) == "string")
+    self.body = new_body
+end
+
+-- note that caller has already handled any self references
+function blud.Macro:assign_late(new_body)
+    if type(new_body) == "table" then -- if we are being given macro tokens
+        self.body = new_body
+    elseif type(new_body) == "string" then
+        self.body = { new_body }      -- store string as array of macro tokens
+    else
+        error("assign_late was passed a " .. type(new_body))
+    end
+end
+
+-- append to an existing macro of either type
+function blud.Macro:append(scope, new_body)
+    if type(self.body) == "table" then  -- if I am a late-binding macro
+        if type(new_body) == "string" then
+            new_body = { new_body }  -- turn string into array of macro tokens
+        else
+            assert(type(new_body) == "table")
+        end
+        for _, token in ipairs(new_body) do
+            table.insert(self.body, token)
+        end
+    elseif type(self.body) == "string" then -- else I am an early-binding macro
+        if type(new_body) == "table" then
+            new_body = self.expand(
+    else
+        assert(false)
+    end
+end
+
+
 blud.macro_simple_name_match = function(token, name)
 print("simple name match ", name, dump(token))
     if token and type(token) == "table" and token.macro == true then
@@ -379,10 +430,13 @@ blud.macro_expand_from_text = function (scope, text, pos)
     return result, pos
 end
 
+function blud.macro_expand
+
+
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
 function blud.macro_expand_text(scope, text, stack)
-print("--------------------")
+print("macro_expand_text: ", text)
 customDebugger("Debug> ")
 
     local tokens = blud.macro_tokens_from_text(text)
