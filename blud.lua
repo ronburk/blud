@@ -1,3 +1,4 @@
+
 blud_module_code = [==[
 local debugInfo
 local function printCurrentLine()
@@ -82,19 +83,79 @@ local function dump(o, seen)
 end
 
 
-local function dump_old(o)
+local function dump1(o)
     if type(o) == 'table' then
         local s = '{ '
         for k,v in pairs(o) do
             if type(k) ~= 'number' then k = '"'..k..'"' end
             if v ~= "__index" then
-            s = s .. '['..k..'] = ' .. dump(v) .. ','
+--                s = s .. '['..k..'] = ' .. dump(v) .. ','
+                s = s .. '['..k..'] = ' .. tostring(v) .. ','
             end
         end
         return s .. '} '
     else
         return tostring(o)
     end
+end
+local function formatValue(value)
+    if type(value) == "string" then
+        if #value > 100 then
+            return string.format("%q", value:sub(1, 100) .. "... (truncated)")
+        else
+            return string.format("%q", value)
+        end
+    elseif type(value) == "number" or type(value) == "boolean" then
+        return tostring(value)
+    elseif type(value) == "table" then
+--        return "{table}"
+        return dump1(value)
+    else
+        return tostring(value)
+    end
+end
+
+local function getFunctionParameters(level)
+    local params = {}
+    local i = 1
+    while true do
+        local name, value = debug.getlocal(level+1, i)
+        if not name then break end
+        -- Stop at first local variable that is not a function parameter
+        if name:match("^%(") then break end
+        table.insert(params, {name = name, value = value})
+        i = i + 1
+    end
+    return params
+end
+
+function getDetailedTraceback()
+    local level = 3 
+    local traceback = {"Stack traceback:"}
+
+    while true do
+        local info = debug.getinfo(level, "Sln")
+        if not info then break end
+
+        local params = getFunctionParameters(level)
+        local frame = string.format("  Function '%s' at %s:%d", info.name or "unknown", info.short_src, info.currentline)
+        table.insert(traceback, frame)
+
+        for _, param in ipairs(params) do
+            table.insert(traceback, string.format("    %s = %s", param.name, formatValue(param.value)))
+        end
+
+        level = level + 1
+        if level > 6 then break end
+    end
+
+    return table.concat(traceback, "\n")
+end
+
+function error_with_traceback(fmt, ...)
+    local message = string.format(fmt, ...)
+    local traceback = getDetailedTraceback()
+    error(message .. "\n" .. traceback, 2)
 end
 
 function errorf(format_string, ...)
@@ -106,29 +167,69 @@ function errorf(format_string, ...)
         io.stderr:write(message)
     end
     io.stderr:write("\n")
-    os.exit(1)
+--    io.stderr:write(debug.traceback("", 2))
+    io.stderr:write(getDetailedTraceback())
+    error("", 2)
+--    os.exit(1)
 end
 
 blud                 = {}
+blud.error           = errorf
 blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
+blud.array_append    = function(array, more)
+    if not (type(array) == "table" and type(more) == "table") then
+        blud.error("Bad call to array_append")
+    end
+    for _, element in ipairs(more) do
+        table.insert(array, element)
+    end
+end
+
 --blud.macros          = {}
 -- macro scopes
 blud.Scope = {}
-blud.Scope.__index = blud.Scope
 function blud.Scope:new(parent)
+    if parent == nil then parent = blud.Scope end
     local instance = {
-        variables = {},
-        parent = parent or nil
+        variables  = {},
+        parent     = parent,
+        __index    = parent,
     }
-    setmetatable(instance, blud.Scope)
+
+    -- no need for separate metatable; each instance is its own metatable
+    setmetatable(instance, instance)
     return instance
 end
+
+-- a param scope filters out any numeric macro name references
+-- it never allows those references to search any higher scope
+-- it passes all non-numeric macro name references up the scope chain
+function blud.Scope:new_param_scope(parent, macro_actual)
+    local scope = blud.Scope:new(parent)
+    scope.macro_actual = macro_actual
+    function scope:get(name)
+        if name:match("^%-?%d+$") then
+            blud.error(" don't handle numerics yet!")
+        else
+            return self.parent:get(name)
+        end
+    end
+    function scope:set(name, value)
+        error("You can't set a param value macro!")
+    end
+    return scope
+end
+
 function blud.Scope:set(name, value)
     self.variables[name] = value
 end
 function blud.Scope:get(name)
+    if self == blud.Scope then
+        return nil
+    end
+if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(self)) end
     if self.variables[name] ~= nil then
         return self.variables[name]
     elseif self.parent then
@@ -137,6 +238,8 @@ function blud.Scope:get(name)
         return nil
     end
 end
+
+
 -- per-target scope
 -- This handles automatic macros in its "get" function
 blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
@@ -173,7 +276,7 @@ blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 
 -- macro class
 blud.Macro = {}
-blud.Macro.__index = blud.Scope
+blud.Macro.__index = blud.Macro
 function blud.Macro:new(body)
     assert(type(body) == "string" or type(body) == "table")
     local instance = {
@@ -182,6 +285,61 @@ function blud.Macro:new(body)
     setmetatable(instance, blud.Macro)
     return instance
 end
+
+-- macro_call is an unexpanded macro call, where [1] == macro name, [2] == arg#1, etc.
+-- macro_actual is the expanded macro call we are inside of, if any, needed for $(1), $(2), etc.
+function blud.Macro.expand_call(scope, macro_call, stack)
+    -- expand macro_call to get all its actual parameters (including name)
+    local new_actual = {}
+    for _, macro_arg in ipairs(macro_call) do
+        table.insert(new_actual, blud.Macro.expand_tokens(scope, macro_arg, stack))
+    end
+    local result
+    local name_string = new_actual[1]
+    local macro_body  = scope:get(name_string) or ""
+    if type(macro_body) == "string" then -- if macro is simple string
+        result = { macro_body }
+    elseif type(macro_body) == "table" then
+        local param_scope = blud.Scope:new_param_scope(scope, new_actual)
+assert(type(macro_body) ~= "string")
+        result = { blud.Macro.expand_tokens(param_scope, macro_body, stack) }
+    else
+        blud.error("Can't happen.")
+    end
+    return result
+end
+
+function blud.Macro.expand_tokens(scope, tokens,     stack)
+
+    if type(tokens) == "string" then
+        return tokens
+    end
+    -- we internally keep a stack to detect macro recursion
+    local top_level = false
+    if stack == nil then
+        stack       = {}
+        top_level   = true
+    end
+
+    local result = {}
+    for _, token in ipairs(tokens) do
+        if type(token) == "string" then  -- simple string, yay!
+            table.insert(result, token)
+        elseif type(token) == "table" then -- macro call, PITA
+            local call_result_tokens = blud.Macro.expand_call(scope, token,  stack)
+            blud.array_append(result, call_result_tokens)
+        else
+            error("Illegal token in token array: " .. dump(token))
+        end
+    end
+    return table.concat(result)
+end
+
+function blud.Macro.expand_text(scope, text,      stack)
+    local tokens = blud.macro_tokens_from_text(text)
+    return blud.Macro.expand_tokens(scope, tokens)
+end
+
 
 function blud.Macro:assign_early(scope, new_body)
     if type(new_body) == "table" then -- if we are being given macro tokens
@@ -225,7 +383,6 @@ end
 
 
 blud.macro_simple_name_match = function(token, name)
-print("simple name match ", name, dump(token))
     if token and type(token) == "table" and token.macro == true then
         -- it's a macro call stack, and [1] will be the tokens making up the name
         local name_tokens = token[1]
@@ -234,7 +391,6 @@ print("simple name match ", name, dump(token))
             return name_tokens[1][1] == name
         end
     end
-print("NO MATCH on ", name, dump(token))
     return false
 end
 
@@ -243,7 +399,6 @@ end
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
 blud.macro_extract_call = function(text, pos, self_reference)
-print("macro_extract_call: ", text, pos)
     local arg_stack = {macro=true}
     local len       = #text
     assert(pos < len)
@@ -256,7 +411,7 @@ print("macro_extract_call: ", text, pos)
 
     if first_char ~= '(' then    -- if single-char macro with no arguments
         table.insert(arg_stack, {first_char})
-    else    -- else looks like full-syntax macro invocation
+    else    -- else looks like paren-style macro invocation
         local arg
         arg, pos = blud.macro_tokens_from_text(text, "[ )]", pos+1)
         assert(next(arg))
@@ -273,9 +428,7 @@ print("macro_extract_call: ", text, pos)
     end
     if self_reference then
         arg_stack = self_reference(arg_stack)
-print(" self_reference returns ", dump(arg_stack), pos)
     end
-print(" extract returns ", dump(arg_stack), pos)
     return arg_stack, pos
 end
 
@@ -288,17 +441,14 @@ end
 -- is either a substring that contains no macro invocations,
 -- or else a table that describes a macro call.
 blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
-print("macro_tokens_from_text: ", text, stop_chars, pos)
     stop_chars        = stop_chars or "%$"
     stop_chars        = "(" .. stop_chars .. ")"
     pos               = pos or 1
     local result      = {}
     local len         = #text
-print("    >macro_tokens_from_text: ", text, stop_chars, pos)
 
     while pos <= len do
         local stop_pos,_,stop_char = text:find(stop_chars, pos)
-print("    >", pos, stop_pos, stop_char)        
         -- if no more stop_chars to find
         -- (also treat $ at end of text as literal)
         if not stop_pos or (stop_char == '$' and stop_pos == len) then
@@ -311,7 +461,8 @@ print("    >", pos, stop_pos, stop_char)
                 table.insert(result, text:sub(pos, stop_pos - 1))
             end
             local macro_call, new_pos = blud.macro_extract_call(text, stop_pos, self_reference)
-            table.insert(result, macro_call)
+--            table.insert(result, macro_call)
+            blud.array_append(result, macro_call)
             pos = new_pos
         -- else it's a char that stops our scan (space, comma, right paren)
         else
@@ -323,7 +474,6 @@ print("    >", pos, stop_pos, stop_char)
         end
     end
 
-print(" tokens_from returns ", dump(result), pos)
     return result, pos
 end
 
@@ -365,6 +515,7 @@ blud.lines  = function (str)
     end
 end
 
+--[====[
 blud.get_macro_args = function (text, pos)
     
 end
@@ -380,6 +531,7 @@ blud.get_macro_call = function (text, pos)
     end
     return pos, macro
 end
+]====]
 
 -- ??? elaborate to handle context
 blud.macro_from_name = function(name, target)
@@ -432,14 +584,15 @@ blud.macro_expand_from_text = function (scope, text, pos)
     return result, pos
 end
 
-function blud.macro_expand
 
+function expand_macro_call(scope, stack)
+    blud.error("Not written. scope = #1, stack = #2.", dump(scope), dump(stack))
+end
 
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
 function blud.macro_expand_text(scope, text, stack)
-print("macro_expand_text: ", text)
-customDebugger("Debug> ")
+--customDebugger("Debug> ")
 
     local tokens = blud.macro_tokens_from_text(text)
     local result = {}
@@ -448,7 +601,7 @@ customDebugger("Debug> ")
             table.insert(result, token)
         elseif type(token) == "table" then
             assert(token.macro)
-            table.insert(result, token.expand(scope, stack))
+            table.insert(result, expand_macro_call(scope, stack))
         end
     end
     return table.concat(result)
@@ -486,6 +639,8 @@ blud.is_positive_integer = function(n)
     return type(n) == "number" and n >= 0 and n%1 == 0
 end
 
+-- $(1) is an arg reference; $(-5) is not; $(FOO) is not.
+-- $($(FOO)) is not an arg reference, 
 blud.macro_is_arg_reference = function(macro_token)
     local result = -1 -- -1 means "no", other positive integers indicate arg #
     if type(macro_token) == "table" and macro_token.macro then
@@ -534,24 +689,20 @@ print("macro_assign: ", line, macro.name, macro.operator, macro.body_pos)
             return macro_call
         end
     end
-    local macro_tokens = blud.macro_tokens_from_text(line, nil, macro.body_pos, self_reference);
+    local macro_body = blud.macro_tokens_from_text(line, nil, macro.body_pos, self_reference);
     local result   = line
     local operator = macro.operator
     
     if operator == "=" then
         -- do nothing
     elseif operator == ":=" then
-        macro_tokens = {blud.macro_expand_text(scope, input)}
+        macro_body = blud.Macro.expand_text(scope, input)
     else
         error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
         assert(false)
     end
---    if blud.macros[macro_name] then
---        print("replacing table ", blud.macros[macro_name], " = ", dump(blud.macros[macro_name]))
---    end
-print("scope: ", dump(scope))
-    scope:set(macro.name, macro_tokens)
-print("macro assign ", macro.name, " table ", macro_tokens, " with value ", dump(macro_tokens))
+    scope:set(macro.name, macro_body)
+print("macro assign ", macro.name, " table ", macro_body, " with value ", dump(macro_body))
     return result
 end
 
@@ -767,7 +918,7 @@ function blud.phase3:parse()
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
-            local dependency_line = blud.macro_expand_text(blud.scope_bludfile, line)
+            local dependency_line = blud.Macro.expand_text(blud.scope_bludfile, line)
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()
@@ -992,7 +1143,7 @@ $(CC) $(CFLAGS) -o $(OWD)/$<
         end
         local exit_code
         print("DO_ACTION in super atom for " .. target.NAME)
-        local action = blud.macro_expand_text(target.SCOPE, target.ACTION)
+        local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
 print("expanded action is ", action)
         print( [[ exit_code = os.execute(action) ]] )
         if exit_code then
