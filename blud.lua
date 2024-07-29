@@ -515,32 +515,6 @@ blud.lines  = function (str)
     end
 end
 
---[====[
-blud.get_macro_args = function (text, pos)
-    
-end
-
-blud.get_macro_call = function (text, pos)
-    local macro = nil
-    local char = text:sub(pos, 1)
-    if char == '(' then
-        local pos, args = blud.get_macro_args(text, pos)
-        macro = { name=args[0], args = args }
-    else
-        macro = { name=char, args = {} }
-    end
-    return pos, macro
-end
-]====]
-
--- ??? elaborate to handle context
-blud.macro_from_name = function(name, target)
-    assert(name ~= nil)
---    local scope = 
-    if target ~= nil then
-    end
-    return blud.macros[name]
-end
 
 blud.macro_expand = function(scope, macro_call)
     assert(macro_call ~= nil)
@@ -585,9 +559,6 @@ blud.macro_expand_from_text = function (scope, text, pos)
 end
 
 
-function expand_macro_call(scope, stack)
-    blud.error("Not written. scope = #1, stack = #2.", dump(scope), dump(stack))
-end
 
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
@@ -777,10 +748,12 @@ function blud.phase3:looks_like_macro_assign(line)
     return nil
 end
 
+--[=====[
 function blud.phase3:macro_assign(macro)
     print("expand_macro_assign got: ", dump(macro))
     return macro.name .. macro.operator .. macro.body
 end
+]=====]
 
 function blud.phase3:looks_like_dependency_line(text)
     -- ??? make better!
