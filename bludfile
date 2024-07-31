@@ -17,5 +17,11 @@ macro :
 
 debug release :BUILD:
 
+test :TEST:
+    $ BLUD_SWD := $(BLUD_CWD)/$@
+    $ BLUD_CWD := $(BLUD_OWD)
+
+test: test*
+
 blud :: blud.c
 

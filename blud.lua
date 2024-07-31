@@ -748,12 +748,6 @@ function blud.phase3:looks_like_macro_assign(line)
     return nil
 end
 
---[=====[
-function blud.phase3:macro_assign(macro)
-    print("expand_macro_assign got: ", dump(macro))
-    return macro.name .. macro.operator .. macro.body
-end
-]=====]
 
 function blud.phase3:looks_like_dependency_line(text)
     -- ??? make better!

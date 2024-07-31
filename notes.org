@@ -296,6 +296,106 @@ end
 
 
 * log
+** <2024-07-30 Tue>
+Tests.
+a) want to name the test (probably the target name)
+b) want to list its dependents
+c) want to be able to change CWD, OWD, SWD
+
+
+the atom :TEST: opens a scope that is just below the :BUILD: scope.
+
+Ooops, I don't have a syntax for embedding a shell command inside
+Lua code inside an action. The "$ " syntax lets me embed blud
+directives inside Lua code inside an action. Well, but note
+than an action can only be attached to a target. So... you *can*
+specify an action as part of a target:
+
+test :TEST:
+    for test in $* do
+        $ $(SWD test} : ${test}.out
+        $     ../blud -f $@ >
+    end
+
+Uncleaned mess, but maybe you get the idea. 
+
+
+** <2024-07-26 Fri>
+A macro body is either a string (already expanded) or
+a table (array of strings and tables representing macro calls).
+expanding.
+
+Hmmm, can I use scope mechanism to handle param macros (like $(1), etc.)?
+Probably, just need a new scope that takes a macro_actual and uses
+it to look up any macro names >= 0.
+
+
+** <2024-07-25 Thu>
+
+B luajit, snake case. I need a new class which will
+be called "blud.Macro". Please only write stubs for
+member functions unless it's obvious how they should
+work. 
+I need the following member functions:
+blud.Macro:new(body) -- return new Macro object with .body field set
+blud.Macro:assign(new_body) -- replace existing body with new body
+blud.Macro:expand(scope, call, stack) -- just a stub
+blud.Macro:expand_call(scope, call, stack)
+
+** <2024-07-23 Tue>
+
+FEE = $(FOO)
+FOO = $(FEE)
+
+When evaluating reference, must always check for recursion.
+
+FEE = 666 $(FOO)
+FOO = $(FEE)
+
+This fails a recursion check when FOO is expanded. Only immediate
+recursion is supported. Really, this is to obviate the need for
++=.
+
+x   = $(CWD)
+FOO = x
+FOO = $($(FOO))
+
+That will equal:
+FOO = $(x)
+
+<><><><><><><>
+Problem is macro_tokens_from_text gets conflated by needing to
+insert body of assignee if it encounters assignee's name.
+And the conflation seeps into macro_extract_call, with
+which it is mutually recursive.  Maybe best I can do is
+pass in a closure.
+
+The closure must get called by macro_extract_call().
+Once it has the call invocation, it can test if the
+call is a self-reference, and... oh oh:
+
+FOO = $1 + $2
+FOO = $(FOO a,b) 777
+
+Can't just change this to:
+FOO = $1 + $2 777
+must actually do weird eval to get:
+FOO = a + b 777
+
+So, when you detect self-reference, you can't just insert
+the macro body tokens. You must locate and substitute out
+any formal parameters
+
+
+
+
+** <2024-07-22 Mon>
+Must we have the "two flavors" of variable ala GNU Make?
+Alas, probably so, since := variables must not be expanded
+upon reference.  So this gives variables three kinds of
+expansion virtual function: delayed reference, simple string,
+or function call. All being variations on "function call".
+
 ** <2024-07-21 Sun>
 
 
