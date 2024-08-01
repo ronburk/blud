@@ -26,6 +26,6 @@ debug release :BUILD:
 blud :: blud.c bludlua.c
 
 bludlua.c : blud.lua cstr
-    cstr $< >$(OWD)/$<
+    cstr $< >$@
 
 cstr :: cstr.cpp

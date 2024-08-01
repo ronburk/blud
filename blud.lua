@@ -275,20 +275,14 @@ function blud.ScopeTarget:get(name)
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            bound_name = first_prereq.BOUND_NAME
-            local swd = self:get_text("SWD")
-            if swd then
-                bound_name = swd .. "/" .. bound_name
-            end
-            result =  bound_name
+            result =  first_prereq.BOUND_NAME
         end
     elseif name == "^" then
-print("$^: prereqs = ", dump1(self.target.PREREQUISITES))
         result = {}
         local seen = {}
         for _, prereq in ipairs(self.target.PREREQUISITES) do
             local bound_name = prereq.BOUND_NAME
-            if not seen[boiund_name] then
+            if not seen[bound_name] then
                 seen[bound_name] = true
                 table.insert(result, prereq.BOUND_NAME)
                 table.insert(result,  " " )
@@ -296,13 +290,7 @@ print("$^: prereqs = ", dump1(self.target.PREREQUISITES))
         end
         result = table.concat(result)
     elseif name == "@" then
-        local bound_name = self.target.BOUND_NAME
-        local owd        = self:get_text("OWD")
-        if owd then
-            bound_name = owd .. "/" .. bound_name
-        end
---        result = blud.macro_tokens_from_text(self.target.BOUND_NAME)
-        result = bound_name
+        result = self.target.BOUND_NAME
     else
         result = self.variables[name]
         if result == nil and self.parent then
@@ -1132,11 +1120,18 @@ $(CXX) $(CFLAGS) $< -o /$@
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
         if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
-        local OWD = atom.SCOPE:get_text("OWD")
-        if atom.ACTION and OWD then
-            atom.BOUND_NAME = OWD .. "/" .. atom.NAME
+        if atom.ACTION then
+            local OWD = atom.SCOPE:get_text("OWD")
+            if OWD ~= "" then
+                atom.BOUND_NAME = OWD .. "/" .. atom.NAME
+            end
         else
-            atom.BOUND_NAME = atom.NAME
+            local SWD = atom.SCOPE:get_text("SWD")
+            if SWD ~= "" then
+                atom.BOUND_NAME = SWD .. "/" .. atom.NAME
+            else
+                atom.BOUND_NAME = atom.NAME
+            end
         end
         return atom
     end,
@@ -1150,10 +1145,10 @@ $(CXX) $(CFLAGS) $< -o /$@
         target.BUILDING = true
         target.BUILD_PREREQUISITES(target)
         local timestamp = blud.get_fs_timestamp(target.BOUND_NAME)
---        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
+        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
         if timestamp < blud.current_time then
             if target.ACTION then
---                print("execute: '" .. target.ACTION .. "'")
+                print("execute: '" .. target.ACTION .. "'")
 --                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
             end
@@ -1179,7 +1174,7 @@ $(CXX) $(CFLAGS) $< -o /$@
             target.SCOPE = blud.ScopeTarget:new(target)
         end
         local exit_code
---        print("DO_ACTION in super atom for " .. target.NAME)
+        print("DO_ACTION in super atom for " .. target.NAME)
         local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
         print(action)
 --        print( [[ exit_code = os.execute(action) ]] )

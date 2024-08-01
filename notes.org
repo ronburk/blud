@@ -37,6 +37,14 @@ make sense of sub-projects (which I haven't really worked out yet).
 So, suppose the bludfile directory is the "base". A 'build' sets
 the output directory.
 
+** binding
+We can't be like Alcatel nmake and have a binding remain in effect
+for tne entire execution. The reason is we want to support multiple
+builds, like:
+    blud debug release
+When building "debug" a target atom needs to be bound to a different
+output directory than when (next) building "release".
+
 
 ** define
 The define keyword helps us avoid cluttering up the atom namespace and
@@ -296,6 +304,23 @@ end
 
 
 * log
+** <2024-08-01 Thu>
+.BIND gets called by .BUILD, and it adjusts the binding
+based on the current scope values of OWD and SWD.
+
+
+** <2024-07-31 Wed>
+
+binding.
+
+blud.scope_build is a placeholder scope. Basically, it adds a level
+of indirection so that all the target scopes that point to it don't
+have to be updated to switch to a new build. Switching to
+a new build involves clobbering the blud.scope_build table
+with information from a particular build, but the parent reference
+is left intact.
+
+
 ** <2024-07-30 Tue>
 Tests.
 a) want to name the test (probably the target name)
