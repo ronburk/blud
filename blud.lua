@@ -1060,6 +1060,7 @@ blud.super_atom = {
         end
         if prerequisites ~= nil then
             local link_inputs = {}
+            local cpp         = false
             for _, prerequisite in ipairs(prerequisites) do
                 local obj = nil
                 local obj_target
@@ -1073,6 +1074,7 @@ $(CC) $(CFLAGS) -o $(OWD)/$<
 ]])
                 elseif prerequisite.NAME:sub(-4) == ".cpp" then
                     print("handle source ", prerequisite.NAME)
+                    cpp = true
                     obj = prerequisite.NAME:gsub("%.cpp$", ".o")
                     obj_target = blud.get_or_create_target(obj)
                     target.ADD_RULE(target, { obj_target } )
@@ -1085,6 +1087,10 @@ $(CXX) $(CFLAGS) -o $(OWD)/$<
 --                target.ADD_PREREQUISITE(target, prerequisite)
                 table.insert(link_inputs, obj_target)
             end
+            local compiler = "$(CC)"
+            if cpp then compiler = "$(CXX)" end
+            local action = compiler .. " $^ -o $@"
+            target.ADD_RULE(target, link_inputs, action)
         end
     end,
     APPLY_SPECIAL = function(atom, prerequisites)
