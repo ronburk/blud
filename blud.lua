@@ -218,6 +218,7 @@ function blud.Scope:new_param_scope(parent, macro_actual)
     local scope = blud.Scope:new(parent)
     scope.macro_actual = macro_actual
     function scope:get(name)
+        blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
@@ -247,6 +248,7 @@ if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(s
     end
 end
 function blud.Scope:get_text(name)
+    blud.assert(self.get)
     local tokens = self:get(name)
     local result = ""
     if tokens then
@@ -269,11 +271,38 @@ function blud.ScopeTarget:new(target)
 end
 function blud.ScopeTarget:get(name)
     local result
+    local bound_name = ""
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            result =  blud.macro_tokens_from_string(name, first_prereq.NAME)
+            bound_name = first_prereq.BOUND_NAME
+            local swd = self:get_text("SWD")
+            if swd then
+                bound_name = swd .. "/" .. bound_name
+            end
+            result =  bound_name
         end
+    elseif name == "^" then
+print("$^: prereqs = ", dump1(self.target.PREREQUISITES))
+        result = {}
+        local seen = {}
+        for _, prereq in ipairs(self.target.PREREQUISITES) do
+            local bound_name = prereq.BOUND_NAME
+            if not seen[boiund_name] then
+                seen[bound_name] = true
+                table.insert(result, prereq.BOUND_NAME)
+                table.insert(result,  " " )
+            end
+        end
+        result = table.concat(result)
+    elseif name == "@" then
+        local bound_name = self.target.BOUND_NAME
+        local owd        = self:get_text("OWD")
+        if owd then
+            bound_name = owd .. "/" .. bound_name
+        end
+--        result = blud.macro_tokens_from_text(self.target.BOUND_NAME)
+        result = bound_name
     else
         result = self.variables[name]
         if result == nil and self.parent then
@@ -461,6 +490,7 @@ blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
     stop_chars        = "(" .. stop_chars .. ")"
     pos               = pos or 1
     local result      = {}
+    blud.assert(text)
     local len         = #text
 
     while pos <= len do
@@ -1068,18 +1098,18 @@ blud.super_atom = {
                     print("handle source ", prerequisite.NAME)
                     obj = prerequisite.NAME:gsub("%.c$", ".o")
                     obj_target = blud.get_or_create_target(obj)
-                    target.ADD_RULE(target, { obj_target } )
+--                    target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CC) $(CFLAGS) -o $(OWD)/$<
+$(CC) $(CFLAGS) $< -o $@
 ]])
                 elseif prerequisite.NAME:sub(-4) == ".cpp" then
                     print("handle source ", prerequisite.NAME)
                     cpp = true
                     obj = prerequisite.NAME:gsub("%.cpp$", ".o")
                     obj_target = blud.get_or_create_target(obj)
-                    target.ADD_RULE(target, { obj_target } )
+--                    target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CXX) $(CFLAGS) -o $(OWD)/$<
+$(CXX) $(CFLAGS) $< -o /$@
 ]])
                 else
                     error("don't know how to handle " .. prerequisite.NAME)
@@ -1089,7 +1119,7 @@ $(CXX) $(CFLAGS) -o $(OWD)/$<
             end
             local compiler = "$(CC)"
             if cpp then compiler = "$(CXX)" end
-            local action = compiler .. " $^ -o $@"
+            local action = compiler .. " $(LDFLAGS) $^ -o $@"
             target.ADD_RULE(target, link_inputs, action)
         end
     end,
@@ -1120,10 +1150,10 @@ $(CXX) $(CFLAGS) -o $(OWD)/$<
         target.BUILDING = true
         target.BUILD_PREREQUISITES(target)
         local timestamp = blud.get_fs_timestamp(target.BOUND_NAME)
-        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
+--        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
         if timestamp < blud.current_time then
             if target.ACTION then
-                print("execute: '" .. target.ACTION .. "'")
+--                print("execute: '" .. target.ACTION .. "'")
 --                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
             end
@@ -1149,10 +1179,10 @@ $(CXX) $(CFLAGS) -o $(OWD)/$<
             target.SCOPE = blud.ScopeTarget:new(target)
         end
         local exit_code
-        print("DO_ACTION in super atom for " .. target.NAME)
+--        print("DO_ACTION in super atom for " .. target.NAME)
         local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
-print("expanded action is ", action)
-        print( [[ exit_code = os.execute(action) ]] )
+        print(action)
+--        print( [[ exit_code = os.execute(action) ]] )
         if exit_code then
             error("command failed: " .. action)
         end
@@ -1220,7 +1250,7 @@ blud.get_fs_timestamp = function (filepath)
     -- Convert the timestamp to a number
     local timestamp = tonumber(output)
     if not timestamp then
-        print("Failed to get timestamp for file: " .. filepath)
+--        print("Failed to get timestamp for file: " .. filepath)
         timestamp = 0
     end
     return timestamp
