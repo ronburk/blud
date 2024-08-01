@@ -1,4 +1,3 @@
-
 blud_module_code = [==[
 local debugInfo
 local function printCurrentLine()
@@ -175,6 +174,15 @@ end
 
 blud                 = {}
 blud.error           = errorf
+blud.assert          = function(condition, format, ...)
+    if not condition then
+        if format then
+            blud.error(format, ...)
+        else
+            blud.error("assertion failed.")
+        end
+    end
+end
 blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
@@ -238,6 +246,14 @@ if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(s
         return nil
     end
 end
+function blud.Scope:get_text(name)
+    local tokens = self:get(name)
+    local result = ""
+    if tokens then
+        result = blud.Macro.expand_tokens(self, tokens)
+    end
+    return result
+end
 
 
 -- per-target scope
@@ -245,34 +261,33 @@ end
 blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
 blud.ScopeTarget.__index = blud.ScopeTarget
 function blud.ScopeTarget:new(target)
-    local scope  = blud.Scope:new(blud.scope_commandline)
+    blud.assert(target)
+    local scope  = blud.Scope:new(blud.scope_build)
     scope.target = target
     setmetatable(scope, blud.ScopeTarget)
     return scope
 end
 function blud.ScopeTarget:get(name)
-print("ScopeTarget:get(", name, ")")
+    local result
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            return blud.macro_tokens_from_string(name, first_prereq.NAME)
+            result =  blud.macro_tokens_from_string(name, first_prereq.NAME)
         end
---        print(dump(self.target.PREREQUISITES))
-
     else
-        local result = self.variables[name]
+        result = self.variables[name]
         if result == nil and self.parent then
             result = self.parent:get(name)
         end
-        return result
     end
+    return result
 end
 
 blud.scope_base        = blud.Scope:new()
 blud.scope_environment = blud.Scope:new(blud.scope_base)
 blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
 blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
-
+blud.scope_build       = blud.Scope:new(blud.scope_commandline)
 
 -- macro class
 blud.Macro = {}
@@ -411,6 +426,7 @@ blud.macro_extract_call = function(text, pos, self_reference)
 
     if first_char ~= '(' then    -- if single-char macro with no arguments
         table.insert(arg_stack, {first_char})
+        pos = pos + 1 -- skip over macro name
     else    -- else looks like paren-style macro invocation
         local arg
         arg, pos = blud.macro_tokens_from_text(text, "[ )]", pos+1)
@@ -1043,19 +1059,31 @@ blud.super_atom = {
             end
         end
         if prerequisites ~= nil then
+            local link_inputs = {}
             for _, prerequisite in ipairs(prerequisites) do
+                local obj = nil
+                local obj_target
                 if prerequisite.NAME:sub(-2) == ".c" then
                     print("handle source ", prerequisite.NAME)
-                    local obj = prerequisite.NAME:gsub("%.c$", ".o")
-                    local obj_target = blud.get_or_create_target(obj)
+                    obj = prerequisite.NAME:gsub("%.c$", ".o")
+                    obj_target = blud.get_or_create_target(obj)
                     target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
 $(CC) $(CFLAGS) -o $(OWD)/$<
+]])
+                elseif prerequisite.NAME:sub(-4) == ".cpp" then
+                    print("handle source ", prerequisite.NAME)
+                    obj = prerequisite.NAME:gsub("%.cpp$", ".o")
+                    obj_target = blud.get_or_create_target(obj)
+                    target.ADD_RULE(target, { obj_target } )
+                    target.ADD_RULE(obj_target, {prerequisite}, [[
+$(CXX) $(CFLAGS) -o $(OWD)/$<
 ]])
                 else
                     error("don't know how to handle " .. prerequisite.NAME)
                 end
 --                target.ADD_PREREQUISITE(target, prerequisite)
+                table.insert(link_inputs, obj_target)
             end
         end
     end,
@@ -1067,20 +1095,26 @@ $(CC) $(CFLAGS) -o $(OWD)/$<
     end,
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
-        --
-        print("bind atom: " .. dump(atom))
+        if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
+        local OWD = atom.SCOPE:get_text("OWD")
+        if atom.ACTION and OWD then
+            atom.BOUND_NAME = OWD .. "/" .. atom.NAME
+        else
+            atom.BOUND_NAME = atom.NAME
+        end
         return atom
     end,
     BUILD = function(target)
         print("BUILD('" .. blud.dump_atom(target) .. "')")
         if target.PARENT then print("PARENT('" .. blud.dump_atom(target.PARENT) .. "')") end
+        target:BIND()
         if target.BUILDING == true then
             error("circular dependency on " .. target.NAME)
         end
         target.BUILDING = true
         target.BUILD_PREREQUISITES(target)
-        local timestamp = blud.get_fs_timestamp(target.NAME)
-        print("timestamp for '" .. target.NAME .. "' is " .. timestamp)
+        local timestamp = blud.get_fs_timestamp(target.BOUND_NAME)
+        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
         if timestamp < blud.current_time then
             if target.ACTION then
                 print("execute: '" .. target.ACTION .. "'")

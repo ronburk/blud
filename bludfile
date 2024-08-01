@@ -1,10 +1,14 @@
 -- bludfile for building/testing blud
 
-CC = gcc
+CC  = gcc
+CXX = g++
 CFLAGS = -g
+LDFLAGS = -L./luajit/src -lluajit
+CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
--- all : macro blud
-all : macro
+
+all : macro blud
+-- all : macro
 
 
 FOO = 1
@@ -17,11 +21,11 @@ macro :
 
 debug release :BUILD:
 
-test :TEST:
-    $ BLUD_SWD := $(BLUD_CWD)/$@
-    $ BLUD_CWD := $(BLUD_OWD)
+    
 
-test: test*
+blud :: blud.c bludlua.c
 
-blud :: blud.c
+bludlua.c : blud.lua cstr
+    cstr $< >$(OWD)/$<
 
+cstr :: cstr.cpp
