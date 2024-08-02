@@ -308,6 +308,21 @@ end
 .BIND gets called by .BUILD, and it adjusts the binding
 based on the current scope values of OWD and SWD.
 
+COMPILE.C   = $(COMPILE.cc)
+COMPILE.cpp = $(COMPILE.cc)
+COMPILE.c   = $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
+COMPILE.cc  = $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
+
+OUTPUT_OPTION = -o $@
+
+%.o: %.c
+    $(COMPILE.c) $(OUTPUT_OPTION) $<
+
+<><><><><><><><>
+
+Some commands really want to be run in current directory. How
+can I easily specify that? Maybe it's an action special character: ^
+
 
 ** <2024-07-31 Wed>
 

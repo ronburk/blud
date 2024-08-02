@@ -532,8 +532,8 @@ blud.build_init = function()
     blud.scope_base:set("OWD", OWD)
 --    if blud.build_name then
     if blud.BUILD_DEFAULT then
---        os.execute("mkdir " .. blud.BUILD_DEFAULT.NAME)
-print("simulate mkdir " .. blud.BUILD_DEFAULT.NAME)
+        os.execute("mkdir " .. blud.BUILD_DEFAULT.NAME)
+--print("simulate mkdir " .. blud.BUILD_DEFAULT.NAME)
         OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
         blud.scope_bludfile:set("OWD", OWD)
     end
@@ -1088,7 +1088,7 @@ blud.super_atom = {
                     obj_target = blud.get_or_create_target(obj)
 --                    target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CC) $(CFLAGS) $< -o $@
+$(CC) $(CFLAGS) $< -o $@ -c
 ]])
                 elseif prerequisite.NAME:sub(-4) == ".cpp" then
                     print("handle source ", prerequisite.NAME)
@@ -1097,7 +1097,7 @@ $(CC) $(CFLAGS) $< -o $@
                     obj_target = blud.get_or_create_target(obj)
 --                    target.ADD_RULE(target, { obj_target } )
                     target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CXX) $(CFLAGS) $< -o /$@
+$(CXX) $(CFLAGS) $< -o $@ -c
 ]])
                 else
                     error("don't know how to handle " .. prerequisite.NAME)
@@ -1107,7 +1107,7 @@ $(CXX) $(CFLAGS) $< -o /$@
             end
             local compiler = "$(CC)"
             if cpp then compiler = "$(CXX)" end
-            local action = compiler .. " $(LDFLAGS) $^ -o $@"
+            local action = compiler .. " $^ $(LDFLAGS) -o $@"
             target.ADD_RULE(target, link_inputs, action)
         end
     end,
@@ -1177,9 +1177,9 @@ $(CXX) $(CFLAGS) $< -o /$@
         print("DO_ACTION in super atom for " .. target.NAME)
         local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
         print(action)
---        print( [[ exit_code = os.execute(action) ]] )
-        if exit_code then
-            error("command failed: " .. action)
+        exit_code = os.execute(action)
+        if exit_code ~= 0 then
+            error("command failed[" .. exit_code .. "]: " .. action)
         end
     end,
 }

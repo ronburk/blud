@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef _WIN32
     #include <windows.h>
 #else
@@ -150,7 +151,7 @@ static int lua_get_path_timestamp(lua_State* L) {
     return 1;
 }
 
-#include "bludlua.c"  // contains lua source code as C char array
+#include "cstr.h"  // contains lua source code as C char array
 
 int execute_lua_code(lua_State* L, const char* code, const char* name) {
     int status = luaL_loadbuffer(L, code, strlen(code), name);
