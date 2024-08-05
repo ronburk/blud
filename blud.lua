@@ -902,6 +902,7 @@ print("********************* compile_rule")
     blud.add_rules(colon_operator, targets, prerequisites, action)
 end
 
+
 function blud.phase3:parse()
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     print(blud.phase2_text)
@@ -920,6 +921,7 @@ function blud.phase3:parse()
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
             local dependency_line = blud.Macro.expand_text(blud.scope_bludfile, line)
+expand_path_patterns(dependency_line)
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()

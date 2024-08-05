@@ -304,6 +304,27 @@ end
 
 
 * log
+** <2024-08-04 Sun>
+I have a syntax for allowing blud statements in actions, but
+can I have a syntax for defining actions that take place before
+a build of the target?  Guess I already have that too:
+
+do_stuff :BEFORE: some_target
+    $ name = foo
+
+right, but there assignments happen in global scope, not scope of
+some_target. So I can control *when* assignments happen, but
+not really the scope, other than the one-assignment-at-a-time
+target scope syntax:
+
+target : FOO += -g
+
+
+** <2024-08-02 Fri>
+wildcard characters in paths.  This is a second kind of "expansion" on
+rule lines. Obviously must happen after macro expansions.
+
+
 ** <2024-08-01 Thu>
 .BIND gets called by .BUILD, and it adjusts the binding
 based on the current scope values of OWD and SWD.

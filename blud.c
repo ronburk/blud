@@ -4,6 +4,7 @@
 #include <assert.h>
 
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -18,6 +19,55 @@
 #endif
 
 
+static void  add_word(lua_State* L, const char* word, int len){
+    fprintf(stderr, "doword(%*.*s)\n", len, len, word);
+}
+
+
+static int lua_expand_path_patterns(lua_State *L) {
+    const char* input       = luaL_checkstring(L, 1);
+    const char* rover       = input;
+    size_t      len         = strlen(input);
+    int*        indices     = (int*)malloc(sizeof(int)*len*2);
+    int         index       = 0;
+    int         c;
+
+    for(;;){
+        while((c = *rover++) != '\0')  // skip whitespace
+            if(c != ' ' && c != '\t')
+                break;
+        indices[index++] = (rover - input) - 1;  // mark possible start of word
+        if(c == ':'){
+            const char* peek = rover;
+            while((c=*peek++) != '\0' && (isalnum(c) || c == '_'))
+                ;
+            if(c == ':'){
+                indices[index++] = peek - input;
+                rover            = peek;
+            } else {
+                indices[index++] = rover - input;
+            }
+        } else if(c == '\0')
+            break;
+        else if(c == '[' && *rover == '['){
+            assert(0); // not written yet
+        } else {
+            while(c != ' ' && c != '\t' && c != '\0' && c != ':')
+                c = *rover++;
+            indices[index++] = (rover - input) - 1;
+        }
+    }
+    lua_newtable(L);  // create table to return
+    int   nwords = index / 2;
+    int   iword;
+    for(iword = 0; iword < nwords; ++iword){
+        const char* word = input + indices[iword*2];
+        int         len  = indices[iword*2 + 1] - indices[iword*2];
+        add_word(L, word, len);
+    }
+
+    return 1;
+}
 
 static int lua_get_executable_path(lua_State *L) {
     int         result_count = 2;
@@ -190,6 +240,7 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "get_cwd", lua_get_cwd);
     lua_register(L, "get_executable_path", lua_get_executable_path);
+    lua_register(L, "expand_path_patterns", lua_expand_path_patterns);
     return 0;
 }
 
