@@ -23,7 +23,8 @@ debug release :BUILD:
 
     
 
-blud :: blud.c bludlua.c
+-- blud :: blud.c bludlua.c
+blud :: *.c
 
 bludlua.c : blud.lua cstr
     $(OWD)/cstr $< >$@

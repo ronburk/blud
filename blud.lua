@@ -183,6 +183,7 @@ blud.assert          = function(condition, format, ...)
         end
     end
 end
+blud.dir_cache       = {}
 blud.operators       = {}
 blud.build_name      = nil
 blud.primary_targets = nil
@@ -903,6 +904,29 @@ print("********************* compile_rule")
 end
 
 
+function is_pattern(word)
+    print("is_pattern(", word, ")")
+    if word:sub(1,2) == "[[" then
+        return false
+    elseif word:find("[?*]") == nil then
+        return false
+    else
+        return true
+    end
+end
+
+-- only handle '*', only handle current directory
+function expand_pattern(words, pattern)
+    local dir = "."
+    local dir_cache = blud.dir_cache[dir]
+    if dir_cache == nil then
+        dir_cache = get_dir_cache(dir)
+        assert(dir_cache)
+        blud.dir_cache[dir] = dir_cache
+    end
+    assert(dir_cache["."])
+end
+
 function blud.phase3:parse()
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     print(blud.phase2_text)
@@ -921,7 +945,16 @@ function blud.phase3:parse()
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
             local dependency_line = blud.Macro.expand_text(blud.scope_bludfile, line)
-expand_path_patterns(dependency_line)
+            local parsed = expand_path_patterns(dependency_line)
+print("parsed = ", dump(parsed))
+            local expanded = {}
+            for _, word in ipairs(parsed) do
+                if is_pattern(word) then
+                    expand_pattern(expanded, word)
+                else
+                    table.insert(expanded, word)
+                end
+            end
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()

@@ -19,33 +19,64 @@
 #endif
 
 
-static void  add_word(lua_State* L, const char* word, int len){
-    fprintf(stderr, "doword(%*.*s)\n", len, len, word);
+
+#if 0
+static int  is_pattern(const char* pattern, int len){
+    const char *wildcards = "[*?{";
+    for (int i = 0; i < len; ++i) {
+        if (memchr(wildcards, pattern[i], strlen(wildcards))) {
+            return 1; // Found a wildcard character
+        }
+    }
+    return 0; // No wildcard characters found
+}
+#endif
+
+//static int  expand_pattern(lua_State* L, const char* pattern, int len, int array_offset){
+//    fprintf(stderr, "doword(%*.*s)\n", len, len, pattern);
+//}
+
+
+static void callback(void* lua, int index, const char* name, int64_t timestamp, int is_dir){
+    printf("callback(%s)\n", name);
+    }
+
+static int lua_get_dir_cache(lua_State *L) {
+    const char *dir = luaL_checkstring(L, 1);
+
+    printf("lua_get_dir_cache(%s)\n", dir);
+    lua_newtable(L);  // table return value
+    os_get_dir(L, 999, callback, dir);
+
+    return 1;
 }
 
 
 static int lua_expand_path_patterns(lua_State *L) {
     const char* input       = luaL_checkstring(L, 1);
     const char* rover       = input;
-    size_t      len         = strlen(input);
-    int*        indices     = (int*)malloc(sizeof(int)*len*2);
+//    size_t      len         = strlen(input);
+//    int*        indices     = (int*)malloc(sizeof(int)*len*2);
     int         index       = 0;
     int         c;
+    const char* start;
+    size_t      wordlen;
 
+    lua_newtable(L);  // create table to return
     for(;;){
         while((c = *rover++) != '\0')  // skip whitespace
             if(c != ' ' && c != '\t')
                 break;
-        indices[index++] = (rover - input) - 1;  // mark possible start of word
+        start = rover-1; // mark possible start of word
         if(c == ':'){
             const char* peek = rover;
             while((c=*peek++) != '\0' && (isalnum(c) || c == '_'))
                 ;
             if(c == ':'){
-                indices[index++] = peek - input;
-                rover            = peek;
+                wordlen = peek - start;
+                rover   = peek;
             } else {
-                indices[index++] = rover - input;
+                wordlen    = 1;
             }
         } else if(c == '\0')
             break;
@@ -54,17 +85,27 @@ static int lua_expand_path_patterns(lua_State *L) {
         } else {
             while(c != ' ' && c != '\t' && c != '\0' && c != ':')
                 c = *rover++;
-            indices[index++] = (rover - input) - 1;
+            wordlen     =  (rover - start) - 1;
         }
+        lua_pushinteger(L, ++index);
+        lua_pushlstring(L, start, wordlen);
+        lua_rawset(L, -3);
     }
-    lua_newtable(L);  // create table to return
+#if 0
     int   nwords = index / 2;
-    int   iword;
-    for(iword = 0; iword < nwords; ++iword){
+    int   path_count = 0;
+    for(int iword = 0; iword < nwords; ++iword){
         const char* word = input + indices[iword*2];
         int         len  = indices[iword*2 + 1] - indices[iword*2];
-        add_word(L, word, len);
+        if(is_pattern(word, len))
+            path_count = expand_pattern(L, word, len, path_count);
+        else {
+            lua_pushstring(L, word, len);
+            lua_rawseti(L, -2, path_count+1);
+            ++path_count;
+        }
     }
+#endif
 
     return 1;
 }
@@ -237,9 +278,10 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
-    lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "get_cwd", lua_get_cwd);
+    lua_register(L, "get_dir_cache", lua_get_dir_cache);
     lua_register(L, "get_executable_path", lua_get_executable_path);
+    lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "expand_path_patterns", lua_expand_path_patterns);
     return 0;
 }
