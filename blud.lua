@@ -924,7 +924,16 @@ function expand_pattern(words, pattern)
         assert(dir_cache)
         blud.dir_cache[dir] = dir_cache
     end
-    assert(dir_cache["."])
+    local names = dir_cache["."]
+    print("dir_cache is ", dump(dir_cache))
+    local lua_pattern = pattern:gsub('%.', "%%.")
+    lua_pattern = lua_pattern:gsub("*", "[^%%z]*")
+    lua_pattern = "(" .. lua_pattern .. ")%z"
+    print(" pattern ", pattern, " into ", lua_pattern)
+    for found in names:gmatch(lua_pattern) do
+        print("found = ", found)
+        table.insert(words, found)
+    end
 end
 
 function blud.phase3:parse()
@@ -955,6 +964,9 @@ print("parsed = ", dump(parsed))
                     table.insert(expanded, word)
                 end
             end
+print("expanded = ", dump(expanded))
+-- ???
+            dependency_line = table.concat(expanded, " ")
             table.insert(self.text, dependency_line .. "\n")
             local action = ""
             line = get_line()

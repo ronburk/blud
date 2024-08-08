@@ -33,10 +33,6 @@ static int  is_pattern(const char* pattern, int len){
 }
 #endif
 
-//static int  expand_pattern(lua_State* L, const char* pattern, int len, int array_offset){
-//    fprintf(stderr, "doword(%*.*s)\n", len, len, pattern);
-//}
-
 typedef struct BLUD_DIR_INFO {
     lua_State*    L;
     int           table_index;
@@ -46,7 +42,7 @@ typedef struct BLUD_DIR_INFO {
 static void callback(void* data, const char* name, int64_t timestamp, int is_dir){
     BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
     size_t          name_len = strlen(name);
-    printf("callback(%s)\n", name);
+    printf("callback(%s) %d\n", name, info->table_index);
     
     luaL_addlstring(&info->buffer, name, name_len + 1); // add name & null byte
     lua_pushlstring(info->L, name, name_len);           // put in position for later lua_rawset()
@@ -66,13 +62,17 @@ static void callback(void* data, const char* name, int64_t timestamp, int is_dir
         lua_settable(info->L, -3);
     }
     // now stack is [name][table_of_attributes]
+    assert(lua_istable(info->L, info->table_index));
     lua_rawset(info->L, info->table_index);
 }
 
 static int lua_get_dir_cache(lua_State *L) {
     BLUD_DIR_INFO   info;
-    const char*     dir     = luaL_checkstring(L, 1);
+    const char*     dir = luaL_checkstring(L, 1);
+
+    info.L              = L;
     lua_newtable(L);        // table return value
+    info.table_index    = lua_gettop(L);
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
     {
         luaL_buffinit(L, &info.buffer);
