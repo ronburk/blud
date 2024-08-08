@@ -18,6 +18,7 @@
     #include <unistd.h>
 #endif
 
+#include "os.h"
 
 
 #if 0
@@ -36,17 +37,50 @@ static int  is_pattern(const char* pattern, int len){
 //    fprintf(stderr, "doword(%*.*s)\n", len, len, pattern);
 //}
 
+typedef struct BLUD_DIR_INFO {
+    lua_State*    L;
+    int           table_index;
+    luaL_Buffer   buffer;
+} BLUD_DIR_INFO;
 
-static void callback(void* lua, int index, const char* name, int64_t timestamp, int is_dir){
+static void callback(void* data, const char* name, int64_t timestamp, int is_dir){
+    BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
+    size_t          name_len = strlen(name);
     printf("callback(%s)\n", name);
+    
+    luaL_addlstring(&info->buffer, name, name_len + 1); // add name & null byte
+    lua_pushlstring(info->L, name, name_len);           // put in position for later lua_rawset()
+    {
+        lua_newtable(info->L);
+
+        lua_pushstring(info->L, "name");
+        lua_pushlstring(info->L, name, name_len);
+        lua_settable(info->L, -3);
+
+        lua_pushstring(info->L, "timestamp");
+        lua_pushinteger(info->L, timestamp);
+        lua_settable(info->L, -3);
+
+        lua_pushstring(info->L, "is_dir");
+        lua_pushboolean(info->L, is_dir);
+        lua_settable(info->L, -3);
     }
+    // now stack is [name][table_of_attributes]
+    lua_rawset(info->L, info->table_index);
+}
 
 static int lua_get_dir_cache(lua_State *L) {
-    const char *dir = luaL_checkstring(L, 1);
-
-    printf("lua_get_dir_cache(%s)\n", dir);
-    lua_newtable(L);  // table return value
-    os_get_dir(L, 999, callback, dir);
+    BLUD_DIR_INFO   info;
+    const char*     dir     = luaL_checkstring(L, 1);
+    lua_newtable(L);        // table return value
+    lua_pushstring(L, "."); // key to store big buffer of all dir entry names
+    {
+        luaL_buffinit(L, &info.buffer);
+        printf("lua_get_dir_cache(%s)\n", dir);
+        os_get_dir(callback, (void*)&info, dir);
+    }
+    luaL_pushresult(&info.buffer);
+    lua_rawset(L, -3); // table["."] = %z-separated buffer of all dir entry names
 
     return 1;
 }
