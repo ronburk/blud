@@ -85,6 +85,11 @@ static int lua_get_dir_cache(lua_State *L) {
     return 1;
 }
 
+static int lua_glob_to_lua(lua_State* L){
+
+}
+
+
 
 static int lua_expand_path_patterns(lua_State *L) {
     const char* input       = luaL_checkstring(L, 1);
@@ -97,13 +102,19 @@ static int lua_expand_path_patterns(lua_State *L) {
     size_t      wordlen;
 
     lua_newtable(L);  // create table to return
+    printf("input='%s'\n", input);
     for(;;){
-        while((c = *rover++) != '\0')  // skip whitespace
+        while((c = *rover) != '\0')  // skip whitespace
             if(c != ' ' && c != '\t')
                 break;
-        start = rover-1; // mark possible start of word
-        if(c == ':'){
-            const char* peek = rover;
+            else
+                ++rover;
+        printf("    c = '%c'\n", c);
+        start = rover; // mark possible start of word
+        if(c == '\0')
+            break;
+        else if(c == ':'){
+            const char* peek = ++rover;
             while((c=*peek++) != '\0' && (isalnum(c) || c == '_'))
                 ;
             if(c == ':'){
@@ -112,34 +123,17 @@ static int lua_expand_path_patterns(lua_State *L) {
             } else {
                 wordlen    = 1;
             }
-        } else if(c == '\0')
-            break;
-        else if(c == '[' && *rover == '['){
+        } else if(c == '[' && *rover == '['){
             assert(0); // not written yet
         } else {
             while(c != ' ' && c != '\t' && c != '\0' && c != ':')
-                c = *rover++;
-            wordlen     =  (rover - start) - 1;
+                c = *++rover;
+            wordlen     =  (rover - start);
         }
-        lua_pushinteger(L, ++index);
+        printf("    [%d]>%s\n", (int)wordlen, start);
         lua_pushlstring(L, start, wordlen);
-        lua_rawset(L, -3);
+        lua_rawseti(L, -2, ++index);
     }
-#if 0
-    int   nwords = index / 2;
-    int   path_count = 0;
-    for(int iword = 0; iword < nwords; ++iword){
-        const char* word = input + indices[iword*2];
-        int         len  = indices[iword*2 + 1] - indices[iword*2];
-        if(is_pattern(word, len))
-            path_count = expand_pattern(L, word, len, path_count);
-        else {
-            lua_pushstring(L, word, len);
-            lua_rawseti(L, -2, path_count+1);
-            ++path_count;
-        }
-    }
-#endif
 
     return 1;
 }

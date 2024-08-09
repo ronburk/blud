@@ -953,7 +953,10 @@ function blud.phase3:parse()
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
+
+print("unexpanded = ", dump(line))
             local dependency_line = blud.Macro.expand_text(blud.scope_bludfile, line)
+print("expanded = ", dump(dependency_line))
             local parsed = expand_path_patterns(dependency_line)
 print("parsed = ", dump(parsed))
             local expanded = {}
@@ -1198,6 +1201,8 @@ $(CXX) $(CFLAGS) $< -o $@ -c
                 print("execute: '" .. target.ACTION .. "'")
 --                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
+            elseif timestamp == 0 then
+                error("Don't know how to build: " .. target.NAME);
             end
         end
         target.BUILDING = false

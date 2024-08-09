@@ -7,9 +7,11 @@ LDFLAGS = -L./luajit/src -lluajit
 CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 
-all : macro blud
+all : macro blud test
 -- all : macro
 
+test: test/test[0-9][0-9][0-9]
+    echo " test $^"
 
 FOO = 1
 FOO = $(FOO)2$(FOO)
