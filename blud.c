@@ -93,6 +93,7 @@ static int pattern_match(const char* pattern, const char* input){
     for(;;){
         unsigned char c     = *input++;
         unsigned char pat_c = *pattern++;
+        printf("c=0X%02X %c   d= 0X%02X %c\n", c, c, d, d);
         switch(pat_c){
         case '*' :
             while((pat_c = *pattern) == '*')
@@ -118,16 +119,16 @@ static int pattern_match(const char* pattern, const char* input){
                     right = left;
                 match = (c >= left && c <= right);
                 if((left=*rover++) == ']')
-                    break;
+                    break;  // break means backtrack
             }
             while(left != '\0' && left != ']') // eat remainder of [..]
                 left = *rover++;
             if(left == ']'){    // if it was well-formed
                 pattern = rover;
-                if(match == negate)
+                if(match != negate)
                     continue;
-                goto backtrack;
-            }
+                break;  // break means backtrack
+            } // else fall through to treat like literal
         }
         default:
             if(c == pat_c || pat_c == '?'){
