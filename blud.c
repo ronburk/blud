@@ -86,50 +86,6 @@ static int lua_get_dir_cache(lua_State *L) {
     return 1;
 }
 
-#define OP_MATCH_ANY        -1
-#define OP_MATCH_RANGE      -2
-#define OP_MATCH_STAR       -3
-#define OP_MATCH_FINAL      -4
-#define OP_MATCH_ALTERNATE  -5
-
-typedef struct PATTERN {
-    const char* pattern;
-    int*        codes;
-    int*        stack;
-    int*        next_stack;
-    size_t      stack_size;
-    char*       ranges;
-} PATTERN;
-
-static int* pattern_compile(const char* pattern){
-    int     backpatch[256];
-    size_t  len     = strlen(pattern);
-    int*    codes   = (int*)malloc(sizeof(int)*len);
-
-    int     ip      = 0, bp = 0;
-    while((c = *pattern++) != '\0'){
-        if(c == '?')
-            codes[ip++]     = OP_MATCH_ANY;
-        else if(c == '*')
-            codes[ip++]     = OP_MATCH_STAR;
-        else if(c == '['){
-            assert(false);
-        } else if(c == '{'){
-            codes[ip++]     = OP_ALTERNATE;
-            backpatch[bp++] = ip++;
-        } else if(c == ','){
-            codes[ip++]     = OP_ALTERNATE;
-            codes[backpatch[--bp]]
-            backpatch[bp++] = ip++;
-        } else if(c == '}'){
-            
-        } else {
-            codes[ip]   = c;
-        }
-    }
-    return result;
-}
-
 static int pattern_match(const char* pattern, const char* input){
     const char* back_pat    = NULL;
     const char* back_input;
