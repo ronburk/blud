@@ -304,6 +304,13 @@ end
 
 
 * log
+** <2024-08-14 Wed>
+Might want to multiplex builds off of O/S and also by compiler.
+For example, might want clang/gcc/vc/icc builds on both Windows and Linux.
+Can just cram it all in directory name like: windows_clang_debug and
+windows_clang_release.
+
+
 ** <2024-08-04 Sun>
 I have a syntax for allowing blud statements in actions, but
 can I have a syntax for defining actions that take place before

@@ -5,6 +5,7 @@
 
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -85,8 +86,202 @@ static int lua_get_dir_cache(lua_State *L) {
     return 1;
 }
 
-static int lua_glob_to_lua(lua_State* L){
+#define OP_MATCH_ANY        -1
+#define OP_MATCH_RANGE      -2
+#define OP_MATCH_STAR       -3
+#define OP_MATCH_FINAL      -4
+#define OP_MATCH_ALTERNATE  -5
 
+typedef struct PATTERN {
+    const char* pattern;
+    int*        codes;
+    int*        stack;
+    int*        next_stack;
+    size_t      stack_size;
+    char*       ranges;
+} PATTERN;
+
+static int* pattern_compile(const char* pattern){
+    int     backpatch[256];
+    size_t  len     = strlen(pattern);
+    int*    codes   = (int*)malloc(sizeof(int)*len);
+
+    int     ip      = 0, bp = 0;
+    while((c = *pattern++) != '\0'){
+        if(c == '?')
+            codes[ip++]     = OP_MATCH_ANY;
+        else if(c == '*')
+            codes[ip++]     = OP_MATCH_STAR;
+        else if(c == '['){
+            assert(false);
+        } else if(c == '{'){
+            codes[ip++]     = OP_ALTERNATE;
+            backpatch[bp++] = ip++;
+        } else if(c == ','){
+            codes[ip++]     = OP_ALTERNATE;
+            codes[backpatch[--bp]]
+            backpatch[bp++] = ip++;
+        } else if(c == '}'){
+            
+        } else {
+            codes[ip]   = c;
+        }
+    }
+    return result;
+}
+
+static int pattern_match(const char* pattern, const char* input){
+    const char* back_pat    = NULL;
+    const char* back_input;
+
+    for(;;){
+        unsigned char c     = *input++;
+        unsigned char pat_c = *pattern++;
+        switch(pat_c){
+        case '*' :
+            while((pat_c = *pattern) == '*')
+                ++pattern;
+            if(pat_c == '\0')  // trailing star(s) guarantees a match
+                return true;
+            back_pat    = pattern; // else, remember new backtrack positions
+            back_input  = --input;
+            continue;
+        case '[' :  {
+            unsigned char   left, right;
+            bool            negate  = false, match = false;
+            const char*     rover   = pattern;
+            if(*rover == '!'){
+                negate = true;
+                ++rover;
+            }
+            left = *rover++;
+            while(!match && left != '\0'){
+                if(rover[0] == '-' && (right=rover[1]) != ']' && right != '\0')
+                    rover += 2;
+                else
+                    right = left;
+                match = (c >= left && c <= right);
+                if((left=*rover++) == ']')
+                    break;
+            }
+            while(left != '\0' && left != ']') // eat remainder of [..]
+                left = *rover++;
+            if(left == ']'){    // if it was well-formed
+                pattern = rover;
+                if(match == negate)
+                    continue;
+                goto backtrack;
+            }
+        }
+        default:
+            if(c == pat_c || pat_c == '?'){
+                if(pat_c == '\0')
+                    return true;
+                else
+                    continue;
+            }
+        }
+      backtrack:
+        // didn't match the current input character
+        if(c == '\0' || !back_pat)
+            return false;
+        pattern = back_pat;
+        input   = back_input;
+    }
+        
+}
+
+static int pattern_match(PATTERN info, const char* input){
+    int c, top = 0, new_top = 0, accepting = false;
+
+    // initialize stack with start state (a set of 1 or more pattern positions)
+    info.stack[top++]   = 0;    // first pattern position is zero
+    if(info.pattern[0] == '*')  // if starts with '*', then must compute closure
+        info.stack[top++] = 1;  // but that just means adding the next position!
+
+    for(;;){
+        c           = *input++;
+        accepting   = false;
+        for(int istack = 0; istack < top; ++istack){
+            int     ip = info.stack[istack]; // ip == instruction pointer
+            switch(info.codes[ip++]){
+            case OP_MATCH_CHAR :            // then ip now points to the character to match
+                if(info.codes[ip] == c)
+                    info.next_stack[new_top++] = ip + 1;
+                break;
+            case OP_MATCH_ANY :  // '?' matches anything, so just push next pattern position
+                info.next_stack[new_top++] = ip + 1;
+                break;
+            case OP_MATCH_RANGE :
+                int invert = 0;
+                int range  = info.codes[ip];
+                if(range < 0){
+                    invert = 1;
+                    range  = -range;
+                }
+                if((info.ranges+(range * 256))[c] != invert)
+                    info.next_stack[new_top++] = ip + 1;
+                break;
+            case OP_MATCH_STAR :
+                info.next_stack[new_top++] = ip;        // '*' position gets pushed
+                info.next_stack[new_top++] = ip + 1;    // and its next neighbor pattern position
+                break;
+            case OP_MATCH_FINAL :
+                accepting = true;
+                break;
+            default : assert(0);
+            }
+        }
+        if(c == '\0')
+            break;
+        int* temp       = info.stack;           // new stack becomes current stack
+        info.stack      = info.next_stack;
+        info.next_stack = temp;
+        top             = new_top;
+        new_top         = 0;
+    }
+    return accepting;
+}
+
+static int char_class(char** output_ptr, const char** glob_ptr){
+    char        buffer[1024*2];
+    char*       output = &buffer;
+    int         result = 0;
+    const char* glob = *glob_ptr;
+    int         c;
+
+    *output++ = '[';
+    c = *glob++;
+    if(c == '!'){
+        *output++ = '^';
+        c = *glob++;
+    }
+    for(; c != '\0'; c = *glob++){
+        
+    }
+}
+
+static int lua_glob_to_lua(lua_State* L){
+    const char* glob = luaL_checkstring(L, 1);
+    char        buffer[1024*2];
+    char*       output = buffer;
+    int         c;
+
+    *output++ = '(';
+    while((c = *glob++) != '\0'){
+        if(c == '*'){
+            *output++ = '.';
+            *output++ = '*';
+        } else if(c == '?'){
+            *output++ = '.';
+        } else if(c == '[' && char_class(&output, &glob)){
+            ;
+        } else{
+            *output++ = c;
+        }
+    }
+
+    return 1;
 }
 
 
