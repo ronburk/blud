@@ -6,6 +6,10 @@
 ./luajit
 foo.*
 test/*.luac
+debug/*
+release/*
+*.luac
+luajit
 
 
 # Prerequisites
