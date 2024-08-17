@@ -86,14 +86,17 @@ static int lua_get_dir_cache(lua_State *L) {
     return 1;
 }
 
+
 static int pattern_match(const char* pattern, const char* input){
     const char* back_pat    = NULL;
     const char* back_input;
 
     for(;;){
+//        static int n = 0;
+//        assert(++n < 25);
         unsigned char c     = *input++;
         unsigned char pat_c = *pattern++;
-        printf("c=0X%02X %c   d= 0X%02X %c\n", c, c, d, d);
+        printf("c=0X%02X %c   pat_c= 0X%02X %c\n", c, c, pat_c, pat_c);
         switch(pat_c){
         case '*' :
             while((pat_c = *pattern) == '*')
@@ -130,6 +133,7 @@ static int pattern_match(const char* pattern, const char* input){
                 break;  // break means backtrack
             } // else fall through to treat like literal
         }
+            /* fallthrough */
         default:
             if(c == pat_c || pat_c == '?'){
                 if(pat_c == '\0')
@@ -138,86 +142,49 @@ static int pattern_match(const char* pattern, const char* input){
                     continue;
             }
         }
-      backtrack:
-        // didn't match the current input character
+        // didn't match the current input character, backtrack
         if(c == '\0' || !back_pat)
             return false;
         pattern = back_pat;
-        input   = back_input;
+        input   = ++back_input;
     }
         
 }
 
-static int pattern_match(PATTERN info, const char* input){
-    int c, top = 0, new_top = 0, accepting = false;
 
-    // initialize stack with start state (a set of 1 or more pattern positions)
-    info.stack[top++]   = 0;    // first pattern position is zero
-    if(info.pattern[0] == '*')  // if starts with '*', then must compute closure
-        info.stack[top++] = 1;  // but that just means adding the next position!
+static int lua_glob_expand(lua_State* L) {
+    // Ensure correct number of arguments
+    if (lua_gettop(L) != 3)
+        return luaL_error(L, "Expected 3 arguments: words (table), pattern (string), names (string)");
+    if (!lua_istable(L, 1))
+        return luaL_error(L, "'words' must be a table");
+    if (!lua_isstring(L, 2))
+        return luaL_error(L, "'pattern' must be a string");
+    if (!lua_isstring(L, 3))
+        return luaL_error(L, "'names' must be a string");
+    const char* pattern         = lua_tostring(L, 2);
+    size_t      names_length;
+    const char* names           = lua_tolstring(L, 3, &names_length); // Get pointer to 'names' and its length
+    const char* end             = names + names_length;
+    lua_Integer size            = lua_objlen(L, 1);
 
-    for(;;){
-        c           = *input++;
-        accepting   = false;
-        for(int istack = 0; istack < top; ++istack){
-            int     ip = info.stack[istack]; // ip == instruction pointer
-            switch(info.codes[ip++]){
-            case OP_MATCH_CHAR :            // then ip now points to the character to match
-                if(info.codes[ip] == c)
-                    info.next_stack[new_top++] = ip + 1;
-                break;
-            case OP_MATCH_ANY :  // '?' matches anything, so just push next pattern position
-                info.next_stack[new_top++] = ip + 1;
-                break;
-            case OP_MATCH_RANGE :
-                int invert = 0;
-                int range  = info.codes[ip];
-                if(range < 0){
-                    invert = 1;
-                    range  = -range;
-                }
-                if((info.ranges+(range * 256))[c] != invert)
-                    info.next_stack[new_top++] = ip + 1;
-                break;
-            case OP_MATCH_STAR :
-                info.next_stack[new_top++] = ip;        // '*' position gets pushed
-                info.next_stack[new_top++] = ip + 1;    // and its next neighbor pattern position
-                break;
-            case OP_MATCH_FINAL :
-                accepting = true;
-                break;
-            default : assert(0);
-            }
+    while(names < end){
+        size_t name_len = strnlen(names, end - names);
+        if(pattern_match(pattern, names)){
+            printf("Match on '%s'\n", names);
+            lua_pushinteger(L, ++size);
+            lua_pushlstring(L, names, name_len);
+            lua_settable(L, 1);
         }
-        if(c == '\0')
-            break;
-        int* temp       = info.stack;           // new stack becomes current stack
-        info.stack      = info.next_stack;
-        info.next_stack = temp;
-        top             = new_top;
-        new_top         = 0;
+        names += name_len + 1;
     }
-    return accepting;
+
+    return 0;
 }
 
-static int char_class(char** output_ptr, const char** glob_ptr){
-    char        buffer[1024*2];
-    char*       output = &buffer;
-    int         result = 0;
-    const char* glob = *glob_ptr;
-    int         c;
 
-    *output++ = '[';
-    c = *glob++;
-    if(c == '!'){
-        *output++ = '^';
-        c = *glob++;
-    }
-    for(; c != '\0'; c = *glob++){
-        
-    }
-}
 
+#if 0
 static int lua_glob_to_lua(lua_State* L){
     const char* glob = luaL_checkstring(L, 1);
     char        buffer[1024*2];
@@ -241,6 +208,7 @@ static int lua_glob_to_lua(lua_State* L){
     return 1;
 }
 
+#endif
 
 
 static int lua_expand_path_patterns(lua_State *L) {
@@ -458,6 +426,7 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    lua_register(L, "glob_expand", lua_glob_expand);
     lua_register(L, "get_cwd", lua_get_cwd);
     lua_register(L, "get_dir_cache", lua_get_dir_cache);
     lua_register(L, "get_executable_path", lua_get_executable_path);

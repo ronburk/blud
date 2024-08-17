@@ -916,6 +916,7 @@ function is_pattern(word)
 end
 
 -- only handle '*', only handle current directory
+-- Take glob pattern and add to table all the matching names in current directory
 function expand_pattern(words, pattern)
     local dir = "."
     local dir_cache = blud.dir_cache[dir]
@@ -925,6 +926,9 @@ function expand_pattern(words, pattern)
         blud.dir_cache[dir] = dir_cache
     end
     local names = dir_cache["."]
+print("Calling glob_expand ", dump(words), dump(pattern), dump(names))
+    glob_expand(words, pattern, names)
+
     print("dir_cache is ", dump(dir_cache))
     local lua_pattern = pattern:gsub('%.', "%%.")
     lua_pattern = lua_pattern:gsub("*", "[^%%z]*")
