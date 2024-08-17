@@ -926,18 +926,7 @@ function expand_pattern(words, pattern)
         blud.dir_cache[dir] = dir_cache
     end
     local names = dir_cache["."]
-print("Calling glob_expand ", dump(words), dump(pattern), dump(names))
     glob_expand(words, pattern, names)
-
-    print("dir_cache is ", dump(dir_cache))
-    local lua_pattern = pattern:gsub('%.', "%%.")
-    lua_pattern = lua_pattern:gsub("*", "[^%%z]*")
-    lua_pattern = "(" .. lua_pattern .. ")%z"
-    print(" pattern ", pattern, " into ", lua_pattern)
-    for found in names:gmatch(lua_pattern) do
-        print("found = ", found)
-        table.insert(words, found)
-    end
 end
 
 function blud.phase3:parse()
@@ -1154,7 +1143,7 @@ $(CC) $(CFLAGS) $< -o $@ -c
 $(CXX) $(CFLAGS) $< -o $@ -c
 ]])
                 else
-                    error("don't know how to handle " .. prerequisite.NAME)
+                    error("source operator doesn't know how to handle " .. prerequisite.NAME)
                 end
 --                target.ADD_PREREQUISITE(target, prerequisite)
                 table.insert(link_inputs, obj_target)
