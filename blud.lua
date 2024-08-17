@@ -908,7 +908,7 @@ function is_pattern(word)
     print("is_pattern(", word, ")")
     if word:sub(1,2) == "[[" then
         return false
-    elseif word:find("[?*]") == nil then
+    elseif word:find("[%[?*]") == nil then
         return false
     else
         return true
@@ -926,7 +926,13 @@ function expand_pattern(words, pattern)
         blud.dir_cache[dir] = dir_cache
     end
     local names = dir_cache["."]
+    local word_count = #words
     glob_expand(words, pattern, names)
+    -- if pattern matched nothing, leave it as literal target
+    if word_count == #words then
+--error("no match for " .. pattern)
+        table.insert(words, pattern)
+    end
 end
 
 function blud.phase3:parse()
