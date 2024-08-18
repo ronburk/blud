@@ -204,13 +204,104 @@ function blud.glob.expand_pattern(words, pattern)
     local path_components = blud.glob.path_split(pattern)
     local dir = path_components[1]  -- Start with the root directory (or "." for current directory)
 
+    -- Create a temporary table to store the new results
+    local new_words = {}
+
     -- Call the recursive helper function to match the pattern
     local initial_cache = blud.glob.get_cached_dir(dir)  -- Cache for the root directory
-    local match_count = blud.glob.recursive_glob_match(words, path_components, 2, dir, initial_cache)
+    local match_count = blud.glob.recursive_glob_match(new_words, path_components, 2, dir, initial_cache)
 
-    -- If no matches were found, treat the pattern as a literal and add it to 'words'
+    -- If no matches were found, treat the pattern as a literal and add it to 'new_words'
     if match_count == 0 then
-        table.insert(words, pattern)
+        table.insert(new_words, pattern)
+    end
+
+    -- Sort the new words
+    table.sort(new_words)
+
+    -- Append the sorted new_words to words
+    for _, word in ipairs(new_words) do
+        table.insert(words, word)
+    end
+end
+
+-- Recursive function to handle glob pattern matching
+-- Returns the number of matches found
+function blud.glob.recursive_glob_match(words, pattern_components, index, current_path, dir_cache)
+    local match_count = 0  -- Keep track of matches
+
+    -- Base case: if we've matched all components, add the full path to words
+    if index > #pattern_components then
+        table.insert(words, current_path)  -- Add the full matched path
+        return 1  -- Count this as one match
+    end
+
+    local part = pattern_components[index]
+
+    -- Handle "**" special case
+    if part == "**" then
+        -- "**" can match zero or more directories, so we need to try all possibilities:
+        -- 1. Match zero directories: call recursively with the next pattern component
+        match_count = match_count + blud.glob.recursive_glob_match(words, pattern_components, index + 1, current_path, dir_cache)
+
+        -- 2. Match one or more directories: iterate through directories in dir_cache and recurse
+        for name, entry in pairs(dir_cache) do
+            if entry.is_dir then
+                local subdir_cache = blud.glob.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
+                local subdir_path = current_path .. "/" .. name  -- Concatenate the full path
+                match_count = match_count + blud.glob.recursive_glob_match(words, pattern_components, index, subdir_path, subdir_cache)
+            end
+        end
+    else
+        -- Normal matching for the current component (using glob_expand for wildcards)
+        local matched = {}
+        glob_expand(matched, part, dir_cache["."])
+
+        -- For each matched entry, continue matching the remaining pattern components
+        for _, matched_entry in ipairs(matched) do
+            local next_dir_cache = blud.glob.get_cached_dir(matched_entry)
+            local full_path = current_path .. "/" .. matched_entry  -- Concatenate the full path
+            match_count = match_count + blud.glob.recursive_glob_match(words, pattern_components, index + 1, full_path, next_dir_cache)
+        end
+    end
+
+    return match_count  -- Return the number of matches found
+end
+
+-- Helper function to get or create the directory cache
+function blud.glob.get_cached_dir(directory)
+    local cache = blud.dir_cache[directory]
+    if cache == nil then
+        cache = get_dir_cache(directory)
+        assert(cache)
+        blud.dir_cache[directory] = cache
+    end
+    return cache
+end
+
+
+
+
+function blud.glob.expand_pattern(words, pattern)
+    -- Split the pattern into path components
+    local path_components = blud.glob.path_split(pattern)
+    local dir = path_components[1]  -- Start with the root directory (or "." for current directory)
+
+    local new_words = {}
+
+    -- Call the recursive helper function to match the pattern
+    local initial_cache = blud.glob.get_cached_dir(dir)  -- Cache for the root directory
+    local match_count = blud.glob.recursive_glob_match(new_words, path_components, 2, dir, initial_cache)
+
+    if match_count == 0 then
+        table.insert(new_words, pattern) -- no match means pattern is literal
+    end
+
+    table.sort(new_words)
+
+    -- Append the sorted new_words to words
+    for _, word in ipairs(new_words) do
+        table.insert(words, word)
     end
 end
 
@@ -266,7 +357,7 @@ function blud.glob.get_cached_dir(directory)
     return cache
 end
 
-function path_split(path)
+function blud.glob.path_split(path)
     local components = {}
     local is_absolute = false
 
