@@ -168,15 +168,22 @@ static int lua_glob_expand(lua_State* L) {
     const char* end             = names + names_length;
     lua_Integer size            = lua_objlen(L, 1);
 
+    int  matched = 0;
     while(names < end){
         size_t name_len = strnlen(names, end - names);
         if(pattern_match(pattern, names)){
             printf("Match on '%s'\n", names);
+            ++matched;
             lua_pushinteger(L, ++size);
             lua_pushlstring(L, names, name_len);
             lua_settable(L, 1);
         }
         names += name_len + 1;
+    }
+    if(matched == 0){
+        lua_pushinteger(L, ++size);
+        lua_pushlstring(L, pattern, strlen(pattern));
+        lua_settable(L, 1);
     }
 
     return 0;
