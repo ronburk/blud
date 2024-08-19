@@ -33,3 +33,6 @@ all: one
 
 one:
 	echo $(GLOBAL_VAR)
+
+prog : blud.o
+

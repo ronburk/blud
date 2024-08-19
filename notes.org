@@ -304,6 +304,129 @@ end
 
 
 * log
+** <2024-08-18 Sun>
+
+Here's my current testing idea:
+
+test : test/test[0-9][0-9][0-9][0-9]
+    echo "Finished running tests"
+
+test%.out : test%
+    echo "test $@ $<"
+
+I want to type things like "blud release test", so the 'release' build
+sets the output directory to "./release" and the output of test runs
+will be stored on a per-build basis.
+
+But probably the default for testing should be this:
+    - output directory defaults to build output directory
+    - source directory defaults to named directory containing test info
+    - current directory defaults to build output directory
+
+This is so I can write a rule like this:
+
+test%.out : test%
+    ./blud -f $< -o $@
+
+Although, is that really harder than:
+
+test%.out : test%
+    $(OWD)/blud -f $< -o $@
+
+I guess point is we really wanted to avoid having to explicitly mention
+special directories like $(OWD) in recipes. OK, can we make the syntax
+default to the previous example? We will want to set the OWD, SWD, and CWD.
+
+test  :TEST: ./test test[0-9][0-9][0-9][0-9]
+
+Groping for :TEST: being a scope above build that implicitly (optionally explicit)
+sets the $(SWD) and $(CWD). The user will have specified a build before
+this test, so we can set $(CWD) to $(OWD) without knowing in advance
+what $(OWD) is. Maybe we end up with:
+
+test :TEST: test[0-9][0-9][0-9][0-9]
+    ./blud -f $< -o $@
+
+    
+No! Always want almost all paths mentioned in bludfile to
+be relative to bludfile dir, for clarity. So:
+
+test :TEST: test[0-9][0-9][0-9][0-9]
+    ^blud -f $< -o $@
+
+Wildcard of *.c is a modest convenience. Not too high a burden to
+have to mention all your source files in your bludfile explicitly.
+But it's more important to tests. You don't want to have to modify
+your bludfile every time you add or remove a test!
+
+So I'm back to this:
+
+test: test/test[0-9][0-9][0-9][0-9]
+    echo "All tests complete"
+
+test%.out : test/test%
+    $(OWD)/blud -f $< -o $@
+
+It's not the worst. But it doesn't really work. test0001 is a
+source file but "test" should depend on $(OWD)/test0001.out.
+Maybe we have to say:
+
+test :: test/test[0-9][0-9][0-9][0-9]
+    echo "All tests complete"
+
+And the "::" says "assume the prerequisites are source files". The
+resulting being the wild card expands into files like test/test0001,
+and when "updating" test/test0001, we check for implicit rules
+and find a match here:
+    
+test%.out : test/test%
+    $(OWD)/blud -f $< -o $@
+
+This is some serious tweaking to core algorithm. Updating
+a prerequisite (may) gives it a corresponding "output" file,
+and those output files become the prerequisites that $^
+refers to!
+<><><><><><><>
+
+if "::" means "treat these prerequisites as source files,
+what happens here:
+
+prog :: prog.c crt.o
+
+We go to update prog.c, find it exists in the source directory,
+find there is a rule to create output file (prog.o), and associate
+prog.c with prog.o so the latter becomes the prerequisite. But
+then we go to update crt.o, find it exists, and regrettably find
+that there is a rule (%.exe : %.o) that matches it, so its
+corresponding prerequisite becomes crt.exe! Not what we want.
+
+If our syntax says ALL these prereqs are sources, then we need
+a syntax that lets us mark individual prereqs differently. How
+about "::"? So, you say:
+
+prog :: prog.c ::crt.o
+
+On the rhs, a "::" prepended to a filename inverts the original
+colon operator, so you could say:
+
+prog : $(OBJS) ::prog.c
+
+
+
+<><><><><><>
+Could do build variations like this:
+
+debug_$(OS)_$(COMPILER) :BUILD:
+    $ CFLAGS += -g
+
+Then you would run "blud -c OS=win COMPILER=clang debug"
+Ooops -- that sure doesn't work. What is the "debug" target on the commandline
+which doesn't appear in the bludfile? Ah, maybe it's like this:
+
+debug :BUILD: ./debug_$(OS)_$(COMPILER)
+    $ CFLAGS += -g
+
+
 ** <2024-08-14 Wed>
 Might want to multiplex builds off of O/S and also by compiler.
 For example, might want clang/gcc/vc/icc builds on both Windows and Linux.
