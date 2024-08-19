@@ -43,7 +43,6 @@ typedef struct BLUD_DIR_INFO {
 static void callback(void* data, const char* name, int64_t timestamp, int is_dir){
     BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
     size_t          name_len = strlen(name);
-    printf("callback(%s) %d\n", name, info->table_index);
     
     luaL_addlstring(&info->buffer, name, name_len + 1); // add name & null byte
     lua_pushlstring(info->L, name, name_len);           // put in position for later lua_rawset()

@@ -304,6 +304,23 @@ end
 
 
 * log
+** <2024-08-19 Mon>
+Thinking about whole pattern matching approach to locating
+implicit rules. In classic make, we are given an output file
+and have to guess the name of the source file that made it.
+For source operator, we will be given name of source file
+and the matching implicit rule will tell us how to create
+name of output file.
+
+In GNU make, the implicit rule can have more than one prerequisite.
+Should we allow that? Not today.
+
+So, must detect implicit rule during parsing, and index it two
+ways: by target and by prerequisite. Well, really, the order of
+the implicit rules is what matters.
+
+
+
 ** <2024-08-18 Sun>
 
 Here's my current testing idea:

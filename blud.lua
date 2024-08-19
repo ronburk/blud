@@ -197,6 +197,8 @@ blud.array_append    = function(array, more)
     end
 end
 
+blud.implicit_rules = {}
+
 blud.glob = {}
 -- Main function to expand the glob pattern
 function blud.glob.expand_pattern(words, pattern)
@@ -959,14 +961,6 @@ function blud.phase3:looks_like_action_line(text)
     return match ~= nil
 end
 
-function blud.phase3:looks_like_build_line(text)
-    -- handle comments
-    if text:find("^build%s*$") or text:find("^build%s+") then
-        return true
-    else
-        return valse
-    end
-end
 
 function match_quoted_string(text, start_pos)
     local quote_char = text:sub(start_pos, start_pos)
@@ -1144,28 +1138,6 @@ print("expanded = ", dump(expanded))
 --            line = get_line()
         elseif self:looks_like_empty_line(line) then
             table.insert(self.text, line .. "\n")
-            line = get_line()
-        elseif self:looks_like_build_line(line) then
-            local build_name = line:match("^build%s+(%a+)")
-            if not build_name then
-                error("Bad build directive syntax: " .. line)
-            end
-            if inside_build then error("Can't nest 'build' directives.") end
-            if not blud.build_name then
-                blud.build_name = build_name
-            end
-            line = get_line()
-            if build_name ~= blud.build_name then
-                while line and not line:find("^end%s*$") do
-                    line = get_line()
-                end
-                if not line then error("Missing 'end' for build directive.") end
-            else
-                inside_build = true
-            end
-        elseif line:find("^end%s*$") then
-            if not inside_build then error("extraneous 'end'") end
-            inside_build = false
             line = get_line()
         else
             error("wtf: '" .. line .. "'")
