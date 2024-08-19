@@ -411,6 +411,50 @@ colon operator, so you could say:
 
 prog : $(OBJS) ::prog.c
 
+<><><><><><><>
+Devolving :: into primitives is good, but I haven't said how this
+actually works:
+
+prog :: *.c
+
+The matching .c files get associated with .o files that get built.
+But how is it specified what command is used to link all those .o
+files together?
+
+First, we must handle the problem of identifying executables.
+By the time we are ready to perform the action for prog,
+all manner of rules may have been generated:
+
+prog : a.o
+prog : b.o  -- etc.
+
+We don't know what "type" prog is, but we know it has .o files
+among its prerequisites. GNU make rules can only handle this
+in the special case of you are using a .o with the same prefix
+as the executable:
+
+prog : prog.o b.o ...
+
+Works because there is a rule:
+
+% : %.o
+
+And the search for a rule match is such that this will match if the
+target is anything, and any one of its prerequisites is the target
+name followed by ".o".  So, we need a more powerful search for
+implicit rules.
+
+Another reason we need a more powerful search is GNU Make can
+only "see" the .o files, so it doesn't know if it's compiling
+C, or C++, or something else. It just assumes C. Here's an
+annoying case:
+
+prog : a.o b.o
+
+If both a.o and b.o come from C files, we want the linker command
+to use gcc. Otherwise, if even ONE of them is C++, we want the
+linker command to use g++.
+
 
 
 <><><><><><>
