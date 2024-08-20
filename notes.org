@@ -1,4 +1,14 @@
 * blud
+** semicolon
+
+Semicolon lets you put action on same line as rule,
+which I initially deemed not particularly useful. But
+now I kind of like this:
+
+a :SOME_OPERATOR: ; do
+    --indented Lua statements!
+end
+
 ** distinguish special atoms from ordinary atoms.
 
 User wants to have a target named ".AFTER" even though that's the name

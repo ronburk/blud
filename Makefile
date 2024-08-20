@@ -1,7 +1,7 @@
 one:
 	echo $(GLOBAL_VAR)
 
-prog : blud.o
+prog : *.c
 
 foo : prog
 	echo "prog is updated"

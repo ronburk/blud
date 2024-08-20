@@ -1030,7 +1030,7 @@ print("********************* compile_rule")
     local prerequisites = {}
     local token_pos = 1
     local token     = ""
-    while token_pos <= #tokens do
+    while token_pos <= #tokens do   -- for each token on dependency line
         token = tokens[token_pos]
         if token:sub(1,1) == ':' then
             break
@@ -1096,7 +1096,6 @@ function blud.phase3:parse()
     local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
-    local inside_build      = false
     self.text = {}
     while line do
         assert(line ~= nil)
@@ -1263,6 +1262,7 @@ blud.super_atom = {
             for _, prerequisite in ipairs(prerequisites) do
                 local obj = nil
                 local obj_target
+                local suffix = prerequisite.NAME:match("^.+(%..+)$")
                 if prerequisite.NAME:sub(-2) == ".c" then
                     print("handle source ", prerequisite.NAME)
                     obj = prerequisite.NAME:gsub("%.c$", ".o")
@@ -1478,6 +1478,8 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
     -- need to give .GLOBAL_MACRO attribute to target
 end
 
+-- we have a dependency rule, possibly with multiple targets
+-- for each target create the rule
 blud.add_rules = function(colon_operator, targets, prerequisites, action)
 
 print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
