@@ -1,8 +1,25 @@
-one:
-	echo $(GLOBAL_VAR)
+all: tool
 
-prog : *.c
-	echo $(patsubst *.c,foo,abcd)
+# GENERATED PART START
+main.o: src/main.c src/sub/file.h
+sub/file.o: src/sub/file.c src/sub/file.h
+# GENERATED PART END
 
-foo : prog
-	echo "prog is updated"
+# main.o : main.o: fee.obj
+
+%.o: src/%.c
+	mkdir -p $(dir $@)
+	gcc -c -o $@ $<
+
+
+OBJS = main.o sub/file.o
+
+$(OBJS) : %.o: src/%.c
+	mkdir -p $(@D)
+	gcc -c -o $@ $<
+
+
+tool: main.o sub/file.o 
+	gcc -I src -o $@ $^
+
+.PHONY: all

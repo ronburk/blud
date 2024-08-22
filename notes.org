@@ -1,4 +1,93 @@
 * blud
+** Use case examples
+*** https://stackoverflow.com/questions/78899903/how-to-create-a-make-target-which-is-an-implicit-dependency-for-all-other-target
+
+How to create a make-target which is an implicit dependency for all other targets?
+
+this can actually easy with blud and impossible with Gnu make:
+
+We already have:
+
+.BEFORE: pre
+pre:
+    echo "I'll run just before the parent target!"
+
+fee: ; echo "I foolishly think I'll come out on time"
+
+foo: pre fee
+    echo "that pre message will come out just before me"
+
+We assign an attribute to a target that polymorphs the
+default execution algorithm. But in this case, we want to
+polymorph the super atom. This is not as similar
+as I hoped.
+
+Maybe something like this:
+.DO_ACTION: -- applies to super-atom if no explicit targets
+    echo "I run instead of default DO_ACTION!"
+    .DO_ACTION
+
+ugh. Definitely not fleshed out.
+
+
+*** https://stackoverflow.com/questions/78881089/how-to-find-the-prerequisite-from-list-based-on-target-list
+
+Root problem here is GNU Make has no easy way to iterate
+across a word list as though it were an array. Problem really
+requires pairing words in order from two lists. This would be
+easy in blud using Lua if we support turning blud variables
+into Lua arrays:
+
+ADDFILES = Makefile  blud.lua          Figure1.pic
+ASFILES  = Makefile  test.log          foo.pic
+DESTDIR  = /tmp/
+DESTFILES = $(addprefix $(DESTDIR),$(ASFILES))
+
+all : $(DESTFILES)
+
+do
+    local dest_files = $[DESTFILES]
+    local src_files  = $[ADDFILES]
+    local count = #dest_files
+    for i = 1, count do
+        $ -- emit rule and action here
+    end
+end
+
+*** https://stackoverflow.com/questions/78866240/makefile-implicit-rule-with-sub-dirs
+
+Now this is interesting because the OP wants to keep a directory tree
+of sources, but keep one Makefile and all output files in the top directory.
+He wants to list source files like ./src/sub_whatever/foo.c and have the
+makefile automatically create (if needed) a parallel ./sub_whatever/ directory
+and put the output files there.
+
+Interesting annoyance here:
+tool: main.o sub/file.o
+	gcc -I src -o $@ $^
+
+When you run this and sub/file.o doesn't exist, GNU Make
+makes no effor to make it, nor does it complain that it doesn't exist!
+It just passes the name to the linker via $^ and the linker complains.
+
+IOW, if "file.o" is needed and doesn't exist, GNU Make complains.
+But if "sub/file.o" is needed and doesn't exist, GNU Make just
+assumes it's uptodate! Amazing.
+
+If "file.o" is needed and missing, GNU Make complains. The fact that
+if "sub/file.o" is needed and missing causes GNU Make to just assume
+it is up-to-date is a remarkably unhelpful feature. I cannot
+immediately imagine how this behavior is justified (but bet
+it is!). UX fail. In any case, @MadScientist has the fix.
+
+
+Your pattern rule does not match because, given sub/file.o,
+it correctly matches %.o, but then also requires that a prerequisite
+of sub/src/file.c exist, which was not what you intended and
+will not match.
+
+
+
 ** semicolon
 
 Semicolon lets you put action on same line as rule,
@@ -8,6 +97,18 @@ now I kind of like this:
 a :SOME_OPERATOR: ; do
     --indented Lua statements!
 end
+
+Of course, you could just make a rule that if a lua
+compound statement starts immediately after a dependency rule,
+it can be in column 1 and will be treated as an action:
+
+a :SOME_OPERATOR:
+do
+    -- indented Lua statements!
+end
+
+But I don't think so, because we want that to be code that is
+executed in pass 2.
 
 ** distinguish special atoms from ordinary atoms.
 
@@ -314,6 +415,231 @@ end
 
 
 * log
+** <2024-08-22 Thu>
+
+Breakthrough. The implicit rules essentially represent code that is
+executed when we don't know what to do with a target.  The decision
+about whether to "execute" an implicit rule is hidden in the algorithm
+for deciding if the rule matches the current target. And then "executing"
+the rule is adding to the current dependency graph.
+
+We can make the decision about "does this rule match" explicit
+and under control of the rule itself by executing the code and
+checking its return value (which will be nil if there is no return
+statement). Let's suppose that any return value other than false
+means that the rule took effect.
+
+Here's a rule that just prints a debug statement without
+affecting any implicit associations:
+
+% : ; do
+    print("searching for rule for '" .. $1 .. '"')
+    return false   -- this rule doesn't match
+end
+
+Here's a rule that conditionally matches:
+
+% : ; do
+    if $1:match(".*secret.*") then
+        $ $1 : secret
+        $     echo "You found the secret!"
+        return true
+    else
+        return false  -- this rule doesn't match
+    end
+end
+
+<><><><><><>
+Actions are a mix of shell/Lua/blud code. Here's a parsing problem:
+
+a : b
+    if os.clock() % 2 then
+        $ c : d
+    end
+    if #$@ > 1 then
+        $     echo "it's longer than 1"
+    else
+        $     echo "it's not longer than 1"
+    end
+
+If os.clock() returns an even number, then this is a blud syntax
+error. It will see an indented action, even though there was no
+previous unindented rule.
+
+Best simplification is that embedded blud directives must be
+consecutive. IOW, they must occur in the same blocks that
+would be required if they weren't embedded. So, the legal
+equivalent of the previous freaky example would be:
+
+a : b
+    local msg
+    if #$@ > 1 then
+        msg = "it's longer than 1"
+    else
+        msg = "it's notlonger than 1"
+    end
+    if os.clock() % 2 then
+        $ c : d
+        $    echo "${msg}"
+    end
+
+
+
+** <2024-08-21 Wed>
+
+Think, think, think. I'm asked to update x.y. The user gave
+no explicit action for updating x.y, so I cannot say for sure
+it is an output file (and therefore cannot bind it yet). Here
+is the context I have for trying to choose an implicit rule
+for updating x.y:
+
+- x.y, the partially formed target
+- its prerequisite list
+- the target that requires x.y to be updated
+- and *its* prerequisite list
+- all variables currently in scope
+- the existance of files in the filesystem
+
+GNU Make has: "old-fashioned" suffix rules and more flexible pattern rules.
+
+"static pattern rules" are really a more flexible way to specify
+explicit rules. Any target of a recipe-bearing static pattern rule is
+given an action and will never be involved in an implicit rule search.
+
+Given a tool that creates output files from input files, it pretty
+much always has the same form.  Consider the C compiler. We might want
+some files compiled with different options, but we don't make separate
+implicit rules to match those files. Instead, we use variables to
+alter the command-line of the tool.
+
+So half the work of the implicit rule is deciding what tool to use,
+and the other half is manipulating file names to create a new output
+file.
+
+What if we make the most primitive escape-to-lua implicit rule
+syntax first?
+
+%.o :CALL: %.c
+    do
+        local dot_o, dot_c = ...
+        
+    end
+%.c :CALL: -- a source rule because it has no prerequisite?
+    do
+    end
+
+OK, you have a source rule:
+prog : *.c
+and you're asked to update "foo.c". If there is an action already
+for "foo.c", you do that. If "foo.c" now exists, you look for a
+source implicit rule. If you find one, then you use that implicit
+rule to generate dependencies. You replace the "foo.c" dependency
+with the outputs of the implicit rule and update them instead. If
+there was no source implicit rule
+
+Really, if you're walking a list of patterns, you're just going
+down a list of function calls, until one of them claims a match
+for the target you want to update.
+
+Do we need a separate source rule operator?
+
+prog : a.c b.c
+
+update prog means update a.c. No rule to update a.c. No implicit
+rule to update a.c. There is a rule to produce a .o from an a.c,
+but should we use it? Maybe "prog" is just a target that copies
+its prerequisites to a backup folder.
+
+
+** <2024-08-20 Tue>
+
+Stuck on implicit rules.
+
+<><><><><><><>
+
+I'm trying to get to a point where this works via primitives,
+not via a special, hard-coded operator:
+
+prog :: a.c b.c c.o luajit/luajit.a
+
+Notice that there is a mix of source and object files on the right.
+blud cannot know, a priori, that c.o and luajit.a are NOT source files,
+since the whole point of the rule could be to copy files elsewhere.
+
+I was settling on this single rule being used for both
+inferring output and source files:
+
+%.o : %.c
+    $(CC) -c $< -o $@
+
+But look at this rule:
+
+%  : %.o
+    $(CC) $< -o $@
+
+We see that a .o file could be an output file and could
+also be a source file. If we see a.c on a :: rule, we
+look to see if a.c can generate an output file. It can
+because of the %.o:%.c implicit rule. But by the same
+rule, we ask if c.o can generate an output file. It can
+because of the %:%.o rule. So we end up believing that
+prog depends on an executable linked from c.o!
+
+Core Issues: given a prerequisite, we want to control whether
+or not it should be replaced by an output file it can generate.
+
+A :: operator could imply the answer is "yes" for all its
+prerequisites. But that's the wrong answer for c.o here:
+
+prog :: a.c b.c c.o luajit/luajit.a
+
+We could say the implicit rule must also use a :: operator
+for the source file to be considered. So, if there is no
+rule like this:
+
+%.o :: %.c
+
+The c.o in the above example would do the right thing, then.
+Is there a case where we want c.o to generate an executable
+via a source rule? Here's an unrealistic case:
+
+exes :: a.o b.o c.o
+-- expands to:
+exes : a b c
+a : a.o
+b : b.o
+c : c.o
+
+If I really wanted that to work, would write:
+
+exes : a b c
+% : %.o ; link command
+
+
+<><><><><><>
+If "c.o" is a prereq in a source rule, should we really be
+looking for it anywhere but the source directory? I think
+not.
+
+
+<><><><><><><>
+Here's another example:
+
+blud :: blud.c oslinux.c bludlua.c
+bludlua.c : blud.lua cstr
+    $(OWD)/cstr $< >$@
+
+We go to update "bludlua.c" and the first thing we do is BIND it.
+Because bludlua.c has an action, it gets bound to $(OWD)/bludlua.c.
+Then we transform it to bludlua.o. Hmmm, I think it all works.
+<><><><><><><>
+
+
+blud :: *.c
+This doesn't work because one of my .c files is an output file
+(generated by running cstr).
+
+
 ** <2024-08-19 Mon>
 Thinking about whole pattern matching approach to locating
 implicit rules. In classic make, we are given an output file
@@ -329,6 +655,8 @@ So, must detect implicit rule during parsing, and index it two
 ways: by target and by prerequisite. Well, really, the order of
 the implicit rules is what matters.
 
+GNU Make does not require implicit rules to appear before they
+are needed, and I guess that makes sense.  So, 
 
 
 ** <2024-08-18 Sun>

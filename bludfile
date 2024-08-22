@@ -9,11 +9,14 @@ CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 all : blud test
 
-test :: test/test[0-9][0-9][0-9][0-9]
+test :: test/test*.blud
     echo "Finished running tests"
 
-test%.out : test/test%
-    echo "test $@ $<"
+test%.out :: test/test%.blud
+  echo "blud -f $@ -o $<"
+
+-- test%.out : test/test%
+--    echo "test $@ $<"
 
 debug release :BUILD:
 
