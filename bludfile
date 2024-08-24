@@ -24,6 +24,8 @@ debug release :BUILD:
 -- blud :: blud.c bludlua.c
 blud :: *.c
 
+% : (
+
 -- use cstr to convert Lua source into a C string
 bludlua.c : blud.lua cstr
     $(OWD)/cstr $< >$@
