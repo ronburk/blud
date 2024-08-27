@@ -415,6 +415,20 @@ end
 
 
 * log
+** <2024-08-26 Mon>
+
+Proposed meaning of "::" rule is: "Treat specially any dependents that exist and have no build rule."
+So, given this case:
+
+prog :: a.c b.c special_crt.o
+
+When building "prog", it notices there is a "source dependency list"
+in addition to the normal dependency list. For each entry on that list,
+if it exists and has no rule to build it, then a search for transformation
+rules begins, possibly resulting in a transformed name being added
+to the dependency list. Otherwise, the name itself gets moved to the
+dependency list.
+
 ** <2024-08-22 Thu>
 
 Breakthrough. The implicit rules essentially represent code that is
