@@ -9,22 +9,17 @@ CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 all : blud test
 
-test :: test/test*.blud
+test : test/test*.blud=out
     echo "Finished running tests"
 
-test%.out :: test/test%.blud
+test%.out : test/test%.blud
   echo "blud -f $@ -o $<"
 
--- test%.out : test/test%
---    echo "test $@ $<"
 
 debug release :BUILD:
 
 
--- blud :: blud.c bludlua.c
 blud :: *.c
-
-% : (
 
 -- use cstr to convert Lua source into a C string
 bludlua.c : blud.lua cstr

@@ -1,5 +1,159 @@
 * blud
+** ChatGPT conversation head
+
+I'm building a replacement for GNU Make using luajit hosted in C.
+It's called "blud".
+Assume all Lua questions refer to luajit unless otherwise specified,
+and likewise assume I'm using C not C++.
+
+Operators:
+The "target1 ... targetN : dependent1 ... dependentN" syntax is
+generalized by treating ":" as a particular case of an "operator".
+Operators are of the form ":NAME:", where NAME is the moniker
+specifying what the operator does. Each rule using an operator
+may have targets, dependents, and an action, but the meaning
+of those things may vary widely. One thing that does not
+vary is this:
+
+target1 ... targetN : whatever
+
+ALWAYS means the same as:
+
+target1 : whatever
+...
+targetN : whatever
+
+Source operator:
+Although operators apart from the single-colon dependency operator
+have names, there is an operator that has a null name: "::". This
+is called the "source operator". It is used in the common case
+of specifying a rule to build an executable or library. It examines
+all its arguments and generates the necessary "normal" rules to
+correctly build its target. In particular, you are allowed
+and encouraged to give the source operator source instead of
+object file names and it will "do the right thing". For
+example this:
+
+prog :: a.c b.c foo.a
+
+would generate rules like this:
+
+prog : a.o b.o foo.a
+    $(CC) -o $@ $^
+a.o : a.c
+b.o : b.c
+
+Integrating Lua:
+Instead of trying to extend a macro language to include programming
+constructs (as GNU Make does), blud integrates Lua into its syntax.
+Like most make derivatives, blud is fairly line-oriented. It examines
+each line to see what "type" of thing it is before evaluating it.
+If a line begins with a Lua keyword that implies block structure
+(do/if/else/function/for/etc.) blud begins treating the text as
+Lua code instead of blud directives. It only examines lines that
+start with a non-blank character from that point to figure out
+where the Lua code segment ends. Here's an example bludfile:
+
+do
+    print("I'll be printed first before graph is even constructed!")
+end
+
+all :
+    echo "I'll be printed separate, while traversing graph!"
+
+For the most part, blud just blindly copies Lua code to a buffer where it
+will later compile and execute it. However, Lua code can access bludfile
+macros via the "$" syntax. Example:
+
+do
+    if $(OS) == "Windows" then
+        error("this bludfile doesn't work on windows!")
+    end
+end
+
+The "$(OS)" expression will be translated to a call to an internal
+function that locates the named macro and returns its value as
+a Lua string.
+
+Lua code can also have embedded bludfile directives. These are any
+lines that are indented, then start with a "$" followed by at least
+one space. If the text following the "$" is followed by more
+than one space, it must be an action for an immediately preceding
+rule. Example:
+
+do
+    if $(OS) == "Windows" then
+        -- add Windows CRT to link for prog
+        $ prog : wincrt.obj
+    end
+end
+
+prog :: prog.c util.c
+
+Multi-language Actions:
+Actions in GNU Make are written in shell script. However blud actions
+can contain a mix of Lua, shell, and blud directives! This is
+parsed much like the outermost bludfile, except that the start
+indentation of the action is used to decide when parts of the
+action are "indented". Also, the default language in the bludfile
+is blud directives, but the default language in an action is
+shell commands. Here's an example:
+
+add_deps :
+    echo "adding 2 dependencies to 'main'"
+    $ main : x.o y.o
+    do
+        print("the time is> " ..os.date("%Y-%m-%d %H:%M:%S"))
+    end
+
+Atoms:
+As part of generalizing the original Feldman make syntax, blud
+follows the lead of Alcatel's nmake and calls the names that
+appear in rules "atoms". Atoms may correspond to files, but may
+not. When asked to update an atom, blud goes through a step
+called "binding". This is when the atom becomes associated
+with a particular file.
+
+Summary:
+This is an overview of some key ways that blud's proposed design
+differs from GNU Make, to help orient you when asked to consider
+design ideas and other aspects of building this utility.
+
+
 ** Use case examples
+*** https://stackoverflow.com/questions/78911443/makefile-for-2-targets-with-different-prerequisites-but-with-single-command-to-g
+
+So, "grouped targets" let you say that an action updates more than
+one target:
+
+target_a target_b &: src_a src_b
+    build_a_and_b
+
+The problem is: this rule lets make know that the action updates both
+targets, but it also forces both targets to depend on all the sources.
+
+Basically, the need is for an action to specify that it updated
+additional targets.
+
+Solution: operator that marks targets updated.
+
+target_a : src_a
+    build_a_and_b
+    $ target_a target_b :UPDATED:
+target_b : src_b
+    build_a_and_b
+    $ target_a target_b :UPDATED:
+
+My first example of an operator that is ONLY useful inside an
+action, something there is no concept for in GNU Make.
+
+Note that this depends on the algorithm we use to see whether
+a target is updated. If we re-check the filesystem timestamp
+just before deciding we need to update a target, then all this
+is not necessary--except then the -n option may produce
+different results than actually running the makefile would
+produce!
+
 *** https://stackoverflow.com/questions/78899903/how-to-create-a-make-target-which-is-an-implicit-dependency-for-all-other-target
 
 How to create a make-target which is an implicit dependency for all other targets?
