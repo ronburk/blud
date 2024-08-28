@@ -1,3 +1,6 @@
+prog : file.o
+
+
 all: tool
 
 # GENERATED PART START
