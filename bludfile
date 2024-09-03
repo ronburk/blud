@@ -7,13 +7,14 @@ LDFLAGS = -L./luajit/src -lluajit
 CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 
-all : blud test
 
-test : test/test*.blud=out
-    echo "Finished running tests"
+all : blud test
 
 test%.out : test/test%.blud
   echo "blud -f $@ -o $<"
+
+test :: test/test*.blud
+    echo "Finished running tests"
 
 
 debug release :BUILD:

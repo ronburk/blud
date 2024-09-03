@@ -561,16 +561,29 @@ main lib : $$($$(@_OBJS))
 main_OBJS := main.o try.o test.o
 lib_OBJS  := lib.o api.o
 
-main lib :AddObjs: _OBJS
+main lib :
+    $ $@ : ${ return $@ .. "_OBJS" }
 
-function AddObjs(target, prerequisites, action)
-    $ $@ : ${ $@ .. "_OBJS" }
-end
+This doesn't quite work because the "action" won't get
+invoked until someone does, e.g., "blud main". And then
+we have the issue of is it OK to dynamically modify the
+update graph after you start updating?
+
+Maybe we need an operator to say "this action happens at compile time."
+
+main lib :EVAL:
+    $ $@ : ${ return $@ .. "_OBJS" }
+
 <><><><><>
 
 
 
 * log
+** <2024-09-03 Tue>
+Can't really generalize "testing" very well, but default features
+may influence practice. First step is :: operator will work on
+list that doesn't look like binary creation. 
+
 ** <2024-08-27 Tue>
 Still (STILL!!!) waffling on whether source dependency can be generalized.
 Time to be more rigorous.
