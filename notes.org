@@ -580,9 +580,21 @@ main lib :EVAL:
 
 * log
 ** <2024-09-03 Tue>
+
+
+** <2024-09-02 Mon>
 Can't really generalize "testing" very well, but default features
 may influence practice. First step is :: operator will work on
-list that doesn't look like binary creation. 
+list that doesn't look like binary creation.
+
+If test pass/fail is represented by file presence, need easy way
+to say "list what didn't pass" and "list percentage of tests passed".
+Assume we have:
+
+test :: test/test*
+    echo "%d/%d tests succeeded"
+    echo "
+
 
 ** <2024-08-27 Tue>
 Still (STILL!!!) waffling on whether source dependency can be generalized.

@@ -197,7 +197,29 @@ blud.array_append    = function(array, more)
     end
 end
 
+blud.match_rule = function(pattern, target)
+    -- Escape any special Lua pattern characters, except for '%'
+    local escaped_pattern = pattern:gsub("([%.%^%$%(%)%%%[%]%+%-%?])", "%%%1")
+
+    -- Replace '%' in the pattern with '(.*)' to capture the stem
+    local lua_pattern = escaped_pattern:gsub("%%", "(.*)")
+
+    -- Use string.match to attempt to match the target with the modified pattern
+    local stem = string.match(target, lua_pattern)
+    
+    -- Return the stem if found, otherwise return nil
+    return stem
+end
 blud.implicit_rules = {}
+blud.find_reverse_rule = function(prerequisite_name)
+    for i = #blud.implicit_rules, 1, -1 do
+        local rule = blud.implicit_rules[i]
+        if blud.match_rule(rule.prerequisites[1].NAME, prerequisite_name) then
+            return rule
+        end
+    end
+    return nil
+end
 
 blud.glob = {}
 -- Main function to expand the glob pattern
@@ -1260,10 +1282,15 @@ blud.super_atom = {
             local link_inputs = {}
             local cpp         = false
             for _, prerequisite in ipairs(prerequisites) do
+                local implicit_rule = blud.find_reverse_rule(prerequisite.NAME)
+                if implicit_rule == nil then
+                    error("no reverse rule for " .. prerequisite.NAME)
+                else
+                    print("Got rule: ", dump(implicit_rule))
+                end
                 local obj = nil
                 local obj_target
-                local suffix = prerequisite.NAME:match("^.+(%..+)$")
-                if prerequisite.NAME:sub(-2) == ".c" then
+                if prerequisite.SUFFIX == ".c" then
                     print("handle source ", prerequisite.NAME)
                     obj = prerequisite.NAME:gsub("%.c$", ".o")
                     obj_target = blud.get_or_create_target(obj)
@@ -1271,7 +1298,7 @@ blud.super_atom = {
                     target.ADD_RULE(obj_target, {prerequisite}, [[
 $(CC) $(CFLAGS) $< -o $@ -c
 ]])
-                elseif prerequisite.NAME:sub(-4) == ".cpp" then
+                elseif prerequisite.SUFFIX == ".cpp" then
                     print("handle source ", prerequisite.NAME)
                     cpp = true
                     obj = prerequisite.NAME:gsub("%.cpp$", ".o")
@@ -1378,6 +1405,8 @@ blud.new_atom = function(atom_name)
     -- atom must always have a prerequisite list, even if it is empty
     -- this guarantees prerequisites are not inherited
     atom.PREREQUISITES = {}
+    -- extract any suffix
+    atom.SUFFIX = atom_name:match("^.+(%..+)$")
     -- the initial metatable for an atom is the "super atom", which
     -- provides the default behavior
     return setmetatable(atom, blud.super_atom)
@@ -1454,8 +1483,15 @@ blud.add_rule = function(target, prerequisites, action)
     target.PREREQUISITES = prerequisites
 end
 
+
+
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
-    return target:ADD_RULE(prereq_atoms, action)
+    if target.NAME:find("%%") then
+        local rule = {target=target, prerequisites = prereq_atoms, action = action}
+        table.insert(blud.implicit_rules, rule)
+    else
+        return target:ADD_RULE(prereq_atoms, action)
+    end
 end
 
 blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
