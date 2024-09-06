@@ -197,6 +197,9 @@ blud.array_append    = function(array, more)
     end
 end
 
+blud.insert_stem = function(pattern, stem)
+    return pattern:gsub("%%", stem)
+end
 blud.match_rule = function(pattern, target)
     -- Escape any special Lua pattern characters, except for '%'
     local escaped_pattern = pattern:gsub("([%.%^%$%(%)%%%[%]%+%-%?])", "%%%1")
@@ -214,8 +217,9 @@ blud.implicit_rules = {}
 blud.find_reverse_rule = function(prerequisite_name)
     for i = #blud.implicit_rules, 1, -1 do
         local rule = blud.implicit_rules[i]
-        if blud.match_rule(rule.prerequisites[1].NAME, prerequisite_name) then
-            return rule
+        local stem = blud.match_rule(rule.prerequisites[1].NAME, prerequisite_name)
+        if stem then
+            return stem, rule
         end
     end
     return nil
@@ -1254,14 +1258,18 @@ blud.super_atom = {
             setmetatable(prerequisite, target_copy)
         end
     end,
+    ADD_ACTION = function(target, action)
+        if target.ACTION then
+            errorf("Target #1 already has an action (#2), so can't give it (#3)",
+                target.NAME, target.ACTION, action)
+        else
+            target.ACTION = action
+        end
+    end,
     ADD_RULE = function(target, prerequisites, action)
         print("super_atom ADD_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
         if type(action) == 'string' and action ~= '' then
-            if target.ACTION then
-                error("Target " .. target.NAME .. " already has an action: " .. target.ACTION)
-            else
-                target.ACTION = action
-            end
+            target:ADD_ACTION(action)
         end
         if prerequisites ~= nil then
             for _, prerequisite in ipairs(prerequisites) do
@@ -1271,52 +1279,33 @@ blud.super_atom = {
     end,
     SOURCE_RULE = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
+        print("    and ACTION = ", dump(target.ACTION))
         if type(action) == 'string' and action ~= '' then
-            if target.ACTION then
-                error("Target " .. target.NAME .. " already has an action: " .. target.ACTION)
-            else
-                target.ACTION = action
-            end
+            print("    before calling target:ADD_ACTION = ", dump(target.ACTION))
+            target:ADD_ACTION(action)
         end
         if prerequisites ~= nil then
+            local new_prereqs = {}
             local link_inputs = {}
             local cpp         = false
             for _, prerequisite in ipairs(prerequisites) do
-                local implicit_rule = blud.find_reverse_rule(prerequisite.NAME)
+                local stem, implicit_rule = blud.find_reverse_rule(prerequisite.NAME)
                 if implicit_rule == nil then
                     error("no reverse rule for " .. prerequisite.NAME)
                 else
                     print("Got rule: ", dump(implicit_rule))
+                    print("Got stem: ", stem)
+                    local dependent_name = blud.insert_stem(implicit_rule.target.NAME, stem)
+                    print("Got input: ", dependent_name)
+                    table.insert(new_prereqs, blud.get_or_create_target(dependent_name));
                 end
-                local obj = nil
-                local obj_target
-                if prerequisite.SUFFIX == ".c" then
-                    print("handle source ", prerequisite.NAME)
-                    obj = prerequisite.NAME:gsub("%.c$", ".o")
-                    obj_target = blud.get_or_create_target(obj)
---                    target.ADD_RULE(target, { obj_target } )
-                    target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CC) $(CFLAGS) $< -o $@ -c
-]])
-                elseif prerequisite.SUFFIX == ".cpp" then
-                    print("handle source ", prerequisite.NAME)
-                    cpp = true
-                    obj = prerequisite.NAME:gsub("%.cpp$", ".o")
-                    obj_target = blud.get_or_create_target(obj)
---                    target.ADD_RULE(target, { obj_target } )
-                    target.ADD_RULE(obj_target, {prerequisite}, [[
-$(CXX) $(CFLAGS) $< -o $@ -c
-]])
-                else
-                    error("source operator doesn't know how to handle " .. prerequisite.NAME)
-                end
---                target.ADD_PREREQUISITE(target, prerequisite)
-                table.insert(link_inputs, obj_target)
+--                table.insert(link_inputs, obj_target)
             end
-            local compiler = "$(CC)"
-            if cpp then compiler = "$(CXX)" end
-            local action = compiler .. " $^ $(LDFLAGS) -o $@"
-            target.ADD_RULE(target, link_inputs, action)
+            target.ADD_RULE(target, new_prereqs, action)
+--            local compiler = "$(CC)"
+--            if cpp then compiler = "$(CXX)" end
+--            local action = compiler .. " $^ $(LDFLAGS) -o $@"
+--            target.ADD_RULE(target, link_inputs, action)
         end
     end,
     APPLY_SPECIAL = function(atom, prerequisites)
@@ -1398,19 +1387,35 @@ setmetatable(blud.super_atom, blud.global)
 blud.global.__index      = blud.global
 blud.super_atom.__index  = blud.super_atom
 
-blud.new_atom = function(atom_name)
-    local atom = {}
-    -- atom must always have a name
-    atom.NAME  = atom_name
-    -- atom must always have a prerequisite list, even if it is empty
-    -- this guarantees prerequisites are not inherited
-    atom.PREREQUISITES = {}
-    -- extract any suffix
-    atom.SUFFIX = atom_name:match("^.+(%..+)$")
-    -- the initial metatable for an atom is the "super atom", which
-    -- provides the default behavior
-    return setmetatable(atom, blud.super_atom)
-end
+blud.new_atom = (function()
+    -- simulate static local var with upvalue and returning closure
+    local suffix_map = {
+        [".obj"] = ".o",
+        [".lib"] = ".a",
+        [".C"]   = ".cpp",
+        [".cc"]  = ".cpp",
+        [".cxx"] = ".cpp",
+        [".c++"] = ".cpp",
+    }
+    setmetatable(suffix_map, suffix_map)
+    suffix_map.__index = function(_, key) return key end
+
+    return function(atom_name)
+        local atom = {}
+        -- atom must always have a name
+        atom.NAME  = atom_name
+        -- atom must always have a prerequisite list, even if it is empty
+        -- this guarantees prerequisites are not inherited
+        atom.PREREQUISITES = {}
+        -- extract any suffix
+        atom.SUFFIX = atom_name:match("^.+(%..+)$")
+        atom.TYPE   = suffix_map[atom.SUFFIX]
+        -- the initial metatable for an atom is the "super atom", which
+        -- provides the default behavior
+        return setmetatable(atom, blud.super_atom)
+    end
+end)()
+
 blud.is_special_atom = function(atom)
     return string.sub(atom.NAME, 1, 1) == "."
 end
@@ -1462,27 +1467,6 @@ blud.get_fs_timestamp = function (filepath)
     end
     return timestamp
 end
-
-blud.add_rule = function(target, prerequisites, action)
-    print("add_rule('" .. target.NAME .. "' :" .. #prerequisites .. ")")
-    if action ~= nil then
-        if target.ACTION then
-            error("Target " .. target.NAME .. " already has an action")
-        else
-            target.ACTION = action
-        end
-    end
-    -- target may already have prerequisites, these will be added
-    -- note that we do not dedup, since duplicates could be significant
-    -- in the general case.
-    local prerequisites = target.PREREQUISITES or {}
-    for _, dep in ipairs(prerequisites) do
-        print("    ." .. dep)
-        table.insert(prerequisitess, dep)
-    end
-    target.PREREQUISITES = prerequisites
-end
-
 
 
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)

@@ -91,11 +91,8 @@ static int pattern_match(const char* pattern, const char* input){
     const char* back_input;
 
     for(;;){
-//        static int n = 0;
-//        assert(++n < 25);
         unsigned char c     = *input++;
         unsigned char pat_c = *pattern++;
-//        printf("c=0X%02X %c   pat_c= 0X%02X %c\n", c, c, pat_c, pat_c);
         switch(pat_c){
         case '*' :
             while((pat_c = *pattern) == '*')

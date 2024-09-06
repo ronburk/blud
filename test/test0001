@@ -1,7 +1,0 @@
--- test0001
---
--- Simple test to make sure SOMETHING works
-
-all:
-    echo "test001 worked"
-    touch test0001.out
