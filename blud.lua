@@ -1279,11 +1279,6 @@ blud.super_atom = {
     end,
     SOURCE_RULE = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
-        print("    and ACTION = ", dump(target.ACTION))
-        if type(action) == 'string' and action ~= '' then
-            print("    before calling target:ADD_ACTION = ", dump(target.ACTION))
-            target:ADD_ACTION(action)
-        end
         if prerequisites ~= nil then
             local new_prereqs = {}
             local link_inputs = {}
