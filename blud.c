@@ -309,7 +309,6 @@ char* get_cwd() {
         if (buffer == NULL) {
             return NULL; // Allocation failed
         }
-
 #ifdef _WIN32
         if (GetCurrentDirectory(size, buffer) != 0) {
             return buffer;

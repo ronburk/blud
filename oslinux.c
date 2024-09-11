@@ -4,6 +4,30 @@
 #include <dirent.h>
 #include "os.h"
 
+#include <unistd.h>  // For getcwd()
+#include <stdlib.h>  // For malloc() and free()
+
+char* get_cwd() {
+    char *buffer;
+    size_t size = 256;
+
+    while (1) {
+        buffer = (char*)malloc(size);
+        if (buffer == NULL) {
+            return NULL; // Allocation failed
+        }
+
+        // Use getcwd for Unix-like systems (Linux, macOS, etc.)
+        if (getcwd(buffer, size) != NULL) {
+            return buffer;
+        }
+
+        free(buffer); // Free the buffer if it was too small
+        size *= 2;    // Double the buffer size and try again
+    }
+}
+
+
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
     DIR*            dp;
     struct dirent*  entry;

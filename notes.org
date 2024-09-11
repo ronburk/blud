@@ -121,6 +121,23 @@ design ideas and other aspects of building this utility.
 
 
 ** Use case examples
+*** https://trofi.github.io/posts/238-new-make-shuffle-mode.html
+Parallelism causes indeterminancy that makes build system Heisenbugs!
+
+*** https://stackoverflow.com/questions/1647480/in-what-order-prerequisites-will-be-made-by-the-gnu-make
+
+Does GNU Make really give no control over ordering of updating
+prerequisites? 
+
+*** https://github.com/tj/mmake
+
+Need way to embed light documentation in bludfile so you can say
+    blud help
+or
+    blud help cmd
+To get some quick help.
+    
+
 *** https://stackoverflow.com/questions/78911443/makefile-for-2-targets-with-different-prerequisites-but-with-single-command-to-g
 
 So, "grouped targets" let you say that an action updates more than
@@ -579,6 +596,52 @@ main lib :EVAL:
 
 
 * log
+** <2024-09-09 Mon>
+
+The prerequisite may have things you don't want to use
+in your action. The solution is macros like $(filter) and
+$(filter-out).  It's tempting to allow a syntax like this:
+    $(^ - cstr)
+which would mean $(filter-out cstr, $^).
+
+There's a problem introduced by having the automatic variables
+($^, $@, etc.) automatically make relative directory adjustments:
+The user attempting to do filter operations has to remember
+to account for possible relative subdirectory changes
+that happen when expanding the automatic variables.
+
+Thus, the funky syntax above could be defined to operate on
+the value of the automatic variable BEFORE relative subdirectory
+adjustments are made. Possible operators:
+
+-  :like $(filter-out), so patterns allowed
++  :add? Not really needed I think unless you're seeking subdir adjustments
+
+I have this real-life rule:
+
+bludlua.c : blud.lua cstr
+    $(OWD)/cstr $< >$@
+
+except I want to add implicit.str to the prerequisites, so $< doesn't
+work, and $^ doesn't work because I want to exclude cstr from the
+action (cstr being the tool that transforms its 1 or more input files'
+text into a single .c file.
+
+The GNU Make "order-only" operator says "these remaining prerequisites
+do not affect the update decision".  Mostly useful for getting
+directories built, I guess.
+
+The simple Feldman make syntax does not allow us to specify which
+prerequisites are actually needed to build a target. In practice,
+those not needed to build the target should probably not
+appear in $<, $^, etc.
+
+bludlua.c : blud.lua rules.str & cstr
+    $(OWD)/cstr $^ >$@
+
+
+   
+
 ** <2024-09-03 Tue>
 
 

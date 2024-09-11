@@ -1608,6 +1608,30 @@ function buffered_line_io(file)
     end
 end
 
+function buffered_line_io_string(input_string)
+    local lines = {}
+    local pos = 1
+
+    -- Split the input_string into lines
+    for line in input_string:gmatch("([^\r\n]*)[\r\n]?") do
+        table.insert(lines, line)
+    end
+
+    return function(peek)
+        if pos > #lines then
+            return nil -- No more lines
+        end
+        if peek then
+            return lines[pos] -- Peek the current line without advancing
+        else
+            local current_line = lines[pos]
+            pos = pos + 1 -- Advance to the next line
+            return current_line
+        end
+    end
+end
+
+
 function calculate_indent(line)
     if line == nil then return 0 end
     local indent = 0

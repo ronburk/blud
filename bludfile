@@ -23,8 +23,9 @@ debug release :BUILD:
 blud :: *.c
 
 -- use cstr to convert Lua source into a C string
-bludlua.c : blud.lua cstr
-    $(OWD)/cstr $< >$@
+STRFILES = blud.lua builtin.blud
+bludlua.c : $(STRFILES) cstr
+    $(OWD)/cstr $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)
 cstr :: cstr.cpp
