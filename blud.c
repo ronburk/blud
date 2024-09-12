@@ -4,6 +4,7 @@
 #include <assert.h>
 
 
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,6 +19,8 @@
     #include <errno.h>
     #include <unistd.h>
 #endif
+
+#include "cstr.h"  // contains lua source code as C char array
 
 #include "os.h"
 
@@ -300,6 +303,28 @@ static int lua_get_executable_path(lua_State *L) {
 
 
 
+// The Lua C function that wraps the CSTRGet function
+int lua_CSTRGet(lua_State* L) {
+    // Check that the first argument is a string (filename)
+    const char* filename = luaL_checkstring(L, 1);
+    
+    // Call the actual C function
+    char* result = CSTRGet(filename);
+    
+    // If result is NULL, return nil to Lua
+    if (result == NULL) {
+        lua_pushnil(L);
+    } else {
+        // Push the result as a Lua string
+        lua_pushstring(L, result);
+    }
+    
+    // Return one value to Lua (the string or nil)
+    return 1;
+}
+
+#if 0
+
 char* get_cwd() {
     char *buffer;
     size_t size = 256;
@@ -323,6 +348,7 @@ char* get_cwd() {
         size *= 2; // Double the buffer size and try again
     }
 }
+#endif
 
 static int lua_get_cwd(lua_State *L) {
     char *cwd = get_cwd();
@@ -392,7 +418,6 @@ static int lua_get_path_timestamp(lua_State* L) {
     return 1;
 }
 
-#include "cstr.h"  // contains lua source code as C char array
 
 int execute_lua_code(lua_State* L, const char* code, const char* name) {
     int status = luaL_loadbuffer(L, code, strlen(code), name);
@@ -428,6 +453,7 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    lua_register(L, "CSTRGet", lua_CSTRGet);
     lua_register(L, "glob_expand", lua_glob_expand);
     lua_register(L, "get_cwd", lua_get_cwd);
     lua_register(L, "get_dir_cache", lua_get_dir_cache);

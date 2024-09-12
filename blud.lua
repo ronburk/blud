@@ -1506,8 +1506,10 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
     end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
-        if blud.primary_targets == nil then
-            blud.primary_targets = { target }
+        if not target.IMPLICIT then
+            if blud.primary_targets == nil then
+                blud.primary_targets = { target }
+            end
         end
         local operator = blud.operators[colon_operator]
         if operator == nil then
@@ -1533,6 +1535,9 @@ blud.get_or_create_target = function(target_name)
         target = blud.new_atom(target_name)
         blud.TARGETS[target_name] = target
         blud.PREREQUISITES = {}
+        if target_name:find("%%") then
+            target.IMPLICIT = true
+        end
     end
     return target
 end
@@ -2031,7 +2036,8 @@ if luac_needs_building then
     file = io.open(bludfile_path)
     --file = io.stdin
     --preprocess(buffered_line_io(file))
-    local phase1_text = phase1_pass(buffered_line_io(file))
+    local phase1_text = phase1_pass(buffered_line_io_string(CSTRGet("builtin.blud")))
+    phase1_text = phase1_text .. phase1_pass(buffered_line_io(file))
     file:close()
     --print(blud_module_code)
     print("phase 1 complete")
