@@ -596,6 +596,20 @@ main lib :EVAL:
 
 
 * log
+** <2024-09-11 Wed>
+Just now dawns on me that for builds to be completely flexible,
+they need to recompile the input. That way, the build action
+can make arbitrary alterations, like changing the implicit
+rules that are in effect.
+
+Just now starting to work on implicit rules. When you go to
+build foo.x, and foo.x has no associated action, you have to
+try to locate an action in the implicit rules. But consider:
+y.tab.o <- y.tab.c <- parse.yy
+
+We go to update y.tab.o, find implicit rule to buld it from
+y.tab.c, 
+
 ** <2024-09-09 Mon>
 
 The prerequisite may have things you don't want to use
