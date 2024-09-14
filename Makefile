@@ -1,3 +1,8 @@
+all : myprog
+
+myprog : myprog.o
+
+
 prog : file.o
 
 

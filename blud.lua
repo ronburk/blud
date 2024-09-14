@@ -1,4 +1,17 @@
 blud_module_code = [==[
+-- Insert custom loader at the beginning of package.loaders
+table.insert(package.loaders, 1, function(modname)
+    local filename = modname .. ".lua"
+    local code = CSTRGet(filename)
+    if code then
+        -- Load the code and return the module function
+        return assert(loadstring(code, "@" .. filename))
+    else
+        -- Return nil and an error message to continue to the next loader
+        return nil, "\n\tmodule '" .. modname .. "' not found in embedded strings"
+    end
+end)
+
 local debugInfo
 local function printCurrentLine()
     if debugInfo then
@@ -174,6 +187,7 @@ function errorf(format_string, ...)
 end
 
 blud                 = {}
+blud.implicit        = require("implicit")
 blud.error           = errorf
 blud.assert          = function(condition, format, ...)
     if not condition then
