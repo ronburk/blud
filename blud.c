@@ -20,7 +20,8 @@
     #include <unistd.h>
 #endif
 
-#include "cstr.h"  // contains lua source code as C char array
+//#include "cstr.h"  // contains lua source code as C char array
+extern const char* CSTRGet(const char* filename);
 
 #include "os.h"
 
@@ -309,7 +310,7 @@ int lua_CSTRGet(lua_State* L) {
     const char* filename = luaL_checkstring(L, 1);
     
     // Call the actual C function
-    char* result = CSTRGet(filename);
+    const char* result = CSTRGet(filename);
     
     // If result is NULL, return nil to Lua
     if (result == NULL) {

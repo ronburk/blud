@@ -10,6 +10,10 @@ debug/*
 release/*
 *.luac
 luajit
+cstr
+bludlua.c
+blud
+
 
 
 # Prerequisites
