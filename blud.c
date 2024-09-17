@@ -472,7 +472,8 @@ int main(int argc, char** argv) {
     set_command_line(L, argc, argv);
 
     fprintf(stderr, "before execute_lua_code\n");
-    execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
+//    execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
+    execute_lua_code(L, CSTRGet("main.lua"), "main.lua");
 
     // Optional: Print the Lua table for verification
 //    luaL_dostring(L, "for i, v in ipairs(COMMAND_LINE) do print(i, v) end");

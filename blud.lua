@@ -1,3 +1,13 @@
+function require_compiled(name)
+    local source = CSTRGet(name)
+    if source == nil then error("no such internal file: " .. name ) end
+    local chunk = load(source, "internal." .. name)
+    return chunk()
+end
+local foo = require_compiled("debug.lua")
+print(foo.dump("foo"))
+assert(false)
+
 blud_module_code = [==[
 local debugInfo
 local function printCurrentLine()
@@ -2044,7 +2054,6 @@ if luac_needs_building then
 
     local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
-
     if not blud_primary_target_name  then
         print("No target given to build")
     else
@@ -2103,7 +2112,6 @@ function execute_bytecode(file_path)
     end
 end
 
--- Example usage
 execute_bytecode(luac_path)
 
 
