@@ -22,6 +22,7 @@ end
 local function custom_error_handler(err)
     local lines = {}
 
+    print(debug.traceback())
     -- Add the error message itself
     table.insert(lines, "Error: " .. tostring(err))
 
