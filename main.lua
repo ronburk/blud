@@ -22,7 +22,6 @@ end
 local function custom_error_handler(err)
     local lines = {}
 
-    print(debug.traceback())
     -- Add the error message itself
     table.insert(lines, "Error: " .. tostring(err))
 
@@ -65,6 +64,7 @@ end
 
 main = {}
 main.sources = {}
+main.sources["[main.lua]"] = CSTRGet("main.lua")
 
 
 -- Helper function that does the actual work of loading and running the Lua chunk
