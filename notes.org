@@ -596,6 +596,18 @@ main lib :EVAL:
 
 
 * log
+** <2024-09-22 Sun>
+
+1) if the pattern contains no slash:
+       pre%post
+   then it becomes this regular expression:
+       (.*/)pre[^/]+post
+
+
+** <2024-09-21 Sat>
+The horizontal scope idea is cute, but probably we really need a build
+to start over from scratch.
+
 ** <2024-09-11 Wed>
 Just now dawns on me that for builds to be completely flexible,
 they need to recompile the input. That way, the build action

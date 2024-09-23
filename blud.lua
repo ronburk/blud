@@ -1,3 +1,4 @@
+--[[
 function require_compiled(name)
     local source = CSTRGet(name)
     if source == nil then error("no such internal file: " .. name ) end
@@ -7,6 +8,7 @@ end
 local foo = require_compiled("debug.lua")
 print(foo.dump("foo"))
 assert(false)
+]]
 
 blud_module_code = [==[
 -- Insert custom loader at the beginning of package.loaders
@@ -75,13 +77,6 @@ end
 local function customHandler(command, arg)
     print("Custom handler received command: " .. command .. " with argument: " .. arg)
 end
-
-
-setmetatable(_G, {
-    __index = function(_, key)
-        error("Attempt to access undefined global variable: " .. tostring(key), 2)
-    end
-})
 
 
 local function dump(o, seen)
@@ -1997,13 +1992,6 @@ function process_make_rule(line)
     return targets, prerequisites
 end
 
-
---[[
-    local file = io.open("blud", "r")
-    assert(file)
-    local blud_file_text = file:read("*a")
-    file:close()
-]]
 
 function get_bludfile_path()
     local path = "bludfile"

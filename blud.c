@@ -420,18 +420,57 @@ static int lua_get_path_timestamp(lua_State* L) {
 }
 
 
+int initialize_lua(lua_State* L, const char* init_str) {
+    assert(init_str != NULL);
+    // Create the "blud" table in the global Lua environment
+    lua_newtable(L);           // Push a new empty table onto the stack
+    lua_setglobal(L, "blud");  // Set the table as a global variable called "blud"
+
+    // Now compile and execute the init_str (should define error handling in the "blud" table)
+    if (luaL_loadbuffer(L, init_str, strlen(init_str), "init_code") != LUA_OK) {
+        fprintf(stderr, "Error loading init code: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);  // Pop the error message from the stack
+        return -1;
+    }
+
+    // Execute the loaded init code (init_str), which sets up things in the "blud" table
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        fprintf(stderr, "Error running init code: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);  // Pop the error message
+        return -1;
+    }
+
+    return 0;  // Success
+}
+
+
 int execute_lua_code(lua_State* L, const char* code, const char* name) {
+    // Get the error handler function (blud.error_handler) onto the stack
+    lua_getglobal(L, "blud");
+    if (!lua_istable(L, -1)) {
+        fprintf(stderr, "Error: 'blud' is not a table\n");
+        lua_pop(L, 1);  // Pop the non-table value from the stack
+        return -1;
+    }
+    lua_getfield(L, -1, "error_handler");
+    if (!lua_isfunction(L, -1)) {
+        fprintf(stderr, "Error: blud.error_handler not found or not a function\n");
+        lua_pop(L, 2);  // Pop the non-function value and 'blud' table from the stack
+        return -1;
+    }
+    lua_remove(L, -2);  // Remove the 'blud' table from the stack, leaving only the error handler
+
     int status = luaL_loadbuffer(L, code, strlen(code), name);
     if (status != LUA_OK) {
         // If loading failed, error message is on top of the stack
         const char* error_msg = lua_tostring(L, -1);
         fprintf(stderr, "Failed to load Lua code: %s\n", error_msg);
-        lua_pop(L, 1);  // Remove error message from stack
+        lua_pop(L, 2);  // Remove error message and error handler from stack
         return status;
     }
     
     // Execute the loaded code
-    status = lua_pcall(L, 0, LUA_MULTRET, 0);
+    status = lua_pcall(L, 0, 0, -2);
     if (status != LUA_OK) {
         // If execution failed, error message is on top of the stack
         const char* error_msg = lua_tostring(L, -1);
@@ -439,8 +478,10 @@ int execute_lua_code(lua_State* L, const char* code, const char* name) {
         lua_pop(L, 1);  // Remove error message from stack
     }
     
+    lua_pop(L, 1); // pop error handler
     return status;
 }
+
 
 void set_command_line(lua_State* L, int argc, char** argv) {
     lua_newtable(L);
@@ -464,10 +505,11 @@ int luaopen_mylib(lua_State *L) {
     return 0;
 }
 
-// Example main function to demonstrate usage
 int main(int argc, char** argv) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
+    fprintf(stderr, "before initialize_lua\n");
+    initialize_lua(L, CSTRGet("init.lua"));
     luaopen_mylib(L);
 
     set_command_line(L, argc, argv);
