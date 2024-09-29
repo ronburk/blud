@@ -86,61 +86,31 @@ function parse_pattern(pattern)
 
     -- Parse directory part for '%%/' operator
     if dir then
-        result.a, result.b = dir:match("^(.*)%%%%/(.*)$")
-        if not result.a then
-            result.a = dir
+        result.pre_dir, result.post_dir = dir:match("^(.*)%%%%/(.*)$")
+        if not result.pre_dir then
+            result.pre_dir = dir
         end
     end
 
     -- Parse file part for '%' operator
     if file then
-        result.c, result.d = file:match("^(.*)%%(.+)$")
+        result.pre_file, result.post_file = file:match("^(.*)%%(.+)$")
     end
 
     return result
 end
 
-local pattern = "aaa/%%/bbb/ccc%ddd"
-local parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
+-- simple unit tests
+if true then
+    local pattern, parsed
+    pattern = "aaa/%%/bbb/ccc%ddd"
+    parsed  = parse_pattern(pattern)
+    assert(parsed.pre_dir == "aaa/")
+    assert(parsed.post_dir == "bbb/")
+    assert(parsed.pre_file == "ccc")
+    assert(parsed.post_file == "ddd")
+end
 
-pattern = "aaa/%%/bbb"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-pattern = "%.c"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-pattern = "foo.%c"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-pattern = "/foo.%c"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-local pattern = "%%/file%ext"
-local parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-
-pattern = "aaa/%%/bbb/ccc%ddd"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
-
-
-pattern = "a/b/%%/c/d%e"
-parsed = parse_pattern(pattern)
-print("pattern "..pattern.." is = ")
-print( dump(parsed))
 
 assert(false)
 
