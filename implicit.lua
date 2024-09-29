@@ -3,6 +3,17 @@ local implicit = {}
 
 local rules = {}
 
+function check_pattern(pattern)
+    local nodir, count =  pattern:gsub("%%%%/", "")
+    local msg   = nil
+    if count > 1 then
+        msg = string.format("%q: pattern can't contain more than one '%%/' operator.", pattern)
+    else
+        
+    end
+end
+
+
 function implicit.literal_length(pattern)
     return #pattern:gsub("%%%%/", ""):gsub("%%", "")
 end
@@ -94,24 +105,112 @@ function parse_pattern(pattern)
 
     -- Parse file part for '%' operator
     if file then
-        result.pre_file, result.post_file = file:match("^(.*)%%(.+)$")
+        result.pre_file, result.post_file = file:match("^([^%%]*)%%([^%%]*)$")
     end
 
     return result
 end
 
--- simple unit tests
-if true then
-    local pattern, parsed
-    pattern = "aaa/%%/bbb/ccc%ddd"
-    parsed  = parse_pattern(pattern)
-    assert(parsed.pre_dir == "aaa/")
-    assert(parsed.post_dir == "bbb/")
-    assert(parsed.pre_file == "ccc")
-    assert(parsed.post_file == "ddd")
+function match_pattern(pattern, path)
+    local dir_stem, file_stem
+
+    -- Separate the path into directory and filename components
+    local dir_path, file_path = path:match("^(.-)([^/]*)$")
+
+    -- Match directory pattern
+    if pattern.pre_dir or pattern.post_dir then
+        local dir_pattern = (pattern.pre_dir or '') .. '(.*)' .. (pattern.post_dir or '')
+        dir_stem = dir_path:match(dir_pattern)
+    else
+        dir_stem = "" -- No directory patterns means match any
+    end
+
+    -- Match file pattern
+    print("pre_file = '" .. tostring(pattern.pre_file) .. "', post_file = '" .. tostring(pattern.post_file) .. "'")
+    if pattern.pre_file or pattern.post_file then
+        local file_pattern = (pattern.pre_file or '') .. '(.*)' .. (pattern.post_file or '')
+        file_stem = file_path:match(file_pattern)
+    else
+        file_stem = "" -- No file patterns means match any
+    end
+
+    -- Return nil if either part did not match
+    if not dir_stem or not file_stem then
+        return nil
+    end
+
+    return dir_stem, file_stem
 end
 
 
-assert(false)
+-- simple unit tests
+if true then
+    function test_parse(pattern, pre_dir, post_dir, pre_file, post_file)
+        local parsed = parse_pattern(pattern)
+        local msg = string.format("pattern=%q\n" ..
+            "pre_dir=%q, expected=%q\n" ..
+            "post_dir=%q, expected=%q\n" ..
+            "pre_file=%q, expected=%q\n" ..
+            "post_file=%q, expected=%q\n",
+            pattern,
+            parsed.pre_dir, pre_dir,
+            parsed.post_dir, post_dir,
+            parsed.pre_file, pre_file,
+            parsed.post_file, post_file
+        )
+        if  pre_dir ~= parsed.pre_dir or
+            post_dir ~= parsed.post_dir or
+            pre_file ~= parsed.pre_file or
+            post_file ~= parsed.post_file then
+            error(msg)
+            end
+    end
+    test_parse("src/%%/build%", "src/", "", "build", "")
+    function test_pattern(pattern, path, dir_stem_expected, file_stem_expected)
+        local parsed, dir_stem, file_stem        
+        parsed = parse_pattern(pattern)
+        dir_stem, file_stem = match_pattern(parsed, path)
+        local msg = string.format("pattern=%q, path=%q\n" ..
+                               "dir_stem=%q, expected=%q\n" ..
+                               "file_stem=%q, expected=%q\n",
+                               pattern, path, dir_stem, dir_stem_expected, file_stem, file_stem_expected)
+        if dir_stem ~= dir_stem_expected then
+            error(msg)
+        end
+        if file_stem ~= file_stem_expected then
+            error(msg)
+        end
+    end
+    
+    test_pattern("aaa/%%/bbb/ccc%ddd", "aaa/bbb/cccxxddd", "", "xx")
+
+    -- Testing with a directory and file pattern
+    test_pattern("src/%%/build%file", "src/project/build123file", "project/", "123") -- dir and file stems
+    test_pattern("src/%%/build%file", "src/buildfile", "", "") -- Should match with empty stems
+    test_pattern("src/%%/build%", "src/temp/buildfile", "temp/", "file") -- Check dir stem with file pattern ending in %
+
+    -- Testing with only directory pattern
+    test_pattern("data/%%/", "data/some/other/", "some/other/", "") -- Entire path as dir_stem
+    test_pattern("data/%%/", "data/test/", "test/", "") -- Single directory as dir_stem
+    test_pattern("data/", "datafile", nil, nil) -- Mismatch; no trailing slash in path
+
+    -- Testing with only file pattern
+    test_pattern("%file.txt", "myfile.txt", "", "my") -- Simple file stem extraction
+    test_pattern("file%", "file123", "", "123") -- File stem with suffix pattern
+    test_pattern("nofile%", "random.txt", nil, nil) -- No match; pattern does not fit
+
+    -- Testing exact matches without patterns
+    test_pattern("folder/subfolder/", "folder/subfolder/", "", "") -- Directories exactly matching
+    test_pattern("singlefile.txt", "singlefile.txt", "", "") -- File exactly matching
+
+    -- Test edge cases
+    test_pattern("%%/file", "dir/file", "dir/", "") -- Edge case for no file pattern
+    test_pattern("folder/%%", "folder/", "", "") -- Edge case for empty directory match
+    test_pattern("folder/%file", "folder/newfile", "", "new") -- Pattern with directory and file
+
+end
+
+
+error("temporarily testing")
 
 return implicit
