@@ -3,16 +3,6 @@ local implicit = {}
 
 local rules = {}
 
-function check_pattern(pattern)
-    local nodir, count =  pattern:gsub("%%%%/", "")
-    local msg   = nil
-    if count > 1 then
-        msg = string.format("%q: pattern can't contain more than one '%%/' operator.", pattern)
-    else
-        
-    end
-end
-
 
 function implicit.literal_length(pattern)
     return #pattern:gsub("%%%%/", ""):gsub("%%", "")
@@ -90,18 +80,32 @@ end
 
 function parse_pattern(pattern)
     local result = {}
+    local msg    = nil
 
     -- Split pattern into directory and file based on the last '/'
     local dir, file = pattern:match("^(.-)([^/]*)$")
-    print("dir = " .. dir .. " file = " .. file)
 
     -- Parse directory part for '%%/' operator
     if dir then
-        result.pre_dir, result.post_dir = dir:match("^(.*)%%%%/(.*)$")
-        if not result.pre_dir then
-            result.pre_dir = dir
+        local operator_count = select(2, dir:gsub("%%%%/", ""))
+        if operator_count > 1 then
+            msg = string.format("%q: only one '%%/' operator allowed.")
+        elseif operator_count == 1 then
+            result.pre_dir, result.post_dir = dir:match("^(.*)%%%%/(.*)$")
+        else
+            result.predir = dir
+            result.postdir = ""
+            result.pre_dir, result.post_dir = dir:match("^(.*)%%%%/(.*)$")
+            if not result.pre_dir then -- if no directory match operator
+                result.pre_dir = dir   -- then entire literal string belongs to pre_dir
+            end
+            if not result.post_dir then result.post_dir = "" end
+        end
+        if result.pre_dir:find("%%") or result.post_dir:find("%%") then
+            msg = string.format("%q: '%' operator not allowed in directory prefix.")
         end
     end
+    if msg then error(msg) end
 
     -- Parse file part for '%' operator
     if file then
@@ -126,7 +130,6 @@ function match_pattern(pattern, path)
     end
 
     -- Match file pattern
-    print("pre_file = '" .. tostring(pattern.pre_file) .. "', post_file = '" .. tostring(pattern.post_file) .. "'")
     if pattern.pre_file or pattern.post_file then
         local file_pattern = (pattern.pre_file or '') .. '(.*)' .. (pattern.post_file or '')
         file_stem = file_path:match(file_pattern)
