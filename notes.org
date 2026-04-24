@@ -596,6 +596,9 @@ main lib :EVAL:
 
 
 * log
+** <2026-04-24 Fri>
+test0004 does not work. What is it supposed to do?  OK, got it working, I think.
+
 ** <2026-04-23 Thu>
 can I figure out what's going on? Let's see.  Ok:
   a) build via: bash build.sh

@@ -4,8 +4,8 @@
 
 release :BUILD: 
 
-CMD = touch test0004.out
+CMD = touch $@
 
 all: test0004.out
-    $(CMD)
 test0004.out : 
+    $(CMD)

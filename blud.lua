@@ -1290,6 +1290,7 @@ blud.super_atom = {
         if type(action) == 'string' and action ~= '' then
             target:ADD_ACTION(action)
         end
+        target.HAS_RULE = true
         if prerequisites ~= nil then
             for _, prerequisite in ipairs(prerequisites) do
                 target.ADD_PREREQUISITE(target, prerequisite)
@@ -1362,7 +1363,7 @@ blud.super_atom = {
                 print("execute: '" .. target.ACTION .. "'")
 --                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
-            elseif timestamp == 0 then
+            elseif timestamp == 0 and not target.HAS_RULE then
                 error("Don't know how to build: " .. target.NAME);
             end
         end
@@ -1525,7 +1526,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
     end
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
-        if not target.IMPLICIT then
+        if not target.IMPLICIT and colon_operator ~= ':BUILD:' then
             if blud.primary_targets == nil then
                 blud.primary_targets = { target }
             end
