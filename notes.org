@@ -596,6 +596,20 @@ main lib :EVAL:
 
 
 * log
+** <2026-04-23 Thu>
+can I figure out what's going on? Let's see.  Ok:
+  a) build via: bash build.sh
+  b) test via:  bash test.sh
+  c) rm test/*.out before running tests if you want to run all
+  d) to run one test: bash test.sh testname.blud
+  
+  
+Why won't it run the 0001 test first? OK, fixed bash script on that point.
+Now we die because can't load require("implicit")
+Add implicit.lua to cstr list (lua whose source goes into C strings).
+error in blud.lua on first test
+
+
 ** <2024-09-22 Sun>
 
 1) if the pattern contains no slash:

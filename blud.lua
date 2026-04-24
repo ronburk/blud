@@ -2044,8 +2044,19 @@ end
 
 
 if luac_needs_building then
+    local f = nil
 
-    file = io.open(bludfile_path)
+    f = io.open(bludfile_path)
+    if f == nil then
+        if not bludfile_path:lower():match("%.blud$") then
+            path = bludfile_path .. ".blud"
+            f = io.open(path)
+        end
+        if f == nil then
+            error("Could not open: " .. bludfile_path)
+        end
+    end
+    file = f
     --file = io.stdin
     --preprocess(buffered_line_io(file))
     local phase1_text = phase1_pass(buffered_line_io_string(CSTRGet("builtin.blud")))

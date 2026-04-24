@@ -214,6 +214,6 @@ if true then
 end
 
 
-error("temporarily testing")
+--error("implicit.lua exits because we are temporarily testing")
 
 return implicit
