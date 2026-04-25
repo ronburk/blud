@@ -23,6 +23,22 @@ function implicit.find_match(name, prerequisites)
 end
 
 
+-- find_reverse: find a rule with a prerequisite pattern that matches a given name
+function implicit.find_reverse(prereq_name)
+    local suffix = prereq_name:match("%.[^/.]+$")
+    local candidates = rules_from_suffix[suffix] or {}
+    for i = #candidates, 1, -1 do
+        local rule = candidates[i]
+        for _, prereq in ipairs(rule.prerequisites) do
+            local dir_stem, file_stem = match_pattern(parse_pattern(prereq), prereq_name)
+            if dir_stem then
+                return rule, file_stem, dir_stem
+            end
+        end
+    end
+    return nil
+end
+
 local rules_from_suffix = {}
 
 function implicit.add_rule(target, prerequisites, action)
