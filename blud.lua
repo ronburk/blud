@@ -1297,6 +1297,7 @@ blud.super_atom = {
             end
         end
     end,
+-- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
         if prerequisites ~= nil then

@@ -720,8 +720,8 @@ prog : a.c b.c wincrt.o -lmylib
 
 ** <2024-08-26 Mon>
 
-Proposed meaning of "::" rule is: "Treat specially any dependents that exist and have no build rule."
-So, given this case:
+Proposed meaning of "::" rule is: "Treat specially any dependents that
+exist and have no build rule."  So, given this case:
 
 prog :: a.c b.c special_crt.o
 
