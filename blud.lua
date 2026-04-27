@@ -1514,6 +1514,19 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
     -- need to give .GLOBAL_MACRO attribute to target
 end
 
+blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action)
+    if target.TEST then
+        blud.error("Target #1 already has a :TEST: rule.", target.NAME)
+    end
+
+    target.TEST = {
+        prerequisites = prereq_atoms,
+        action = action,
+    }
+
+    target.HAS_RULE = true
+end
+
 -- we have a dependency rule, possibly with multiple targets
 -- for each target create the rule
 blud.add_rules = function(colon_operator, targets, prerequisites, action)
