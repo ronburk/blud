@@ -10,6 +10,10 @@ CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 all : blud test
 
+test :TEST:
+    ./blud -f $<
+
+
 test%.out : test/test%.blud
   echo "blud -f $@ -o $<"
 

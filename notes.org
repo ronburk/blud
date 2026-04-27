@@ -1,4 +1,4 @@
-* blud
+ * blud
 ** ChatGPT conversation head
 
 I'm building a replacement for GNU Make using luajit hosted in C.
@@ -113,6 +113,108 @@ appear in rules "atoms". Atoms may correspond to files, but may
 not. When asked to update an atom, blud goes through a step
 called "binding". This is when the atom becomes associated
 with a particular file.
+
+Scope:
+
+A scope is a mapping from variable names to values. Scopes form a
+lookup chain: lookup starts in the innermost active scope and proceeds
+outward until a value is found.
+
+Scope frames have layers. The layer order is:
+
+base < environment < bludfile < commandline < build < test < target < parameter
+
+This is an ordering rule, not a fixed stack shape. The actual lookup
+chain may have variable length. For example, building one target may
+push a target scope, which may build another target and push another
+target scope.
+
+Fixed scopes
+
+- base: blud builtins and defaults
+- environment: imported environment variables
+- bludfile: variables assigned while reading the bludfile
+- commandline: variables supplied by the user on the command line
+
+These normally exist once for the duration of the run.
+
+Build scope
+
+The build scope represents the active build configuration, such as
+"debug" or "release". There is always one active build scope, possibly
+a default one.
+
+A :BUILD: atom defines a build scope. Activating such an atom replaces
+the current build scope; it does not push a nested build scope. This
+matters because build configurations are alternatives, not nested
+contexts.
+
+Example:
+
+```
+blud debug foo.o release fee.o
+```
+
+means:
+
+```
+activate build scope "debug"
+build foo.o
+activate build scope "release"
+build fee.o
+```
+
+release does not inherit from debug.
+
+Test scope
+
+A :TEST: atom defines a test scope. A test scope is active only while
+running tests. It is logically below the active build scope and above
+target scopes.
+
+The test scope may change the implicit directories for test
+execution. For example, the current directory may become the build
+output directory, the source directory may become the test input
+directory, and the output directory may become a reserved per-build
+test-status directory.
+
+Target scope
+
+A target scope is pushed while building a target. It supplies
+target-specific automatic variables such as $@, $<, and $^.
+
+Target scopes are dynamic: they are pushed and popped as recursive builds proceed.
+
+Parameter scope
+
+A parameter scope is used for macro/function parameters. It is
+temporary and innermost while expanding that macro/function.
+
+Implicit directories
+
+CWD, SWD, and OWD are ordinary scoped variables.
+
+* CWD: directory where commands execute
+* SWD: directory where source/input names are bound
+* OWD: directory where output names are bound
+
+Because these are scoped variables, :BUILD: and :TEST: do not mutate
+global directory state. They activate scopes in which these variables
+may have different values.
+
+Binding rule
+
+Atom names are logical names. Bound names are actual filesystem paths.
+
+Binding is performed as late as possible, after the relevant
+build/test/target scope has been selected. Binding is still part of
+the build decision process: timestamps, existence checks, automatic
+variables, and late source pattern expansion all depend on bound
+names.
+
+Thus binding is not merely an execution detail. It is the point where
+logical graph names are interpreted in the current directory context.
+
 
 Summary:
 This is an overview of some key ways that blud's proposed design
@@ -596,6 +698,18 @@ main lib :EVAL:
 
 
 * log
+** <2026-04-27 Mon>
+
+In the limit, the user can always fall back to using primitives to build their test system. However, maybe we have a good default:
+
+test :TEST: test????
+    ./blud -f $<
+
+This means a) "test" is the name of a subdirectory containing test files and b) "test" is also the name of a subdirectory in the current "build" directory that will contain <name>.out dummy files that record the success of a test and c) for each file in the prerequisite list, a rule is generated:
+
+$(OWD)/test/<filename>.out : $(
+
+
 ** <2026-04-24 Fri>
 test0004 does not work. What is it supposed to do?  OK, got it working, I think.
 
