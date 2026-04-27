@@ -1,0 +1,10 @@
+-- expect: test0005.out
+-- test0005: lua code execution
+
+do
+    local f = assert(io.open("test0005.out", "w"))
+    f:write("lua ran\n")
+    f:close()
+end
+
+all:

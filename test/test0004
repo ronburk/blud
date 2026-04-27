@@ -1,3 +1,4 @@
+-- expect: release/test0004.out
 -- test0004
 --
 -- Simple build directive

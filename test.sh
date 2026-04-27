@@ -3,6 +3,29 @@
 BLUD="../blud"
 cd ./test || { echo "Failed to change directory to ./test"; exit 1; }
 
+get_expected() {
+    local file="$1"
+    local first_line
+
+    IFS= read -r first_line < "$file" || return 1
+
+    case "$first_line" in
+        "-- expect:"*)
+            # strip prefix
+            first_line="${first_line#-- expect:}"
+            # trim leading whitespace
+            first_line="${first_line#"${first_line%%[![:space:]]*}"}"
+            if [ -n "$first_line" ]; then
+                echo "$first_line"
+                return
+            fi
+            ;;
+    esac
+
+    # default: replace .blud with .out
+    echo "${file%.blud}.out"
+}
+
 run_test() {
     local test_name=$1
 
@@ -13,11 +36,14 @@ run_test() {
         echo "$BLUD -f ${test_name}  failed on: ${test_name}"
         exit 2
     fi
-    # Check if the output file was created
-    if [ ! -f "${test_name}.out" ]; then
-        echo "Output file missing after test: ${test_name}"
-        exit 3
-    fi
+    # for each expected output file
+    for f in $(get_expected "$test_name"); do
+        # Check if the output files were created
+        if [ ! -f "$f" ]; then
+            echo "Output file missing after test: ${f}"
+            exit 3
+        fi
+    done
 }
 
 # Check if a specific test name was given
