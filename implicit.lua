@@ -2,6 +2,7 @@
 local implicit = {}
 
 local rules = {}
+local rules_from_suffix = {}
 
 
 function implicit.literal_length(pattern)
@@ -39,7 +40,6 @@ function implicit.find_reverse(prereq_name)
     return nil
 end
 
-local rules_from_suffix = {}
 
 function implicit.add_rule(target, prerequisites, action)
     -- Add the rule as usual

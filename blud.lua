@@ -192,6 +192,20 @@ function errorf(format_string, ...)
 end
 
 blud                 = {}
+function blud.macro(name, ...)
+    local macro_call = { { tostring(name) } }
+
+    for i = 1, select("#", ...) do
+        table.insert(macro_call, { tostring(select(i, ...)) })
+    end
+
+    local result = blud.Macro.expand_call(blud.scope_bludfile, macro_call)
+    return table.concat(result)
+end
+
+M = blud.macro
+
+blud.macro_name_pattern = "([%a_][%w_%.]*)"
 blud.implicit        = require("implicit")
 blud.error           = errorf
 blud.assert          = function(condition, format, ...)
@@ -722,8 +736,8 @@ blud.match_macro_assign = function(line)
         [":="]  = true,
         ["+="]  = true,
     }
-    local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
-    macro_name, operator, remainder = line:match(pattern)
+    local pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
+    local macro_name, operator, remainder = line:match(pattern)
     if macro_name and operator then
         if operators[operator] == true then
             return macro_name, operator, remainder
@@ -963,7 +977,8 @@ end
 
 blud.phase3 = {}
 function blud.phase3:looks_like_macro_assign(line)
-    local name, operator, body_pos = line:match("^(%a[%w_]*)%s*([=+:])()")
+    local assign_pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:])()"
+    local name, operator, body_pos = line:match(assign_pattern)
     if name and operator and body_pos then
         local next_char = line:sub(body_pos, body_pos)
         if operator == ":" then
@@ -996,7 +1011,7 @@ end
 
 function blud.phase3:looks_like_empty_line(text)
     -- handle comments
-    match = string.find(text, "^%s*$")
+    local match = string.find(text, "^%s*$")
     return match ~= nil
 end
 
@@ -1297,33 +1312,43 @@ blud.super_atom = {
             end
         end
     end,
--- implement the "::" operator
+    -- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
-        if prerequisites ~= nil then
-            local new_prereqs = {}
-            local link_inputs = {}
-            local cpp         = false
-            for _, prerequisite in ipairs(prerequisites) do
-                local stem, implicit_rule = blud.find_reverse_rule(prerequisite.NAME)
-                if implicit_rule == nil then
-                    error("no reverse rule for " .. prerequisite.NAME)
-                else
-                    print("Got rule: ", dump(implicit_rule))
-                    print("Got stem: ", stem)
-                    local dependent_name = blud.insert_stem(implicit_rule.target.NAME, stem)
-                    print("Got input: ", dependent_name)
-                    table.insert(new_prereqs, blud.get_or_create_target(dependent_name));
-                end
---                table.insert(link_inputs, obj_target)
+
+        local new_prereqs = {}
+        local link_macro  = "LINK.o"
+
+        for _, prerequisite in ipairs(prerequisites or {}) do
+            local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite.NAME)
+            if rule == nil then
+                error("no reverse rule for " .. prerequisite.NAME)
             end
-            target.ADD_RULE(target, new_prereqs, action)
---            local compiler = "$(CC)"
---            if cpp then compiler = "$(CXX)" end
---            local action = compiler .. " $^ $(LDFLAGS) -o $@"
---            target.ADD_RULE(target, link_inputs, action)
+            if prerequisite.TYPE == ".cpp" then
+                link_macro = "LINK.cxx.o"
+            end
+            local output_name = blud.implicit.expand(rule.target, file_stem, dir_stem)
+            local output = blud.get_or_create_target(output_name)
+
+            -- Materialize the implicit rule:
+            --     output : prerequisite
+            --         rule.action
+            --
+            -- This is intentionally OK if the same exact rule is added twice,
+            -- but ADD_RULE may still complain if the target already has a
+            -- different action.
+            output:ADD_RULE({ prerequisite }, rule.action)
+
+            table.insert(new_prereqs, output)
         end
+
+        if action == nil or action == "" then
+            action = "$(" .. link_macro .. ")"
+        end
+
+        target:ADD_RULE(new_prereqs, action)
     end,
+
     APPLY_SPECIAL = function(atom, prerequisites)
         print("APPLY_SPECIAL " .. dump(atom))
         for _, prerequisite in ipairs(prerequisites) do
@@ -1485,10 +1510,24 @@ blud.get_fs_timestamp = function (filepath)
 end
 
 
+-- killme!
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
     if target.NAME:find("%%") then
         local rule = {target=target, prerequisites = prereq_atoms, action = action}
         table.insert(blud.implicit_rules, rule)
+    else
+        return target:ADD_RULE(prereq_atoms, action)
+    end
+end
+
+blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
+    if target.NAME:find("%%") then
+        local prereq_names = {}
+        for _, prereq in ipairs(prereq_atoms) do
+            table.insert(prereq_names, prereq.NAME)
+        end
+
+        blud.implicit.add_rule(target.NAME, prereq_names, action)
     else
         return target:ADD_RULE(prereq_atoms, action)
     end
@@ -1729,8 +1768,8 @@ function match_macro_assign(line)
         ["+="]  = true,
     }
     --    print("match_macro_assign(\"" .. line .. "\")")
-    local pattern = "^(%a+)%s*([=+:]+)%s*(.*)$"
-    macro_name, operator, remainder = line:match(pattern)
+    local pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
+    local macro_name, operator, remainder = line:match(pattern)
     if macro_name and operator then
         if operators[operator] == true then
             return macro_name, operator, remainder
@@ -1842,7 +1881,7 @@ function phase1_pass(get_line)
     while true do
         ::NEXT::
         line_number = line_number + 1
-        line = get_line(false)
+        line        = get_line(false)
         if line == nil then break end -- end of file
         if phase1_line_is_empty(line) then goto NEXT end
         local keyword = leading_keyword(line)
