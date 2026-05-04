@@ -221,6 +221,9 @@ This is an overview of some key ways that blud's proposed design
 differs from GNU Make, to help orient you when asked to consider
 design ideas and other aspects of building this utility.
 
+** grammar
+
+
 
 ** Use case examples
 *** https://trofi.github.io/posts/238-new-make-shuffle-mode.html
@@ -698,6 +701,12 @@ main lib :EVAL:
 
 
 * log
+** <2026-05-04 Mon>
+
+blud is a language that blends together three languages: Lua, shell
+commands, and make-like directives. 
+
+
 ** <2026-04-27 Mon>
 
 In the limit, the user can always fall back to using primitives to build their test system. However, maybe we have a good default:

@@ -1742,8 +1742,7 @@ function atoms_to_string(atoms)
     return result
 end
 
-function line_is_lua(line)
-    local result     = true
+do
     local keywords   = {
         ["do"]       = true,
         ["else"]     = true,
@@ -1758,13 +1757,17 @@ function line_is_lua(line)
         ["until"]  = true,
         ["while"]  = true,
     }
-    local first_word = line:match("^%a+")
-    if first_word ~= nil then
-        if keywords[first_word] == nil then
-            result = false
+
+    function line_is_lua(line)
+        local result     = true
+        local first_word = line:match("^%a+")
+        if first_word ~= nil then
+            if keywords[first_word] == nil then
+                result = false
+            end
         end
+        return result
     end
-    return result
 end
 
 function match_macro_assign(line)
@@ -1812,8 +1815,7 @@ local var =  script:gsub("{(.-)}", variables)
 print(var)
 end
 
-function leading_keyword(line)
-    local result = nil
+do
     local keywords   = {
         ["define"]   = true,  -- blud keyword
         ["do"]       = true,
@@ -1829,12 +1831,16 @@ function leading_keyword(line)
         ["while"]    = true,
     }
 
-    local keyword = line:match("^%a+")
-    if keyword == "local" and line:match("local%s+function%s+") then
-        keyword = "function"
+    function leading_keyword(line)
+        local result = nil
+
+        local keyword = line:match("^%a+")
+        if keyword == "local" and line:match("local%s+function%s+") then
+            keyword = "function"
+        end
+        if keywords[keyword] then result = keyword end
+        return result
     end
-    if keywords[keyword] then result = keyword end
-    return result
 end
 
 function syntax_error(line, line_number, format_string, ...)
@@ -1878,7 +1884,7 @@ function phase1_pass(name, get_line)
     local line_number   = 0
     local line
     local text          = string.format("--BLUDLINE %d %q\n", line_number, name)
-    local open_keyword  = nil
+    local keyword_stack = {}
     local error = function (...)
         syntax_error(line, line_number, ...)
     end
@@ -1892,27 +1898,28 @@ function phase1_pass(name, get_line)
             text = text .. line .. "\n"
             goto NEXT
         end
-        local keyword = leading_keyword(line)
+        local keyword     = leading_keyword(line)
+        local top_keyword = keyword_stack[#keyword_stack]
         if not keyword then
-            if open_keyword then   -- copying Lua code ??? handle embedded make code
+            if top_keyword then   -- copying Lua code ??? handle embedded make code
                 line = phase1_embedded_make(line)
             else -- copying non-Lua code
                 line = "blud.phase2_append(" .. lua_quote(line) .. ")"
             end
         elseif keyword == "do" or keyword == "function" or keyword == "if" or keyword == "repeat" then
-            if open_keyword then error("already inside '#1'", open_keyword) end
-            open_keyword = keyword
+            if top_keyword then error("already inside '#1'", top_keyword) end
+            table.insert(keyword_stack,keyword)
         elseif keyword == "end" then
-            if not open_keyword then
+            if not top_keyword then
                 error("Unexpected 'end'")
             else
-                open_keyword = nil
+                table.remove(keyword_stack)
             end
         elseif keyword == "elseif" or keyword == "else" then
-            if open_keyword ~= "if" and open_keyword ~= "elseif" then
-                error("Unexpected '#1' doesn't match open '#2'", keyword, open_keyword)
+            if top_keyword ~= "if" and top_keyword ~= "elseif" then
+                error("Unexpected '#1' doesn't match open '#2'", keyword, top_keyword)
             else
-                open_keyword = keyword
+                keyword_stack[#keyword_stack] = keyword
             end
         elseif keyword == "local" then
             -- just copy the line

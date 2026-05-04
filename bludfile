@@ -16,10 +16,10 @@ debug release :BUILD:
 SRC_FILES = blud.c bludlua.c
 if M("BLUD_HOST_OS") == "windows" then
     $ SRC_FILES += "oswindows.c"
-elseif M(BLUD_HOST_OS) == "linux" then
+elseif M("BLUD_HOST_OS") == "linux" then
     $ SRC_FILES += "oslinux.c"
 else
-    error("unknown value for BLUD_HOST_OS: " .. M("BLUD_HOST_OS"))
+--    error("unknown value for BLUD_HOST_OS: " .. M("BLUD_HOST_OS"))
 end
 
 blud :: *.c
