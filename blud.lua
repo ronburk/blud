@@ -758,12 +758,18 @@ blud.build_init = function()
     end
 end
 
+-- blud.lines: return an iterator that returns one line of the string at a time
 blud.lines  = function (str)
     local pos = 1
+    -- the line is everything to the nearest '\n' or end-of-string
+    -- a CR in front of the LF is also discarded.
     return function()
         if pos > #str then return nil end
-        local start, stop, line = str:find("([^\r\n]*)[\r\n]?", pos)
+        local start, stop, line = str:find("([^\n]*)\n?", pos)
         pos = stop + 1
+        if line:sub(-1) == "\r" then
+            line = line:sub(1, -2)
+        end
         return line
     end
 end
@@ -1868,12 +1874,11 @@ function phase1_line_is_empty(line)
     end
 end
 
-function phase1_pass(get_line)
+function phase1_pass(name, get_line)
     local line_number   = 0
     local line
-    local text          = ""
+    local text          = string.format("--BLUDLINE %d %q\n", line_number, name)
     local open_keyword  = nil
-    local default_build = nil
     local error = function (...)
         syntax_error(line, line_number, ...)
     end
@@ -1881,9 +1886,12 @@ function phase1_pass(get_line)
     while true do
         ::NEXT::
         line_number = line_number + 1
-        line        = get_line(false)
+        line        = get_line()
         if line == nil then break end -- end of file
-        if phase1_line_is_empty(line) then goto NEXT end
+        if phase1_line_is_empty(line) then
+            text = text .. line .. "\n"
+            goto NEXT
+        end
         local keyword = leading_keyword(line)
         if not keyword then
             if open_keyword then   -- copying Lua code ??? handle embedded make code
@@ -2097,6 +2105,38 @@ end
 ]]
 
 
+function phase1_report_compile_error(err, code_to_compile)
+    local generated_line, message = err:match(":(%d+):%s*(.*)$")
+    generated_line = tonumber(generated_line)
+    if not generated_line then
+        error("Compilation Error: " .. err)
+    end
+
+    local lines = {}
+    for line in (code_to_compile .. "\n"):gmatch("([^\n]*)\n") do
+        table.insert(lines, line)
+    end
+
+    local source_line, source_name
+    for i = generated_line, 1, -1 do
+        source_line, source_name =
+            lines[i]:match("^--BLUDLINE%s+(%d+)%s+(.+)$")
+        if source_line then
+            source_line = generated_line - i
+            break
+        end
+    end
+
+    if source_line then
+        io.stderr:write(string.format("%s:%d: %s\n",
+            source_name, source_line, message))
+        io.stderr:write((lines[generated_line] or "") .. "\n")
+        os.exit(1)
+    end
+
+    error("Compilation Error: " .. err)
+end
+
 if luac_needs_building then
     local f = nil
 
@@ -2113,14 +2153,19 @@ if luac_needs_building then
     file = f
     --file = io.stdin
     --preprocess(buffered_line_io(file))
-    local phase1_text = phase1_pass(buffered_line_io_string(CSTRGet("builtin.blud")))
-    phase1_text = phase1_text .. phase1_pass(buffered_line_io(file))
+    local phase1_text = phase1_pass("[buildin.blud]",
+                                    buffered_line_io_string(CSTRGet("builtin.blud")))
+    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
     file:close()
     --print(blud_module_code)
     print("phase 1 complete")
+    print(phase1_text)
 
     local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
+    local line_offset = 0
+    _, line_offset = blud_module_code:gsub("\n","\n")
+    print("line count = " .. line_offset)
     if not blud_primary_target_name  then
         print("No target given to build")
     else
@@ -2131,10 +2176,10 @@ if luac_needs_building then
     blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
     -- Compile the source code to bytecode
-    local compiled_function, err = loadstring(code_to_compile)
+    local compiled_function, err = loadstring(code_to_compile, "bludfile")
+    
     if not compiled_function then
-        print("Failed to compile source code: " .. err)
-        return
+        phase1_report_compile_error(err, code_to_compile)
     end
 
     local bytecode = string.dump(compiled_function, false) -- true to strip debugging info
