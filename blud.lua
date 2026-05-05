@@ -10,6 +10,7 @@ print(foo.dump("foo"))
 assert(false)
 ]]
 
+
 blud_module_code = [==[
 -- Insert custom loader at the beginning of package.loaders
 table.insert(package.loaders, 1, function(modname)
