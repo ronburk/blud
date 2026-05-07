@@ -208,6 +208,7 @@ M = blud.macro
 
 blud.macro_name_pattern = "([%a_][%w_%.]*)"
 blud.implicit        = require("implicit")
+blud.sourcemap       = require("sourcemap")
 blud.error           = errorf
 blud.assert          = function(condition, format, ...)
     if not condition then
@@ -760,14 +761,19 @@ blud.build_init = function()
 end
 
 -- blud.lines: return an iterator that returns one line of the string at a time
-blud.lines  = function (str)
+blud.lines = function(str)
     local pos = 1
-    -- the line is everything to the nearest '\n' or end-of-string
-    -- a CR in front of the LF is also discarded.
     return function()
         if pos > #str then return nil end
-        local start, stop, line = str:find("([^\n]*)\n?", pos)
-        pos = stop + 1
+        local nl = str:find("\n", pos, true)
+        local line
+        if nl then
+            line = str:sub(pos, nl - 1)
+            pos = nl + 1
+        else
+            line = str:sub(pos)
+            pos = #str + 1
+        end
         if line:sub(-1) == "\r" then
             line = line:sub(1, -2)
         end
@@ -1667,6 +1673,7 @@ blud_user_code = ""
 
 -- returns generator that lets you read/peek one line at a time from the file
 function buffered_line_io(file)
+    assert(io.type(file) == "file");
     local current_line; --  = file:read("*l")  -- Read the first line to prime the generator
     local has_peeked   = false
     local peek_line    = nil
@@ -1771,22 +1778,6 @@ do
     end
 end
 
-function match_macro_assign(line)
-    local operators = {
-        ["="]   = true,
-        [":="]  = true,
-        ["+="]  = true,
-    }
-    --    print("match_macro_assign(\"" .. line .. "\")")
-    local pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
-    local macro_name, operator, remainder = line:match(pattern)
-    if macro_name and operator then
-        if operators[operator] == true then
-            return macro_name, operator, remainder
-        end
-    end
-    return nil
-end
 
 function lua_quote(str)
     -- Escape backslashes and double quotes
@@ -1878,108 +1869,6 @@ function phase1_line_is_empty(line)
         return true
     else
         return false
-    end
-end
-
-function phase1_pass(name, get_line)
-    local line_number   = 0
-    local line
-    local text          = string.format("--BLUDLINE %d %q\n", line_number, name)
-    local keyword_stack = {}
-    local error = function (...)
-        syntax_error(line, line_number, ...)
-    end
-
-    while true do
-        ::NEXT::
-        line_number = line_number + 1
-        line        = get_line()
-        if line == nil then break end -- end of file
-        if phase1_line_is_empty(line) then
-            text = text .. line .. "\n"
-            goto NEXT
-        end
-        local keyword     = leading_keyword(line)
-        local top_keyword = keyword_stack[#keyword_stack]
-        if not keyword then
-            if top_keyword then   -- copying Lua code ??? handle embedded make code
-                line = phase1_embedded_make(line)
-            else -- copying non-Lua code
-                line = "blud.phase2_append(" .. lua_quote(line) .. ")"
-            end
-        elseif keyword == "do" or keyword == "function" or keyword == "if" or keyword == "repeat" then
-            if top_keyword then error("already inside '#1'", top_keyword) end
-            table.insert(keyword_stack,keyword)
-        elseif keyword == "end" then
-            if not top_keyword then
-                error("Unexpected 'end'")
-            else
-                table.remove(keyword_stack)
-            end
-        elseif keyword == "elseif" or keyword == "else" then
-            if top_keyword ~= "if" and top_keyword ~= "elseif" then
-                error("Unexpected '#1' doesn't match open '#2'", keyword, top_keyword)
-            else
-                keyword_stack[#keyword_stack] = keyword
-            end
-        elseif keyword == "local" then
-            -- just copy the line
-        else
-            line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
-        end
-        text = text .. line .. "\n"
-    end
-    return text
-end
-
--- When processing Lua code, it could have text in column 1 due to
--- a string constant or a comment. Here, we check for that possibility
--- and return nil if it's not true, else a string that signifies what the end
--- of the multi-line string/comment should look like
-function skip_long_quote_lua(line, pos)
-    local match = line:match("=*%[", pos)
-    if not match then return nil end -- wasn't start of long quote after all
-    local count = #match - 2
-    assert(count >= 0);
-    local end_quote = "]" .. string.rep("=", count) .. "]"
-    pos = line:find(end_quote, pos, true)
-    if pos then
-        return pos + #end_quote
-    else
-        return end_quote
-    end
-end
-
-function find_multiline_start_lua(line, pos)
-    pos = line:find("['\"-[]", pos)
-    while pos do
-        local hit = line:sub(pos, 1)
-        if hit == '[' then
-            pos = skip_long_quote_lua(line, pos)
-        elseif hit == '-' then
-            pos = skip_comment_lua(line, pos)
-        elseif hit == '"' or hit == "'" then
-            pos = skip_short_quote_lua(line, pos, hit)
-        else
-            assert(false)
-        end
-        if not pos then break end
-        pos = line:find("['\"-[]", pos)
-    end
-    return pos
-end
-
-function find_multiline_lua(line)
-    local pos = line:find("['\"-[]")
-    while pos do
-        local hit = line:sub(pos, 1)
-        if hit == '"' then
-            --
-        elseif hit == "'" then
-            --
-        elseif hit == '[' then
-            --
-        end
     end
 end
 
@@ -2146,6 +2035,8 @@ function phase1_report_compile_error(err, code_to_compile)
 end
 
 if luac_needs_building then
+    --rlb
+    local compiler = require("compiler")
     local f = nil
 
     f = io.open(bludfile_path)
@@ -2158,18 +2049,21 @@ if luac_needs_building then
             error("Could not open: " .. bludfile_path)
         end
     end
-    file = f
+
     --file = io.stdin
     --preprocess(buffered_line_io(file))
-    local phase1_text = phase1_pass("[buildin.blud]",
-                                    buffered_line_io_string(CSTRGet("builtin.blud")))
-    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
-    file:close()
+--    local phase1_text = phase1_pass("[buildin.blud]",
+--                                    buffered_line_io_string(CSTRGet("builtin.blud")))
+--    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
+    local compiled = compiler.compile("bludfile", buffered_line_io(f))
+    print(compiled)
+    f:close()
+    error("did it compile?")
     --print(blud_module_code)
     print("phase 1 complete")
-    print(phase1_text)
+--    print(phase1_text)
 
-    local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
+--    local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
     local line_offset = 0
     _, line_offset = blud_module_code:gsub("\n","\n")
