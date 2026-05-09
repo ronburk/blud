@@ -4,6 +4,38 @@ local sourcemap = require("sourcemap")
 print("loaded compiler.lua")
 
 
+do
+    local keywords   = {
+        ["define"]   = true,  -- blud keyword
+        ["do"]       = true,
+        ["else"]     = true,
+        ["elseif"]   = true,
+        ["end"]      = true,  -- blud AND Lua keyword
+        ["for"]      = true,
+        ["function"] = true,
+        ["if"]       = true,
+        ["local"]    = true,
+        ["repeat"]   = true,
+        ["until"]    = true,
+        ["while"]    = true,
+    }
+
+    function leading_keyword(line)
+        local result = nil
+
+        local keyword = line:match("^%a+")
+        if keyword == "local" and line:match("local%s+function%s+") then
+            keyword = "function"
+        end
+        if keywords[keyword] then result = keyword end
+        return result
+    end
+end
+
+
+local macro_name_pattern = "([%a_][%w_%.]*)"
+
+
 -- parse a line that looks like macro assign, or return nil
 local match_macro_assign
 do
@@ -14,7 +46,7 @@ do
     }
     function match_macro_assign(line)
         --    print("match_macro_assign(\"" .. line .. "\")")
-        local pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
+        local pattern = "^" .. macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
         local macro_name, operator, remainder = line:match(pattern)
         if macro_name and operator then
             if operators[operator] == true then
@@ -25,14 +57,42 @@ do
     end
 end
 
+local translate
+do
+    function translate(compile_io)
+        print("tranlate()")
+        local state = "OUTERMOST"
+        while state ~= "END" do
+            local line = compile_io.get_line()
+            if state == "OUTERMOST" then
+                if line_is_lua_start then
+                    compile_io.emit_line(line)
+                    state = "OUTERMOST_LUA"
+                else
+                    translate_directive(compile_io, line)
+                end
+            elseif state == "OUTERMOST_LUA" then
+            end
+            end
+        end
+    end
+end
+
+
+local translate_make_directives
+do
+    function translate_make_directives(compile_io)
+    end
+end
+
 
 local translate_bludfile
 do
     local start_keywords = {["do"]=true, ["function"]=true, ["if"]=true, ["repeat"]=true}
-    function translate_bludfile(name, get_line)
+    function translate_bludfile(compile_io)
         local source_ln     = 0
         local line
-        local text          = string.format("--BLUDLINE %d %q\n", source_ln, name)
+        local text          = ""
         local keyword_stack = {}
         local error = function (...)
             syntax_error(line, source_ln, ...)
@@ -40,16 +100,16 @@ do
 
         while true do
             ::NEXT::
-            source_ln = source_ln + 1
-            line        = get_line()
+            source_ln   = source_ln + 1
+            line        = compile_io.get_line()
             if line == nil then break end -- end of file
             if phase1_line_is_empty(line) then
-                sourcemap.append_line(name, source_ln, line);
+                compile_io.emit_line(line)
                 goto NEXT
             end
             local keyword     = leading_keyword(line)
             local top_keyword = keyword_stack[#keyword_stack]
-            if not keyword then
+            if not keyword then -- if not Lua block start/end
                 print("parse blud directive: " .. line .. " top=" .. tostring(top_keyword))
                 local macro = match_macro_assign(line)
                 if top_keyword then   -- copying Lua code ??? handle embedded make code
@@ -80,7 +140,8 @@ do
                 assert(false)
                 line =  "blud.phase2_append(" .. lua_quote(line) .. ")"
             end
-            sourcemap.append_line(name, source_ln, line);
+            compile_io.emit_line(line)
+--            sourcemap.append_line(name, source_ln, line);
             text = text .. line .. "\n"
         end
         return text
@@ -138,12 +199,13 @@ function find_multiline_lua(line)
     end
 end
 
-function M.compile(name, get_line)
-    print("blud.compile(" .. name .. ")")
+-- function M.compile(name, get_line)
+function M.compile(compile_io)
+    print("blud.compile()\n")
     local source_ln = 1
     sourcemap.append("<internal>", source_ln, "function blud.bludfile_main()\n")
     source_ln = source_ln + 1
-    translate_bludfile(name, get_line)
+    translate(compile_io)
     sourcemap.append("<internal>", source_ln, "end\n")
     return sourcemap.tostring() .. sourcemap.to_lua()
 end

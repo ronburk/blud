@@ -701,6 +701,23 @@ main lib :EVAL:
 
 
 * log
+** <2026-05-08 Fri>
+
+if true then
+    $ a : b
+    $     if true then
+    $         $     echo "a is built now"
+    $     end
+end
+
+if true then
+    $ a : b
+    if true then
+        $     echo "a is built now"
+    end
+end
+
+
 ** <2026-05-04 Mon>
 
 blud is a language that blends together three languages: Lua, shell

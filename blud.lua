@@ -206,7 +206,6 @@ end
 
 M = blud.macro
 
-blud.macro_name_pattern = "([%a_][%w_%.]*)"
 blud.implicit        = require("implicit")
 blud.sourcemap       = require("sourcemap")
 blud.error           = errorf
@@ -1807,33 +1806,6 @@ local var =  script:gsub("{(.-)}", variables)
 print(var)
 end
 
-do
-    local keywords   = {
-        ["define"]   = true,  -- blud keyword
-        ["do"]       = true,
-        ["else"]     = true,
-        ["elseif"]   = true,
-        ["end"]      = true,  -- blud AND Lua keyword
-        ["for"]      = true,
-        ["function"] = true,
-        ["if"]       = true,
-        ["local"]    = true,
-        ["repeat"]   = true,
-        ["until"]    = true,
-        ["while"]    = true,
-    }
-
-    function leading_keyword(line)
-        local result = nil
-
-        local keyword = line:match("^%a+")
-        if keyword == "local" and line:match("local%s+function%s+") then
-            keyword = "function"
-        end
-        if keywords[keyword] then result = keyword end
-        return result
-    end
-end
 
 function syntax_error(line, line_number, format_string, ...)
     io.stderr:write(line)
@@ -2055,7 +2027,10 @@ if luac_needs_building then
 --    local phase1_text = phase1_pass("[buildin.blud]",
 --                                    buffered_line_io_string(CSTRGet("builtin.blud")))
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
-    local compiled = compiler.compile("bludfile", buffered_line_io(f))
+
+    local compile_io = require("compile_io")
+    compile_io.push_input("bludfile", f:read("*a"))
+    local compiled = compiler.compile(compile_io)
     print(compiled)
     f:close()
     error("did it compile?")
