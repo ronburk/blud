@@ -701,6 +701,19 @@ main lib :EVAL:
 
 
 * log
+** <2026-05-09 Sat>
+
+Can we define tests and implicit rule in one whack?
+
+test%.out:test%.blud
+    ./blud $< 
+
+test :TEST:  -- test/*
+    ./blud $<
+
+Hmmm, got quite a mess here.
+
+
 ** <2026-05-08 Fri>
 
 if true then
