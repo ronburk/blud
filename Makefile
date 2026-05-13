@@ -1,6 +1,11 @@
 all : myprog
 
-myprog : myprog.o
+foo : fee
+
+fee :
+	echo fee
+
+myprog : cstr.o
 
 
 prog : file.o

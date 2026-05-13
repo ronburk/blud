@@ -698,9 +698,65 @@ main lib :EVAL:
 
 <><><><><>
 
+* Open Problems TODO
+** multiple outputs from one action
+See the '&:' operator in Gnu Make.
+
+CC = gcc
+YACC = bison
+
+program: main.o parser.o
+	$(CC) -o $@ $^
+
+main.o: main.c parser.h
+	$(CC) -c -o $@ main.c
+
+parser.o: parser.c parser.h
+	$(CC) -c -o $@ parser.c
+
+parser.c parser.h: parser.y
+	$(YACC) -d -o parser.c parser.y
+
+clean:
+	rm -f program main.o parser.o parser.c parser.h
+
+  ----------------
+
+My solution:
+
+parser.c (parser.h) : parser.y
+	$(YACC) -d -o $@ parser.y
+
+The paren syntax says that additional files are also targets of this
+single action, but only the non-parenthesized file is what $@ expands to.
+Should be able to achieve same behavior as Gnu "&:".
 
 
 * log
+** <2026-05-11 Mon>
+We are mixing three languages: Lua, make directives, and shell commands.
+Each line is in one of three modes, corresponding to the three languages.
+blud starts of in "make mode". To enter Lua mode, you simply write a
+line that starts with one of the Lua block statements: function/do/while/for/etc.
+
+CC = gcc
+YACC = bison
+
+program: main.o parser.o
+	$(CC) -o $@ $^
+
+main.o: main.c parser.h
+	$(CC) -c -o $@ main.c
+
+parser.o: parser.c parser.h
+	$(CC) -c -o $@ parser.c
+
+parser.c parser.h: parser.y
+	$(YACC) -d -o parser.c parser.y
+
+clean:
+	rm -f program main.o parser.o parser.c parser.h
+
 ** <2026-05-09 Sat>
 
 Can we define tests and implicit rule in one whack?

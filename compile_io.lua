@@ -26,7 +26,7 @@ end
 
 -- emit an entire file (possibly virtual) verbatim
 function M.emit_file(name, text)
-    local entry = {filename=filename, source_ln=1, dest_ln=next_output_ln}
+    local entry = {filename=name, source_ln=1, dest_ln=next_output_ln}
     table.insert(map, entry);
     next_output_ln = next_output_ln + count_nl(text)
     append_output_text(text)
@@ -90,39 +90,57 @@ end
 
 -- don't really emit sourcemap, just start accumulating in a new place
 function M.emit_sourcemap()
+    assert(post_sourcemap == nil)
     -- signal that it's time to start appending to a different place
     post_sourcemap = ""
+    -- add virtual entry to source map
+    local entry = {filename="<sourcemap>", source_ln=1, dest_ln = next_output_ln}
+    table.insert(sourcemap, entry);
     -- remember where we will later backpatch
     sourcemap_gap = #sourcemap
 end
 
-local function need_new_sourcemap_entry()
+
+local function need_new_sourcemap_entry(previous_entry, current_input)
     local need_entry = false
-    local previous_entry = sourcemap[#sourcemap]
-    if previous_entry ~= nil then
-        if current_input.name ~= previous_entry.filename then
-            need_entry = true
-        elseif previous_entry.source_ln ~= current_input.source_ln then
-            need_entry = true
-        end
+    -- if no existing entry to extend, then need new entry
+    if previous_entry == nil then
+        need_entry = true
+    elseif current_input.name ~= previous_entry.filename then
+        need_entry = true
+    elseif previous_entry.source_ln ~= current_input.source_ln then
+        need_entry = true
     end
+    print(
+        string.format(
+            "[%d] prev name=%s, source_ln=%d \n returns %s", #sourcemap,
+            previous_entry.filename, previous_entry.source_ln, need_entry
+    ))
     return need_entry
 end
 
-function M.emit_line(text)
+function M.emit_line(fmt, ...)
     assert(#input_stack > 0) -- should not be called when no active input
+
+    local text = string.format(fmt, ...)
+    if text:sub(-1) ~= '\n' then text = text .. '\n' end
 
     -- see if we can skip adding a new map entry
     local need_entry = false
     local line_count = count_nl(text)
+    
     -- if more than one output line for this input, or if it's a new file
-    if line_count > 1 or need_new_sourcemap_entry() then
+    if line_count > 1 or need_new_sourcemap_entry(sourcemap[#sourcemap], current_input) then
         need_entry = true
     end
     if need_entry then
         for i = 1, line_count do
-            local entry = {filename=filename, source_ln=linenumber, dest_ln=next_output_ln}
-            table.insert(map, entry)
+            local entry = {
+                filename=current_input.name,
+                source_ln=current_input.source_ln,
+                dest_ln=next_output_ln
+            }
+            table.insert(sourcemap, entry)
             next_output_ln = next_output_ln + 1
         end
     end
@@ -141,13 +159,21 @@ local function sourcemap_to_lua(map)
     return result
 end
 
+function M.error(fmt, ...)
+    local text = string.format(fmt, ...)
+    local where = string.format("File %s, line %d\n", current_input.name, current_input.source_ln)
+    error(where .. text)
+end
+
 -- close(): insert sourcemap in the gap, fix up the line numbers that follow, return text
 function M.close()
+    assert(sourcemap_gap ~= nil, "Did you forget to call emit_sourcemap()?")
     local sourcemap_lua = sourcemap_to_lua(sourcemap)
     local line_count    = count_nl(sourcemap_lua)
     local entry         = sourcemap[sourcemap_gap]
-    local new_entry     = {filename="<sourcemap>", source_ln=1, dest_ln=entry.dest_ln}
-    table.insert(sourcemap, sourcemap_gap, new_entry);
+    print("sourcemap_gap =", sourcemap_gap, "  #sourcemap =", #sourcemap)
+--    local new_entry     = {filename="<sourcemap>", source_ln=1, dest_ln=entry.dest_ln}
+--    table.insert(sourcemap, sourcemap_gap, new_entry);
     for i = sourcemap_gap+1, #sourcemap do
         sourcemap[i].dest_ln = sourcemap[i].dest_ln + line_count
     end

@@ -2030,8 +2030,10 @@ if luac_needs_building then
 
     local compile_io = require("compile_io")
     compile_io.push_input("bludfile", f:read("*a"))
+    compile_io.emit_sourcemap()
     local compiled = compiler.compile(compile_io)
-    print(compiled)
+    --    print(compiled)
+    print(compile_io.close())
     f:close()
     error("did it compile?")
     --print(blud_module_code)

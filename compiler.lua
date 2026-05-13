@@ -4,6 +4,104 @@ local sourcemap = require("sourcemap")
 print("loaded compiler.lua")
 
 
+-- tokenize_dependency_line(line)
+-- Tokenizes one blud dependency/rule line into an array of token tables.
+
+local function tokenize_dependency_line(line)
+    assert(type(line) == "string", "line must be a string")
+
+    local tokens = {}
+    local pos    = 1
+    local len    = #line
+
+    local function push(type_, text, p)
+        assert(type_ and text and p, "token fields must not be nil")
+        tokens[#tokens + 1] = { type = type_, text = text, pos = p }
+    end
+
+    while pos <= len do
+        -- skip whitespace
+        local ws_start, ws_stop = line:find("^[ \t]+", pos)
+        if ws_start then
+            pos = ws_stop + 1
+        end
+        if pos > len then break end
+
+        local c = line:sub(pos, pos)
+
+        if c == ":" then
+            -- could be := or plain :
+            if line:sub(pos, pos+1) == ":=" then
+                push("operator", ":=", pos)
+                pos = pos + 2
+            else
+                push("colon", ":", pos)
+                pos = pos + 1
+            end
+
+        elseif c == "+" and line:sub(pos, pos+1) == "+=" then
+            push("operator", "+=", pos)
+            pos = pos + 2
+
+        elseif c == "?" and line:sub(pos, pos+1) == "?=" then
+            push("operator", "?=", pos)
+            pos = pos + 2
+
+        elseif c == "!" and line:sub(pos, pos+1) == "!=" then
+            push("operator", "!=", pos)
+            pos = pos + 2
+
+        elseif c == "=" then
+            push("operator", "=", pos)
+            pos = pos + 1
+
+        else
+            -- word: any non-whitespace, non-colon bytes
+            local w_start, w_stop = line:find("^[^ \t:+=?!]+", pos)
+            if w_start then
+                -- check if word is followed immediately by an operator char
+                -- that would have been caught above; just grab the plain word
+                push("word", line:sub(w_start, w_stop), w_start)
+                pos = w_stop + 1
+            else
+                -- single unrecognized character
+                push("error", c, pos)
+                pos = pos + 1
+            end
+        end
+    end
+
+    push("eol", "", len + 1)
+    return tokens
+end
+
+------------------------------------------------------------------------
+-- tests
+------------------------------------------------------------------------
+
+local tests = {
+    "foo : bar baz",
+    "foo.o : foo.c foo.h",
+    "a b c : x y z",
+    "debug : CFLAGS += -g",
+    "out := somefile",
+    "x ?= default",
+    "x != shell_cmd",
+    "",
+    "   ",
+    "single",
+}
+
+for _, line in ipairs(tests) do
+    print("INPUT: " .. string.format("%q", line))
+    local tokens = tokenize_dependency_line(line)
+    for _, tok in ipairs(tokens) do
+        print(string.format("  [%8s] pos=%-3d %q", tok.type, tok.pos, tok.text))
+    end
+    print()
+end
+
+-- leading_keyword() - does line start with a Lua keyword we care about?
 do
     local keywords   = {
         ["define"]   = true,  -- blud keyword
@@ -32,9 +130,24 @@ do
     end
 end
 
+do
+    local leading = {
+        ["do"]       = true,
+        ["for"]      = true,
+        ["function"] = true,
+        ["if"]       = true,
+        ["local"]    = true,
+        ["repeat"]   = true,
+        ["while"]    = true
+    }
+    function is_start_keyword(word)
+        return leading[word] == true
+    end
+end
+
+
 
 local macro_name_pattern = "([%a_][%w_%.]*)"
-
 
 -- parse a line that looks like macro assign, or return nil
 local match_macro_assign
@@ -57,31 +170,54 @@ do
     end
 end
 
-local translate
+local function is_blank_or_comment(line)
+    return line:match("^%s*$") ~= nil
+        or line:match("^%s*%-%-.*$") ~= nil
+end
+
+
+local translate_make_directive
 do
-    function translate(compile_io)
-        print("tranlate()")
-        local state = "OUTERMOST"
-        while state ~= "END" do
-            local line = compile_io.get_line()
-            if state == "OUTERMOST" then
-                if line_is_lua_start then
-                    compile_io.emit_line(line)
-                    state = "OUTERMOST_LUA"
-                else
-                    translate_directive(compile_io, line)
-                end
-            elseif state == "OUTERMOST_LUA" then
-            end
-            end
+    function translate_make_directive(compile_io, line)
+        print("translate_make_directive: " .. tostring(line))
+        local macro = match_macro_assign(line)
+        if macro then
+            compile_io.emit_line("blud.macro_assign(%q,%q,%q)",
+            macro.name, macro.operator, macro.value)
+        elseif is_blank_or_comment(line) then
+            compile_io.emit_line(line)
+        else
+            compile_io.error("Don't know what this line is: %s", line)
         end
     end
 end
 
-
-local translate_make_directives
+local translate_lua
 do
-    function translate_make_directives(compile_io)
+    function translate_lua(compile_io, line)
+        print("translate_lua: " .. tostring(line))
+        local keyword_stack = {}
+        local keyword_top   = leading_keyword(line)
+        compile_io.emit_line(line)
+    end
+end
+
+
+-- outermost translate loop
+local translate
+do
+    function translate(compile_io)
+        print("tranlate()")
+        while true do
+            local line = compile_io.get_line()
+            if line == nil then break end
+            if is_start_keyword(leading_keyword(line)) then
+                translate_lua(compile_io, line)
+            else
+                translate_make_directive(compile_io, line)
+            end
+        end
+        return nil
     end
 end
 
@@ -201,7 +337,7 @@ end
 
 -- function M.compile(name, get_line)
 function M.compile(compile_io)
-    print("blud.compile()\n")
+    print("blud.compile()")
     local source_ln = 1
     sourcemap.append("<internal>", source_ln, "function blud.bludfile_main()\n")
     source_ln = source_ln + 1
