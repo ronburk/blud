@@ -1,25 +1,66 @@
 local M    = {}
 local sourcemap = require("sourcemap")
+local m         = require("macro")
+local util      = require("util")
 
 print("loaded compiler.lua")
+
+local function is_blank_or_comment(line)
+    assert(type(line) == "string")
+
+    if line:match("^%s*$") then
+        return true
+    end
+
+    if line:match("^%s*%-%-%[=*%[") then
+        error("multi-line comment not allowed here: " .. line)
+    end
+
+    if line:match("^%s*%-%-") then
+        return true
+    end
+
+    return false
+end
+
+--[[
+
 
 
 -- tokenize_dependency_line(line)
 -- Tokenizes one blud dependency/rule line into an array of token tables.
 
-local function tokenize_dependency_line(line)
-    assert(type(line) == "string", "line must be a string")
-
+local function tokenize_line(line)
     local tokens = {}
     local pos    = 1
     local len    = #line
+    local c
+    local state  = 0
 
     local function push(type_, text, p)
         assert(type_ and text and p, "token fields must not be nil")
         tokens[#tokens + 1] = { type = type_, text = text, pos = p }
     end
 
+    c = line:sub(pos, pos)
+    ::START::
+    
+
+    local start, stop, match
     while pos <= len do
+        c = line:sub(pos, pos)
+        if c:match("%s") then
+            start, stop, match = line:find("^([ \t]+)", pos)
+            if pos == 1 then push("indent", match, pos) end
+            pos = stop
+        elseif c:match("^[%a_]+", pos) then
+            start, stop, match = line:find("^([%a%d_]+)", pos)
+            push("", match, pos)
+            pos = stop
+        end
+        pos = pos + 1
+    end
+        
         -- skip whitespace
         local ws_start, ws_stop = line:find("^[ \t]+", pos)
         if ws_start then
@@ -101,6 +142,8 @@ for _, line in ipairs(tests) do
     print()
 end
 
+]]--
+
 -- leading_keyword() - does line start with a Lua keyword we care about?
 do
     local keywords   = {
@@ -170,10 +213,13 @@ do
     end
 end
 
-local function is_blank_or_comment(line)
-    return line:match("^%s*$") ~= nil
-        or line:match("^%s*%-%-.*$") ~= nil
+local translate_make_rule
+do
+    function translate_make_rule(compile_io, line)
+    end
 end
+
+
 
 
 local translate_make_directive
@@ -187,6 +233,8 @@ do
         elseif is_blank_or_comment(line) then
             compile_io.emit_line(line)
         else
+            local foo = m.tokens_from_text(line)
+            util.dump(foo)
             compile_io.error("Don't know what this line is: %s", line)
         end
     end
@@ -207,7 +255,7 @@ end
 local translate
 do
     function translate(compile_io)
-        print("tranlate()")
+        print("translate()")
         while true do
             local line = compile_io.get_line()
             if line == nil then break end

@@ -733,6 +733,16 @@ Should be able to achieve same behavior as Gnu "&:".
 
 
 * log
+** <2026-05-13 Wed>
+
+Token types:
+    whitespace
+    quote      - lua style, multi-line is an issue
+    comment
+    
+    
+
+
 ** <2026-05-11 Mon>
 We are mixing three languages: Lua, make directives, and shell commands.
 Each line is in one of three modes, corresponding to the three languages.
