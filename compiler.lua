@@ -233,8 +233,8 @@ do
         elseif is_blank_or_comment(line) then
             compile_io.emit_line(line)
         else
-            local foo = m.tokens_from_text(line)
-            util.dump(foo)
+            local foo = m.parts_from_text(line)
+            print(util.dump(foo))
             compile_io.error("Don't know what this line is: %s", line)
         end
     end
