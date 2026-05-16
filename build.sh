@@ -1,4 +1,5 @@
-LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit)"
+#LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit)"
+LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit) -Wl,-rpath,/usr/local/lib"
 #LDFLAGS="-L./luajit/src -lluajit"
 CFLAGS="-Wall -Wextra -fmax-errors=2"
 g++ -o cstr cstr.cpp $CFLAGS

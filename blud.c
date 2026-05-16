@@ -2,7 +2,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <assert.h>
-
+#include <limits.h>
 
 
 #include <ctype.h>

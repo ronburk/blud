@@ -23,40 +23,40 @@ local function is_comment(text, pos)
 end
 
 -- little scanner class maintains state of a scan
+local Scanner   = {}
 do
-    local Scanner
     Scanner.__index = Scanner
-    function Scanner.new(text, pattern, start_pos)
+    function Scanner.new(text, start_pos)
         local self = {
             text      = text,
             len       = #text,
-            pattern   = pattern
             start_pos = start_pos or 1,   -- start of what has not been consumed
             pos       = start_pos or 1,   -- pos of char we scan next
-            stop_char
+            stop_char = nil
         }
         return setmetatable(self, Scanner)
     end
     -- advance to next "stop char"
-    function Scanner:advance()
+    function Scanner:advance(pattern)
         local result = false
         if self.pos < len then
-            stop_pos,_,stop_char = text:find(pattern, pos)
+            self.pos,_,self.stop_char = text:find(pattern, pos)
 
             -- if no more stop_chars to find
             -- (also treat $ at end of text as literal)
-            if not stop_pos or (stop_char == '$' and stop_pos == len) then
-                table.insert(result, text:sub(pos))
-                break
-
-                
+            if not self.pos or (self.stop_char == '$' and self.stop_pos == len) then
+                self.stop_char = nil
+                self.pos       = self.len+1
+--                table.insert(result, text:sub(pos))
             end
         end
         return false
     end
-    function Scanner:skip_to(new_pos)
-    end
     function Scanner:consume()
+        local result = text:sub(self.start_pos, self.pos)
+        self.start_pos = self.pos+1
+        self.pos       = self.start_pos
+        return result
     end
     function Scanner:stop_char() return self:stop_char end
 end
@@ -75,20 +75,17 @@ while scanner:advance() do
 end
 
 
-M.parts_from_text = function(text,     stop_chars, pos, self_reference)
+M.parts_from_text = function(text,     stop_chars, scanner, self_reference)
     assert(text)
     stop_chars        = stop_chars or ""
-    pos               = pos or 1
+    scanner           = scanner or Scanner.new(text)
     local pattern     = '([%-%$\'\"' .. stop_chars .. '])'
     local result      = {}
-    local len         = #text
     local stop_char
     -- stop_pos is position of last char we have processed
-    local stop_pos    = pos - 1
-    local start_pos   = pos
-    while stop_pos < len do
-        pos = stop_pos + 1
-        stop_pos,_,stop_char = text:find(pattern, pos)
+    while scanner:advance(pattern) do
+        local stop_char = scanner:stop_char()
+
         -- if no more stop_chars to find
         -- (also treat $ at end of text as literal)
         if not stop_pos or (stop_char == '$' and stop_pos == len) then
