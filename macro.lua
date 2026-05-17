@@ -11,9 +11,8 @@ local util = require("util")
 
 ]]
 -- parts_from_text: break text into parts
---    A macro body is stored as a table. Each entry in the table
--- is either a substring that contains no macro invocations,
--- or else a table that describes a macro call.
+-- Each part is a table with a "type" field. Each non-macro part has a "text" field.
+-- A part with "type" equal to "macro" is an "argstack" array.
 local function is_comment(text, pos)
     local result = false
     if text:sub(pos, pos+1) == '--' then
@@ -30,9 +29,21 @@ do
         local self = {
             text      = text,
             len       = #text,
-            pos       = start_pos or 1
+            pos       = start_pos or 1,
+            part      = nil
         }
         return setmetatable(self, Scanner)
+    end
+    function Scanner:unget_part(part)
+        assert(self.part == nil)
+        self.part = part
+    end
+    function Scanner:get_char()
+        assert(self.pos <= self.len)
+
+        local ch = self.text:sub(self.pos, self.pos)
+        self.pos = self.pos + 1
+        return ch
     end
     function Scanner:find_lua_short_string_end(quote, pos)
         pos = pos + 1
@@ -52,7 +63,11 @@ do
     end
     -- advance to next "stop char"
     function Scanner:get_next_part(stop_chars)
-        local result   = nil
+        local result   = self.part
+        if result then
+            self.part = nil
+            return result
+        end
         local stop_pos, stop_char
         local pattern  = '([%-%$\'\"' .. stop_chars .. '])'
         local start_pos = self.pos
@@ -152,98 +167,126 @@ do
     )
 end
 
-
-M.parts_from_text = function(text,     stop_chars, scanner, self_reference)
+M.parts_from_text = function(text)
     assert(text)
+    local scanner = Scanner.new(text)
+    return M.parts_from_text_(scanner)
+end
+
+
+M.parts_from_text_ = function(scanner,     stop_chars, self_reference)
     stop_chars        = stop_chars or ""
-    scanner           = scanner or Scanner.new(text)
-    local pattern     = '([%-%$\'\"' .. stop_chars .. '])'
     local result      = {}
-    local stop_char
-    -- stop_pos is position of last char we have processed
-    while not scanner:empty() do
-        local part    = scanner:advance(pattern)
-        if part == "$" then
-            local macro_call = blud.macro_extract_call(text, scanner, self_reference)
+    local part        = scanner:get_next_part(stop_chars)
+    while part do
+        if part.type == "stop" and part.text == "$" then
+            local macro_call = M.macro_extract_call(scanner, self_reference)
             table.insert(result, macro_call)
+        elseif part.type == "stop" then
+            return result
         else
             table.insert(result, part)
 
         end
+        part = scanner:get_next_part(stop_chars)
     end
+    return result
 end
---[[
-        if stop_char == '-' then -- might be comment
-            
+
+
+-- macro_extract_call:
+--     extract macro invocation from scanner. No error return,
+-- if it's not looking like a macro, we just skip the '$'
+-- returns a symbolic macro reference, including any actual parameters
+M.macro_extract_call = function(scanner, self_reference)
+    local arg_stack  = {type="macro"}
+    local first_char = scanner:get_char()
+
+    if first_char ~= '(' then    -- if single-char macro with no arguments
+        table.insert(arg_stack, {type="text", text=first_char})
+    else    -- else looks like paren-style macro invocation
+        local arg
+        arg = M.parts_from_text_(scanner, "[ )]", self_reference)
+        if not next(arg) then
+            error("empty macro invocation")
         end
-        
-        -- if no more stop_chars to find
-        -- (also treat $ at end of text as literal)
-        if not stop_pos or (stop_char == '$' and stop_pos == len) then
-            table.insert(result, text:sub(pos))
-            break
-        elseif stop_char == '-' then -- might be a comment
-            if is_comment(text, stop_pos) then
-                error("Don't handle comments yet")
+        local stop_char = text:sub(pos,pos)
+        table.insert(arg_stack, arg)
+        if stop_char == ' ' then
+            error("can't handle macro args yet")
+        elseif stop_char ~= ')' then
+            error("malformed macro call: " .. text)
+        else  -- else we hit closing paren of macro call
+            pos = pos + 1   -- skip over ')'
+        end
+    end
+    if self_reference then
+        arg_stack = self_reference(arg_stack)
+    end
+    return arg_stack
+end
+
+
+-- Unit tests
+do
+    local function part_to_string(part)
+        if part.type == "text" then
+            return "text:" .. string.format("%q", part.text)
+        elseif part.type == "quote" then
+            return "quote:" .. string.format("%q", part.text)
+        elseif part.type == "comment" then
+            return "comment:" .. string.format("%q", part.text)
+        elseif part.type == "stop" then
+            return "stop:" .. string.format("%q", part.text)
+        elseif part.type == "macro" then
+            local args = {}
+            for i = 1, #part do
+                table.insert(args, parts_to_string(part[i]))
             end
-        elseif stop_char == "'" or stop_char == '"' then
-            error("Don't handle quotes yet")
-        -- else if it is a macro invocation
-        elseif stop_char == '$' then
-            -- add any text up to the macro invocation
-            if stop_pos > pos then
-                table.insert(result, text:sub(pos, stop_pos - 1))
-            end
-            local macro_call, new_pos = blud.macro_extract_call(text, stop_pos, self_reference)
-            table.insert(result, macro_call)
---            util.array_append(result, macro_call)
-            pos = new_pos
-        -- else it's a char that stops our scan (space, comma, right paren)
+            return "macro(" .. table.concat(args, ", ") .. ")"
         else
-            if stop_pos > pos then
-                table.insert(result, text:sub(pos, stop_pos - 1))
-                pos = stop_pos
-            end
-            break
+            return "unknown:" .. tostring(part.type)
         end
     end
 
-    return result, pos
-end
+    function parts_to_string(parts)
+        local result = {}
+        for i = 1, #parts do
+            table.insert(result, part_to_string(parts[i]))
+        end
+        return table.concat(result, " | ")
+    end
 
---]]
+    local function check_parts(text, expected)
+        local parts = M.parts_from_text(text)
+        local actual = parts_to_string(parts)
 
--- Unit tests
--- Unit tests
-if true then
-    local function check(condition, message)
-        if not condition then
-            error("unit test failed: " .. message, 2)
+        if actual ~= expected then
+            error(
+                "parts_from_text(" .. string.format("%q", text) .. ") failed\n" ..
+                "expected: " .. expected .. "\n" ..
+                "actual:   " .. actual,
+                2
+            )
         end
     end
 
-    local function check_stop_char_case(text, stop_chars, expected_part, expected_pos)
-        local parts, pos = M.parts_from_text(text, stop_chars)
+    check_parts(
+    "abc",
+    'text:"abc"'
+)
 
-        check(#parts == 1,
-            string.format("parts_from_text(%q, %q): expected 1 part, got %d",
-                text, stop_chars, #parts))
+check_parts(
+    "abc$(FOO)def",
+    'text:"abc" | macro(text:"FOO") | text:"def"'
+)
 
-        check(parts[1] == expected_part,
-            string.format("parts_from_text(%q, %q): expected part[1] = %q, got %q",
-                text, stop_chars, expected_part, tostring(parts[1])))
-
-        check(pos == expected_pos,
-            string.format("parts_from_text(%q, %q): expected pos = %d, got %s",
-                text, stop_chars, expected_pos, tostring(pos)))
-    end
-
-    do  -- look for off-by one; text immediately before a stop char must not be dropped
-        check_stop_char_case("x)",  ")", "x",  2)
-        check_stop_char_case("xy)", ")", "xy", 3)
-        check_stop_char_case("a-b)", ")", "a-b", 4)
-    end
+check_parts(
+    [["abc" -- comment]],
+    'quote:"\\"abc\\"" | text:" " | comment:"-- comment"'
+)
 end
+
 
 
 return M
