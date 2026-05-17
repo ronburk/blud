@@ -30,48 +30,126 @@ do
         local self = {
             text      = text,
             len       = #text,
-            start_pos = start_pos or 1,   -- start of what has not been consumed
-            pos       = start_pos or 1,   -- pos of char we scan next
-            stop_char = nil
+            pos       = start_pos or 1
         }
         return setmetatable(self, Scanner)
     end
-    -- advance to next "stop char"
-    function Scanner:advance(pattern)
-        local result = false
-        if self.pos < len then
-            self.pos,_,self.stop_char = text:find(pattern, pos)
+    function Scanner:find_lua_short_string_end(quote, pos)
+        pos = pos + 1
+        while pos <= self.len do
+            local ch = self.text:sub(pos, pos)
 
-            -- if no more stop_chars to find
-            -- (also treat $ at end of text as literal)
-            if not self.pos or (self.stop_char == '$' and self.stop_pos == len) then
-                self.stop_char = nil
-                self.pos       = self.len+1
---                table.insert(result, text:sub(pos))
+            if ch == "\\" then
+                pos = pos + 2
+            elseif ch == quote then
+                return pos
+            else
+                pos = pos + 1
             end
         end
-        return false
+
+        return nil
     end
-    function Scanner:consume()
-        local result = text:sub(self.start_pos, self.pos)
-        self.start_pos = self.pos+1
-        self.pos       = self.start_pos
+    -- advance to next "stop char"
+    function Scanner:get_next_part(stop_chars)
+        local result   = nil
+        local stop_pos, stop_char
+        local pattern  = '([%-%$\'\"' .. stop_chars .. '])'
+        local start_pos = self.pos
+
+        if start_pos <= self.len then -- if there are chars left to scan
+            ::SCAN::
+            stop_pos,_,stop_char = self.text:find(pattern, self.pos)
+            if not stop_pos then -- if remainder of string has no special chars
+                result   = { type="text", text=self.text:sub(start_pos) }
+                self.pos = self.len + 1
+            elseif stop_pos > self.pos then -- if there was literal text before the stop char
+                result   = { type="text", text=self.text:sub(start_pos, stop_pos-1) }
+                self.pos = stop_pos         -- git you next time, sucka!
+            else  -- ok, we have a special char of some kind
+                -- some are not special if they are last char in string
+                if stop_pos == self.len and stop_char:find("['\"$-]") then
+                    result   = { type="text", text=self.text:sub(start_pos) }
+                    self.pos = self.len + 1
+                elseif self.text:sub(stop_pos, stop_pos+1) == '--' then -- if comment
+                    result = { type="comment", text=self.text:sub(start_pos) }
+                    self.pos = self.len + 1
+                elseif stop_char == '-' then -- stopped in case it was --, but it wasn't so look further
+                    self.pos = stop_pos + 1  -- scan will resume after this '-'
+                    goto SCAN
+                elseif stop_char == '"' or stop_char == "'" then
+                    stop_pos = self:find_lua_short_string_end(stop_char, self.pos)
+                    if stop_pos then
+                        result = { type="quote", text=self.text:sub(self.pos, stop_pos) }
+                        self.pos = stop_pos + 1
+                    else
+                        result   = { type="text", text=self.text:sub(self.pos) }
+                        self.pos = self.len + 1
+                    end
+                else
+                    result = { type="stop", text=stop_char }
+                    self.pos = stop_pos + 1
+                end
+            end
+        end
         return result
     end
-    function Scanner:stop_char() return self:stop_char end
 end
 
-while scanner:advance() do
-    local stop_char = scanner:stop_char()
-    if stop_char == nil then
-        table.insert(result, scanner.consume())
-    elseif stop_char == '-' then
-        if scanner:is_comment() then
-            error("not yet")
+
+do
+    local function collect(text, stop_chars)
+        local s = Scanner.new(text)
+        local result = {}
+
+        while true do
+            local part = s:get_next_part(stop_chars or "")
+            if not part then break end
+            table.insert(result, part.type .. ":" .. part.text)
         end
-    elseif
+
+        return table.concat(result, "|")
     end
 
+    local function assert_eq(name, actual, expected)
+        if actual ~= expected then
+            error(
+                name .. " failed\n" ..
+                "expected: " .. expected .. "\n" ..
+                "actual:   " .. actual,
+                2
+            )
+        end
+    end
+
+    assert_eq(
+        "comment after text should return text first, then comment",
+        collect("abc -- comment"),
+        "text:abc |comment:-- comment"
+    )
+
+    assert_eq(
+        "single '-' is ordinary text, even if returned in adjacent text parts",
+        collect("a-b$c", "%$"),
+        "text:a|text:-b|stop:$|text:c"
+    )
+    assert_eq(
+        "adjacent stop chars should produce two stop tokens",
+        collect("a$$b", "%$"),
+        "text:a|stop:$|stop:$|text:b"
+    )
+
+    assert_eq(
+        "quoted Lua short string should be one quote token",
+        collect("\"abc\" tail"),
+        "quote:\"abc\"|text: tail"
+    )
+
+    assert_eq(
+        "unterminated quote should preserve remaining text",
+        collect("abc \"unterminated"),
+        "text:abc |text:\"unterminated"
+    )
 end
 
 
@@ -83,9 +161,22 @@ M.parts_from_text = function(text,     stop_chars, scanner, self_reference)
     local result      = {}
     local stop_char
     -- stop_pos is position of last char we have processed
-    while scanner:advance(pattern) do
-        local stop_char = scanner:stop_char()
+    while not scanner:empty() do
+        local part    = scanner:advance(pattern)
+        if part == "$" then
+            local macro_call = blud.macro_extract_call(text, scanner, self_reference)
+            table.insert(result, macro_call)
+        else
+            table.insert(result, part)
 
+        end
+    end
+end
+--[[
+        if stop_char == '-' then -- might be comment
+            
+        end
+        
         -- if no more stop_chars to find
         -- (also treat $ at end of text as literal)
         if not stop_pos or (stop_char == '$' and stop_pos == len) then
@@ -120,6 +211,7 @@ M.parts_from_text = function(text,     stop_chars, scanner, self_reference)
     return result, pos
 end
 
+--]]
 
 -- Unit tests
 -- Unit tests
