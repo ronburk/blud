@@ -311,6 +311,7 @@ function M.close()
     for i = sourcemap_gap+1, #sourcemap do
         sourcemap[i].dest_ln = sourcemap[i].dest_ln + line_count
     end
+    sourcemap_lua = sourcemap_to_lua(sourcemap)
     return pre_sourcemap .. sourcemap_lua .. post_sourcemap
 end
 

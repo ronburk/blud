@@ -303,6 +303,9 @@ function compile_macro_assign(compile_io, macro_name)
     print(string.format("'%s' '%s' %q", macro_name, assign_op, macro_text))
     compile_io.emit_line("blud.macro_assign(blud.scope_bludfile, %q, %q, %s)",
                          macro_name, assign_op, m.parts_to_lua(parts))
+
+    compile_io.emit_line("blud.macro_assign(blud.scope_bludfile, %q, %q, %s)",
+                         macro_name, assign_op, m.parts_to_lua(parts))
 end
 
 

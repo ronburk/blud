@@ -4,7 +4,7 @@ CC  = gcc $(EMPTY)
 CXX = g++
 CFLAGS = -g
 LDFLAGS = -L./luajit/src -lluajit
-CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
+CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 
 all : blud test
