@@ -1,6 +1,6 @@
 -- bludfile for building/testing blud
 
-CC  = gcc
+CC  = gcc $(EMPTY)
 CXX = g++
 CFLAGS = -g
 LDFLAGS = -L./luajit/src -lluajit

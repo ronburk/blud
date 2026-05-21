@@ -2054,6 +2054,7 @@ if luac_needs_building then
 
     -- Compile the source code to bytecode
     local code_to_compile = compile_io.close()
+    print(code_to_compile)
     local compiled_function, err = loadstring(code_to_compile, "bludfile")
     
     if not compiled_function then

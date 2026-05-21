@@ -299,8 +299,10 @@ function compile_macro_assign(compile_io, macro_name)
 
     compile_io.skip_white()
     local macro_text = compile_io.get_line_remainder()
+    local parts = m.parts_from_text(macro_text)
     print(string.format("'%s' '%s' %q", macro_name, assign_op, macro_text))
-    compile_io.emit_line("blud.macro_assign(%q, %q, %q)", macro_name, assign_op, macro_text)
+    compile_io.emit_line("blud.macro_assign(blud.scope_bludfile, %q, %q, %s)",
+                         macro_name, assign_op, m.parts_to_lua(parts))
 end
 
 
@@ -436,7 +438,7 @@ function compile(compile_io)
         elseif token_type == "EOL" then
         else
             compile_rule_or_target_assignment(compile_io, token_type, token_text)
-        end`
+        end
         token_type, token_text = compile_io.get_token()
     end
 end
