@@ -56,9 +56,85 @@ end
 -- push an input "file" that will be read by get_line()
 M.push_input = function(name, text)
     local reader= lines(text)
-    current_input = { name=name, text=text, source_ln=0, reader=reader }
+    current_input = { name=name, text=text, source_ln=1, reader=reader }
     table.insert(input_stack, current_input)
 end
+local pos = 1 --???
+local eol = true
+
+local function match_colon_operator(text, pos)
+    local stop = text:match("^:[%a_][%w_]*:()", pos)
+    if stop then
+        return text:sub(pos, stop - 1)
+    end
+    if text:sub(pos, pos + 1) == "::" then
+        return "::"
+    end
+    return ":"
+end
+
+
+M.get_token = function()
+    local token_type, token_text
+    local text = current_input.text
+    local char = text:sub(pos, pos)
+    if eol and char == " " then
+        token_type = "LEADWHITE"
+        token_text = text:match("^[ \t]+", pos)
+    elseif text:sub(pos, pos+1) == "--" then
+        token_type = "COMMENT"
+        token_text = text:match("^%-%-[^\n]*", pos)
+    elseif char == '\n' then
+        token_type = "EOL"
+        token_text = char
+        current_input.source_ln = current_input.source_ln + 1
+    elseif char:match("[.%a_]") then
+        token_type = "IDENT"
+        token_text = text:match("^[.%a_]+", pos)
+    elseif char == ':' then
+        token_type = "COLON_OP"
+        token_text = match_colon_operator(text, pos)
+    elseif char == '' then
+        token_type = "EOF"
+        token_text = ""
+    else
+        error("Unknown char: '" .. char .. "'")
+    end
+    
+    pos = pos + #token_text
+    eol = (token_type == "EOL")
+--    print(string.format("[%s]=%q", token_type, token_text))
+    return token_type, token_text
+end
+
+M.get_line_remainder = function()
+    local result = current_input.text:match("^[^\n]*", pos)
+    pos = pos + #result
+    return result
+end
+
+M.skip_white = function()
+    local white = current_input.text:match("^[ \t]*", pos)
+    pos = pos + #white
+end
+
+
+
+M.get_assign_op = function()
+    local result, discard
+    local text = current_input.text
+    discard, result = text:match("^([ \t]*)(:=)", pos)
+    if not result then
+        discard, result = text:match("^([ \t]*)(+=)", pos)
+    end
+    if not result then
+        discard, result = text:match("^([ \t]*)(=)", pos)
+    end
+    assert(result) -- we should not get called unless assign op known to exist
+    pos = pos + #discard + #result
+    return result
+end
+
 
 function M.reread()
     assert(current_input)
@@ -152,16 +228,74 @@ local function sourcemap_to_lua(map)
     for i = 1, #sourcemap do
         local entry = sourcemap[i]
         result = result .. string.format(
-            "    {filename=%q, source_ln=%d, dest_ln=%d}\n",
+            "    {filename=%q, source_ln=%d, dest_ln=%d},\n",
             entry.filename, entry.source_ln, entry.dest_ln)
     end
     result = result .. "    }\n"
     return result
 end
 
+local function error_get_line(text, source_ln)
+    local current = 1
+    for line in text:gmatch("[^\n]*\n?") do
+        if current == source_ln then
+            return line:match("([^\n]*)")  -- strip trailing newline
+        end
+        current = current + 1
+    end
+    error(string.format("Source line %d out of range\n", source_ln))
+    return nil  -- line number out of range
+end
+
+M.get_current_line = function()
+    local text = current_input.text
+
+    while pos > 1 and text:sub(pos - 1, pos - 1) ~= "\n" do
+        pos = pos - 1
+    end
+    assert(pos == 1 or text:sub(pos - 1, pos - 1) == "\n")
+    local newline_pos = text:find("\n", pos, true)
+    local line
+
+    if newline_pos then
+        line = text:sub(pos, newline_pos - 1)
+    else
+        line = text:sub(pos)
+    end    
+    pos = pos + #line
+    return line
+end
+    
+M.is_indented_line = function()
+    return current_input.text:match("^[ \t]+[^ \t\n]", pos)
+end
+
+
+M.peek_assign = function(text, position)
+    local result = false
+    local anchor = ""
+
+    if not text then
+        text     = current_input.text
+        position = pos
+    end
+    local pattern = anchor .. ""
+    if text:match("^[ \t]*:=", position) then
+        result = true
+    elseif text:match("^[ \t]*+=", position) then
+        result = true
+    elseif text:match("^[ \t]*=", position) then
+        result = true
+    end
+    return result
+end
+
 function M.error(fmt, ...)
     local text = string.format(fmt, ...)
-    local where = string.format("File %s, line %d\n", current_input.name, current_input.source_ln)
+    local where = string.format("%s\nFile %s, line %d\n",
+                            error_get_line(current_input.text, current_input.source_ln),
+                            current_input.name,
+                            current_input.source_ln)
     error(where .. text)
 end
 

@@ -6,30 +6,26 @@ CFLAGS = -g
 LDFLAGS = -L./luajit/src -lluajit
 CFLAGS  = -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
+
 all : blud test
+
 
 test :TEST:
     ./blud -f $<
 
 debug release :BUILD:
+debug: CFLAGS += -g
+
+
 
 SRC_FILES = blud.c bludlua.c
-if M("BLUD_HOST_OS") == "windows" then
-    $ SRC_FILES += "oswindows.c"
-elseif M("BLUD_HOST_OS") == "linux" then
-    $ SRC_FILES += "oslinux.c"
-else
---    error("unknown value for BLUD_HOST_OS: " .. M("BLUD_HOST_OS"))
-end
 
 blud :: *.c
 
 -- use cstr to convert Lua source into a C string
 STRFILES = blud.lua builtin.blud
 bludlua.c : $(STRFILES) cstr
-    if true then
-        $(OWD)/cstr $(STRFILES) >$@
-    end
+    $(OWD)/cstr $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)
 cstr :: cstr.cpp

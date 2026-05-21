@@ -3,7 +3,6 @@ local M = {}
 local util = require("util")
 
 
-
 --[[
 
     parts_from_text() - break text into parts
@@ -167,10 +166,29 @@ do
     )
 end
 
+local function append_part(parts, part)
+    assert(parts)
+    assert(part)
+    assert(part.type)
+
+    local previous = parts[#parts]
+
+    if      part.type == "text"
+        and previous
+        and previous.type == "text"
+    then
+        previous.text = previous.text .. part.text
+    else
+        table.insert(parts, part)
+    end
+end
+
 M.parts_from_text = function(text)
     assert(text)
     local scanner = Scanner.new(text)
-    return M.parts_from_text_(scanner)
+    local result  = M.parts_from_text_(scanner)
+    print(util.dump(result))
+    return result
 end
 
 
@@ -181,12 +199,12 @@ M.parts_from_text_ = function(scanner,     stop_chars, self_reference)
     while part do
         if part.type == "stop" and part.text == "$" then
             local macro_call = M.macro_extract_call(scanner, self_reference)
-            table.insert(result, macro_call)
+            append_part(result, macro_call)
         elseif part.type == "stop" then
+            scanner:unget_part(part)
             return result
         else
-            table.insert(result, part)
-
+            append_part(result, part)
         end
         part = scanner:get_next_part(stop_chars)
     end
@@ -205,19 +223,23 @@ M.macro_extract_call = function(scanner, self_reference)
     if first_char ~= '(' then    -- if single-char macro with no arguments
         table.insert(arg_stack, {type="text", text=first_char})
     else    -- else looks like paren-style macro invocation
-        local arg
-        arg = M.parts_from_text_(scanner, "[ )]", self_reference)
-        if not next(arg) then
+        local parts
+        parts = M.parts_from_text_(scanner, " )", self_reference)
+        if #parts <= 0 then
             error("empty macro invocation")
-        end
-        local stop_char = text:sub(pos,pos)
-        table.insert(arg_stack, arg)
-        if stop_char == ' ' then
-            error("can't handle macro args yet")
-        elseif stop_char ~= ')' then
-            error("malformed macro call: " .. text)
-        else  -- else we hit closing paren of macro call
-            pos = pos + 1   -- skip over ')'
+        else
+            assert(parts[1].type == "text" and parts[1].text ~= "")
+            table.insert(arg_stack, parts[1])
+            local macro_name = parts[1].text
+            local stop_part  = scanner:get_next_part(" )")
+            if stop_part.text == ' ' then
+                error("can't handle macro args yet")
+            elseif stop_part.text ~= ')' then
+                error(string.format("malformed macro call '%s' because of '%s'",
+                                    macro_name, stop_part.text))
+            else  -- else we hit closing paren of macro call
+                
+            end
         end
     end
     if self_reference then
@@ -225,6 +247,62 @@ M.macro_extract_call = function(scanner, self_reference)
     end
     return arg_stack
 end
+
+
+local function q(s)
+    return string.format("%q", s)
+end
+
+
+local function part_to_lua(part)
+    assert(type(part) == "table")
+    assert(part.type)
+
+    if part.type == "text"
+    or part.type == "quote"
+    or part.type == "comment"
+    or part.type == "stop" then
+        assert(type(part.text) == "string")
+        return string.format(
+            "{ type = %q, text = %q }",
+            part.type,
+            part.text
+        )
+    end
+
+    if part.type == "macro" then
+        local result = {
+            string.format("{ type = %q,", part.type)
+        }
+
+        for i = 1, #part do
+            table.insert(result,
+                string.format("    [%d] = %s,", i, part_to_lua(part[i]))
+            )
+        end
+
+        table.insert(result, "}")
+
+        return table.concat(result, "\n")
+    end
+
+    error("unknown part type: " .. tostring(part.type))
+end
+
+M.parts_to_lua = function(parts)
+    assert(type(parts) == "table")
+
+    local result = { "{" }
+
+    for _, part in ipairs(parts) do
+        table.insert(result, "    " .. part_to_lua(part) .. ",")
+    end
+
+    table.insert(result, "}")
+
+    return table.concat(result, "\n")
+end
+
 
 
 -- Unit tests
@@ -241,7 +319,7 @@ do
         elseif part.type == "macro" then
             local args = {}
             for i = 1, #part do
-                table.insert(args, parts_to_string(part[i]))
+                table.insert(args, part_to_string(part[i]))
             end
             return "macro(" .. table.concat(args, ", ") .. ")"
         else
@@ -272,19 +350,58 @@ do
     end
 
     check_parts(
-    "abc",
-    'text:"abc"'
-)
+        "$(FOO)",
+        'macro(text:"FOO")'
+    )
 
-check_parts(
-    "abc$(FOO)def",
-    'text:"abc" | macro(text:"FOO") | text:"def"'
-)
+    check_parts(
+        "$x",
+        'macro(text:"x")'
+    )
 
-check_parts(
-    [["abc" -- comment]],
-    'quote:"\\"abc\\"" | text:" " | comment:"-- comment"'
-)
+    check_parts(
+        "a$b",
+        'text:"a" | macro(text:"b")'
+    )
+
+    check_parts(
+        "a-b",
+        'text:"a-b"'
+    )
+
+    check_parts(
+        "a--comment",
+        'text:"a" | comment:"--comment"'
+    )
+
+    check_parts(
+        "'abc'",
+        'quote:"\'abc\'"'
+    )
+
+    check_parts(
+        [["a\"b"]],
+        'quote:"\\"a\\\\\\"b\\""'
+    )
+
+    check_parts(
+        "abc$",
+        'text:"abc$"'
+    )
+    check_parts(
+        "abc",
+        'text:"abc"'
+    )
+
+    check_parts(
+        "abc$(FOO)def",
+        'text:"abc" | macro(text:"FOO") | text:"def"'
+    )
+
+    check_parts(
+        [["abc" -- comment]],
+        'quote:"\\"abc\\"" | text:" " | comment:"-- comment"'
+    )
 end
 
 

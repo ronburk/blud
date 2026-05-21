@@ -36,5 +36,9 @@ M.dump = function(o, seen)
     end
 end
 
+M.printf = function(...)
+    io.write(string.format(...))
+end
+
 
 return M

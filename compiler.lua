@@ -224,6 +224,35 @@ end
 
 local translate_make_directive
 do
+    local function match_rule_operator(text)
+        local start_pos = text:find(":", 1, true)
+        if not start_pos then
+            return nil
+        end
+
+        local stop_pos = text:match("^:[A-Za-z_][A-Za-z0-9_]*:()", start_pos)
+        if stop_pos then
+            return start_pos, stop_pos - 1
+        end
+
+        if text:sub(start_pos, start_pos + 1) == "::" then
+            return start_pos, start_pos + 1
+        end
+
+        return start_pos, start_pos
+    end
+    local function parts_from_dependency_line(line)
+        local result = nil
+        local parts  = m.parts_from_text(line)
+        for _, part in ipairs(parts) do
+            if part.type == "text" then
+                local start_pos, end_pos = match_rule_operator(part.text)
+                if not start_pos then break end
+            end
+        end
+        return result
+    end
+
     function translate_make_directive(compile_io, line)
         print("translate_make_directive: " .. tostring(line))
         local macro = match_macro_assign(line)
@@ -233,8 +262,8 @@ do
         elseif is_blank_or_comment(line) then
             compile_io.emit_line(line)
         else
-            local foo = m.parts_from_text(line)
-            print(util.dump(foo))
+            local parts = parts_from_dependency_line(line)
+            print(util.dump(parts))
             compile_io.error("Don't know what this line is: %s", line)
         end
     end
@@ -247,6 +276,168 @@ do
         local keyword_stack = {}
         local keyword_top   = leading_keyword(line)
         compile_io.emit_line(line)
+    end
+end
+
+
+local TC_EMPTY = { LEADWHITE=true, COMMENT=true }
+local TC_END   = { EOF=true, EOL=true }
+local TC_IDENT = { LUASTART=true, LUAEND=true, IDENT=true }
+
+function compile_empty_line(compile_io, token_type, token_text)
+    while TC_EMPTY[token_type] do
+        token_type, token_text = compile_io.get_token()
+    end
+    if not TC_END[token_type] then
+        compile_io.error("Unexpected token: %s", token_text)
+    end
+    return token_type
+end
+
+function compile_macro_assign(compile_io, macro_name)
+    local assign_op = compile_io.get_assign_op()
+
+    compile_io.skip_white()
+    local macro_text = compile_io.get_line_remainder()
+    print(string.format("'%s' '%s' %q", macro_name, assign_op, macro_text))
+    compile_io.emit_line("blud.macro_assign(%q, %q, %q)", macro_name, assign_op, macro_text)
+end
+
+
+local function match_colon_operator(text, pos)
+    assert(text)
+    assert(pos)
+
+    local stop = text:match("^:[%a_][%w_]*:()", pos)
+    if stop then
+        return stop - 1
+    end
+
+    if text:match("^::", pos) then
+        return pos + 1
+    end
+
+    if text:match("^:%s*", pos) then
+        return pos
+    end
+
+    return nil
+end
+
+local function find_colon_operator_in_text(text)
+    local pos = 1
+
+    while true do
+        pos = text:find(":", pos, true)
+        if not pos then
+            return nil
+        end
+
+        local stop_pos = match_colon_operator(text, pos)
+        if stop_pos then
+            return pos, stop_pos
+        end
+
+        pos = pos + 1
+    end
+end
+
+local function append_if_nonempty(parts, part)
+    if part.type ~= "text" or part.text ~= "" then
+        table.insert(parts, part)
+    end
+end
+
+local function split_parts_at_colon_operator(parts)
+    local left = {}
+
+    for i, part in ipairs(parts) do
+        if part.type == "comment" then
+            break
+        end
+        if part.type == "text" then
+            local op_start, op_stop = find_colon_operator_in_text(part.text)
+            if op_start then
+                local right = {}
+                local operator = part.text:sub(op_start, op_stop)
+                append_if_nonempty(left, {
+                    type = "text",
+                    text = part.text:sub(1, op_start - 1),
+                })
+                append_if_nonempty(right, {
+                    type = "text",
+                    text = part.text:sub(op_stop + 1),
+                })
+                for j = i + 1, #parts do
+                    if parts[j].type == "comment" then
+                        break
+                    end
+                    table.insert(right, parts[j])
+                end
+                return left, operator, right
+            end
+        end
+        table.insert(left, part)
+    end
+    return nil
+end
+
+function compile_rule_or_target_assignment(compile_io, token_type, token_text)
+    local parts = m.parts_from_text(compile_io.get_current_line())
+    local left, operator, right = split_parts_at_colon_operator(parts)
+
+    -- temporary proof of parse
+    print("left     = " .. util.dump(left))
+    print("operator = " .. util.dump(operator))
+    print("right    = " .. util.dump(right))
+
+    if not operator then
+        compile_io.error("Expected dependency rule")
+    end
+    if right and #right > 0 and right[1].type == "text" then
+        print("Should check for target-scoiped macro assign")
+    end
+    
+    print("left = " .. m.parts_to_lua(left))
+    print("right = " .. m.parts_to_lua(right))
+    -- next step:
+    -- decide whether right begins with target-specific macro assignment
+    -- otherwise emit blud.add_rule_parts(left, operator, right, action)
+    local action = ""
+    -- eat end of line, if any
+    local token_type, token_text = compile_io.get_token()
+    if token_type ~= "EOF" then
+        assert(token_type == "EOL")
+        while compile_io.is_indented_line() do
+            action = action .. compile_io.get_current_line()
+            token_type, token_text = compile_io.get_token()
+        end
+        print("ACTION = " .. action)
+        token_type, token_text = compile_io.get_token()
+    end
+    compile_io.emit_line("blud.eval_rule(%q, %s, %s)", operator, m.parts_to_lua(left), m.parts_to_lua(right))
+    util.printf("-----------------\n")
+end
+
+
+function compile(compile_io)
+    local token_type, token_text = compile_io.get_token()
+
+    while token_type ~= "EOF" do
+        if TC_EMPTY[token_type] then -- if could be empty line
+            compile_empty_line(compile_io, token_type, token_text)
+        elseif TC_IDENT[token_type] and compile_io.peek_assign() then
+            compile_macro_assign(compile_io, token_text)
+        elseif token_type == "LEADWHITE" then
+            util.printf("[%s] = %q\n", token_type, token_text)
+            compile_io.error("Line looks like action, but is not part of rule")
+        elseif token_type == "LUASTART" then
+            compile_lua(compile_io, token_text)
+        elseif token_type == "EOL" then
+        else
+            compile_rule_or_target_assignment(compile_io, token_type, token_text)
+        end`
+        token_type, token_text = compile_io.get_token()
     end
 end
 
@@ -389,7 +580,8 @@ function M.compile(compile_io)
     local source_ln = 1
     sourcemap.append("<internal>", source_ln, "function blud.bludfile_main()\n")
     source_ln = source_ln + 1
-    translate(compile_io)
+    --    translate(compile_io)
+    compile(compile_io)
     sourcemap.append("<internal>", source_ln, "end\n")
     return sourcemap.tostring() .. sourcemap.to_lua()
 end

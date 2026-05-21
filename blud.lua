@@ -2031,11 +2031,9 @@ if luac_needs_building then
     local compile_io = require("compile_io")
     compile_io.push_input("bludfile", f:read("*a"))
     compile_io.emit_sourcemap()
-    local compiled = compiler.compile(compile_io)
-    --    print(compiled)
-    print(compile_io.close())
+    compiler.compile(compile_io)
+    
     f:close()
-    error("did it compile?")
     --print(blud_module_code)
     print("phase 1 complete")
 --    print(phase1_text)
@@ -2055,6 +2053,7 @@ if luac_needs_building then
     blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
     -- Compile the source code to bytecode
+    local code_to_compile = compile_io.close()
     local compiled_function, err = loadstring(code_to_compile, "bludfile")
     
     if not compiled_function then
