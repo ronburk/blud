@@ -1,5 +1,5 @@
 local M = {}
-
+string_buf = require("string.buffer")
 
 
 -- array_append: append one array to another
@@ -11,6 +11,25 @@ M.array_append    = function(array, more)
     for _, element in ipairs(more) do
         table.insert(array, element)
     end
+end
+
+-- count_char() count occurrences of char in string
+M.count_char = function(text, char)
+    return select(2, text:gsub(char, char))
+end
+
+-- turn a chunk into a string constant that can later be
+-- turned back into a chunk by loadstring()
+M.chunk_to_lua = function(chunk)
+    local bytecode = string.dump(chunk)
+    -- preallocate, add 10 bytes for slop
+    local buf = string_buf.new((#bytecode * 4) + 10)
+    buf:put("\"")
+    for i = 1, #bytecode do
+        buf:putf("\\x%02x", bytecode:byte(i))
+    end
+    buf:put("\"")
+    return buf:tostring()
 end
 
 -- dump: simple Lua dumper
@@ -39,6 +58,16 @@ end
 M.printf = function(...)
     io.write(string.format(...))
 end
+
+M.string_to_file = function(filename, text)
+    assert(filename)
+    assert(text)
+
+    local file = assert(io.open(filename, "wb"))
+    assert(file:write(text))
+    assert(file:close())
+end
+
 
 
 return M

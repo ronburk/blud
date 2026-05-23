@@ -1,5 +1,5 @@
 local M    = {}
-local sourcemap = require("sourcemap")
+-- XXX local sourcemap = require("sourcemap").new()
 local m         = require("macro")
 local util      = require("util")
 
@@ -583,12 +583,12 @@ end
 function M.compile(compile_io)
     print("blud.compile()")
     local source_ln = 1
-    sourcemap.append("<internal>", source_ln, "function blud.bludfile_main()\n")
+--XXX    sourcemap:append("<internal>", source_ln, "function blud.bludfile_main()\n")
     source_ln = source_ln + 1
     --    translate(compile_io)
     compile(compile_io)
-    sourcemap.append("<internal>", source_ln, "end\n")
-    return sourcemap.tostring() .. sourcemap.to_lua()
+--XXX    sourcemap:append("<internal>", source_ln, "end\n")
+--XXX    return sourcemap:tostring() .. sourcemap:to_lua()
 end
 
 return M

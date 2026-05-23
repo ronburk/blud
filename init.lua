@@ -22,45 +22,56 @@ end
 
 -- Custom error handler for xpcall that iterates over the stack frames
 function blud.error_handler(err)
-    local lines = {}
+    -- must never die, so wrap it
+    local ok, result = pcall(function()
 
-    -- Add the error message itself
-    table.insert(lines, "Error: " .. tostring(err))
+            local lines = {}
 
-    -- Iterate over the stack frames starting from the 2nd frame (skip error handler frame)
-    local level = 2
-    while true do
-        -- Get source/line info ("Sl") and function name ("n")
-        local info = debug.getinfo(level, "Sln")
-        if not info then break end  -- Stop when no more frames
+            -- Add the error message itself
+            table.insert(lines, "Error: " .. tostring(err))
 
-        -- Check if the source is in blud.sources (i.e., it's a dynamically loaded chunk)
-        local file_name = info.source
-        local line_number = info.currentline
-        local func_name = info.name or "[C function]"  -- Get the function name or indicate C function
+            -- Iterate over the stack frames starting from the 3rd frame
+            -- (skip error handler frame)
+            local level = 3
+            while true do
+                -- Get source/line info ("Sl") and function name ("n")
+                local info = debug.getinfo(level, "Sln")
+                if not info then break end  -- Stop when no more frames
 
-        if file_name and blud.sources[file_name] and line_number > 0 then
-            -- Get the specific line from the source code
-            local source = blud.sources[file_name]
-            local src_line = get_line_from_source(source, line_number)
+                -- Check if the source is in blud.sources (i.e., it's a dynamically loaded chunk)
+                local file_name = info.source
+                local line_number = info.currentline
+                local func_name = info.name or "[C function]"  -- Get the function name or indicate C function
 
-            -- Add the stack frame information along with the source line
-            if src_line then
-                table.insert(lines, string.format("  %s:%d --> %s", file_name, line_number, src_line))
-            else
-                table.insert(lines, string.format("  %s:%d", file_name, line_number))
+                if file_name and blud.sources[file_name] and line_number > 0 then
+                    -- Get the specific line from the source code
+                    local source = blud.sources[file_name]
+                    local src_line = get_line_from_source(source, line_number)
+
+                    -- Add the stack frame information along with the source line
+                    if src_line then
+                        table.insert(lines, string.format("  %s:%d --> %s", file_name, line_number, src_line))
+                    else
+                        table.insert(lines, string.format("  %s:%d", file_name, line_number))
+                    end
+                elseif info.what == "C" then
+                    -- Add C function name and indicate it
+                    table.insert(lines, string.format("  C function '%s'", func_name))
+                else
+                    -- Add the stack frame info without source code if not in blud.sources
+                    table.insert(lines, string.format("  %s:%d in function '%s'", info.source, info.currentline, func_name))
+                end
+
+                level = level + 1
             end
-        elseif info.what == "C" then
-            -- Add C function name and indicate it
-            table.insert(lines, string.format("  C function '%s'", func_name))
-        else
-            -- Add the stack frame info without source code if not in blud.sources
-            table.insert(lines, string.format("  %s:%d in function '%s'", info.source, info.currentline, func_name))
-        end
 
-        level = level + 1
-    end
-
-    return table.concat(lines, "\n")
+            return table.concat(lines, "\n")
+    end)
+    if ok then return result end
+    return debug.traceback(
+        "error handler failed: " .. tostring(result) ..
+        "\noriginal error: " .. tostring(err),
+        2
+    )
 end
 

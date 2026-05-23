@@ -32,25 +32,39 @@ function blud.require(name)
     return chunk()  -- Run the chunk (runtime errors will also be caught by xpcall)
 end
 
-function get_bludfile_path()
-    local path = "bludfile"
-    local args = COMMAND_LINE
-    local option = "-f"
-    for i = 1, #args do
-        if args[i] == option then
-            -- Check if there's a next argument to be the value
-            if i < #args then
-                return args[i + 1]
-            else
-                return path
+function blud.parse_command_line()
+    local options = {
+        bludfile_path = "bludfile",
+        debug = false,
+    }
+    local args = _G.COMMAND_LINE
+    local i = 2     -- skip command-name
+    while i <= #args do
+        local arg = args[i]
+
+        if arg == "-f" then
+            i = i + 1
+            if i <= #args then
+                options.bludfile_path = args[i]
             end
+        elseif arg == "-d" then
+            options.debug = true
+        else
+            error("unknown command-line option: " .. arg)
         end
+        i = i + 1
     end
-    return path
+
+    blud.command_line_options = options
+end
+
+blud.parse_command_line()
+
+function get_bludfile_path()
+    return blud.command_line_options.bludfile_path
 end
 
 
-print("start executing phase 1")
 function blud.luac_needs_building()
     local bludfile_path = get_bludfile_path()
     local luac_path = bludfile_path .. ".luac"

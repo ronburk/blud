@@ -27,7 +27,7 @@ end
 -- emit an entire file (possibly virtual) verbatim
 function M.emit_file(name, text)
     local entry = {filename=name, source_ln=1, dest_ln=next_output_ln}
-    table.insert(map, entry);
+    table.insert(sourcemap, entry);
     next_output_ln = next_output_ln + count_nl(text)
     append_output_text(text)
 end
@@ -187,17 +187,20 @@ local function need_new_sourcemap_entry(previous_entry, current_input)
     elseif previous_entry.source_ln ~= current_input.source_ln then
         need_entry = true
     end
-    print(
+--[[    print(
         string.format(
             "[%d] prev name=%s, source_ln=%d \n returns %s", #sourcemap,
             previous_entry.filename, previous_entry.source_ln, need_entry
     ))
+]]
     return need_entry
 end
 
 function M.emit_line(fmt, ...)
-    assert(#input_stack > 0) -- should not be called when no active input
-
+    if #input_stack <= 0 then
+        error("Must not call emit_line when no active input (I have no filename!)")
+    end
+    
     local text = string.format(fmt, ...)
     if text:sub(-1) ~= '\n' then text = text .. '\n' end
 
