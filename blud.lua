@@ -385,6 +385,12 @@ if luac_needs_building then
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
 
     local compile_io = require("compile_io")
+    local chunk, err   = loadstring(blud_module_code, "<runtime>")
+    if not chunk then error (err) end
+    local runtime = string.format("loadstring(%s,\"<runtime>\")()\n",
+                                  util.chunk_to_lua(chunk))
+    compile_io.emit_file("<runtime>", runtime)
+
     compile_io.push_input("builtin.blud", CSTRGet("builtin.blud"))
     compiler.compile(compile_io)
     compile_io.push_input("bludfile", f:read("*a"))
@@ -392,11 +398,6 @@ if luac_needs_building then
     compile_io.emit_sourcemap()
     compiler.compile(compile_io)
     compile_io.emit_line("end")
-    local chunk, err   = loadstring(blud_module_code, "<runtime>")
-    if not chunk then error (err) end
-    local runtime = string.format("loadstring(%s,\"<runtime>\")()\n",
-                                  util.chunk_to_lua(chunk))
-    compile_io.emit_line(runtime)
 --    compile_io.emit_file("<blud_module_code>", blud_module_code)
     
     f:close()
@@ -520,7 +521,7 @@ function execute_bytecode(file_path)
         return
     end
 
-func()
+    func()
 return
 --[[
     -- Execute the bytecode and trap errors
@@ -538,6 +539,15 @@ end
 execute_bytecode(luac_path)
 print("now run user code")
 blud.bludfile_code()
+print("OK, now ready to update")
+if blud.primary_targets == nil then
+    error("no targets to build")
+end
+blud.build_init()
+for _,target in ipairs(blud.primary_targets) do
+    target:BUILD()
+end
+
 
 --[[
 print("About to call pcall")

@@ -56,11 +56,11 @@ end
 -- push an input "file" that will be read by get_line()
 M.push_input = function(name, text)
     local reader= lines(text)
-    table.insert(input_stack, current_input)
-    current_input = { name=name, text=text, source_ln=1, reader=reader, pos=1 }
+    if current_input then   -- stack current input if any
+        table.insert(input_stack, current_input)
+    end
+    current_input = { name=name, text=text, source_ln=1, reader=reader, pos=1, eol=true }
 end
-
-local eol = true
 
 local function match_colon_operator(text, pos)
     local stop = text:match("^:[%a_][%w_]*:()", pos)
@@ -97,7 +97,7 @@ M.get_token = function()
     local char = text:sub(pos, pos)
 
     if pos > #text then return "EOF", "" end
-    if eol and char == " " then
+    if current_input.eol and char == " " then
         token_type = "LEADWHITE"
         token_text = text:match("^[ \t]+", pos)
     elseif text:sub(pos, pos+1) == "--" then
@@ -111,8 +111,17 @@ M.get_token = function()
         token_type = "COLON_OP"
         token_text = match_colon_operator(text, pos)
     elseif char == '' then
-        token_type = "EOF"
-        token_text = ""
+        -- fake EOL if input did not end in newline
+        if not current_input.eol then
+            token_type = "EOL"
+            token_text = '\n'
+        elseif #input_stack > 0 then
+            current_input = table.remove(input_stack)
+            return M.get_token()
+        else
+            token_type = "EOF"
+            token_text = ""
+        end
     else
         token_type = "WORD"
         token_text = char .. scan_dependency_word(text, pos+1)
@@ -121,7 +130,7 @@ M.get_token = function()
     end
     
     current_input.pos = pos + #token_text
-    eol = (token_type == "EOL")
+    current_input.eol = (token_type == "EOL")
 --    print(string.format("[%s]=%q", token_type, token_text))
     return token_type, token_text
 end
@@ -223,7 +232,7 @@ local function need_new_sourcemap_entry(previous_entry, current_input)
 end
 
 function M.emit_line(fmt, ...)
-    if #input_stack <= 0 then
+    if not current_input then
         error("Must not call emit_line when no active input (I have no filename!)")
     end
     
@@ -248,6 +257,8 @@ function M.emit_line(fmt, ...)
             table.insert(sourcemap, entry)
             next_output_ln = next_output_ln + 1
         end
+    else
+        next_output_ln = next_output_ln + line_count
     end
     append_output_text(text)
 end
