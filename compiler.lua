@@ -294,6 +294,27 @@ function compile_empty_line(compile_io, token_type, token_text)
     return token_type
 end
 
+local function parts_to_body_lua(parts)
+    local result = "{"
+    for i, part in ipairs(parts) do
+        if i > 1 then
+            result = result .. ", "
+        end
+        if part.type == "text" or part.type == "quote" or part.type == "comment" then
+            result = result .. string.format("%q", part.text)
+        elseif part.type == "macro" then
+            result = result .. "{macro=true"
+            for _, arg in ipairs(part) do
+                result = result .. ", " .. parts_to_body_lua({ arg })
+            end
+            result = result .. "}"
+        else
+            error("unknown macro part type: " .. tostring(part.type))
+        end
+    end
+    return result .. "}"
+end
+
 function compile_macro_assign(compile_io, macro_name)
     local assign_op = compile_io.get_assign_op()
 
@@ -302,7 +323,7 @@ function compile_macro_assign(compile_io, macro_name)
     local parts = m.parts_from_text(macro_text)
 
     compile_io.emit_line("blud.macro_assign_parts(blud.scope_bludfile, %q, %q, %s)",
-                         macro_name, assign_op, m.parts_to_lua(parts))
+                         macro_name, assign_op, parts_to_body_lua(parts))
 end
 
 

@@ -396,7 +396,7 @@ if luac_needs_building then
 --    compile_io.emit_file("<blud_module_code>", blud_module_code)
     
     f:close()
-    print(blud_module_code)
+--    print(blud_module_code)
     print("phase 1 complete")
     
 --    print(phase1_text)

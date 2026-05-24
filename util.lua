@@ -55,6 +55,42 @@ M.dump = function(o, seen)
     end
 end
 
+-- better version? Delete previous when happy...
+M.dump = function(o, seen)
+    seen = seen or {}
+    local t = type(o)
+    if t == 'table' then
+        if seen[o] then
+            return '"<circular reference>"'
+        end
+        seen[o] = true
+        local s = '{ '
+
+        -- non-numeric keys first
+        local numeric = {}
+        for k, v in pairs(o) do
+            if type(k) == 'number' then
+                numeric[#numeric + 1] = k
+            else
+                s = s .. '["' .. tostring(k) .. '"] = ' .. M.dump(v, seen) .. ', '
+            end
+        end
+
+        -- numeric keys in ascending order
+        table.sort(numeric)
+        for _, k in ipairs(numeric) do
+            s = s .. '[' .. k .. '] = ' .. M.dump(o[k], seen) .. ', '
+        end
+
+        seen[o] = nil
+        return s .. '}'
+    elseif t == 'string' then
+        return string.format("%q", o)
+    else
+        return tostring(o)
+    end
+end
+
 M.printf = function(...)
     io.write(string.format(...))
 end
