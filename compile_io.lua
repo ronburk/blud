@@ -56,10 +56,10 @@ end
 -- push an input "file" that will be read by get_line()
 M.push_input = function(name, text)
     local reader= lines(text)
-    current_input = { name=name, text=text, source_ln=1, reader=reader }
     table.insert(input_stack, current_input)
+    current_input = { name=name, text=text, source_ln=1, reader=reader, pos=1 }
 end
-local pos = 1 --???
+
 local eol = true
 
 local function match_colon_operator(text, pos)
@@ -74,10 +74,29 @@ local function match_colon_operator(text, pos)
 end
 
 
+local function scan_dependency_word(text, pos)
+    local start = pos
+
+    while pos <= #text do
+        local c = text:sub(pos, pos)
+        if c == " " or c == "\t" or c == "\n" or c == ":" then
+            break
+        end
+        if c == "-" and text:sub(pos, pos + 1) == "--" then
+            break
+        end
+        pos = pos + 1
+    end
+    assert(pos > start)
+    return text:sub(start, pos - 1)
+end
 M.get_token = function()
     local token_type, token_text
     local text = current_input.text
+    local pos  = current_input.pos
     local char = text:sub(pos, pos)
+
+    if pos > #text then return "EOF", "" end
     if eol and char == " " then
         token_type = "LEADWHITE"
         token_text = text:match("^[ \t]+", pos)
@@ -88,9 +107,6 @@ M.get_token = function()
         token_type = "EOL"
         token_text = char
         current_input.source_ln = current_input.source_ln + 1
-    elseif char:match("[.%a_]") then
-        token_type = "IDENT"
-        token_text = text:match("^[.%a_]+", pos)
     elseif char == ':' then
         token_type = "COLON_OP"
         token_text = match_colon_operator(text, pos)
@@ -98,30 +114,38 @@ M.get_token = function()
         token_type = "EOF"
         token_text = ""
     else
-        error("Unknown char: '" .. char .. "'")
+        token_type = "WORD"
+        token_text = char .. scan_dependency_word(text, pos+1)
+        print(string.format("token_text=%q\n", token_text))
+--        error("Unknown char: '" .. char .. "'")
     end
     
-    pos = pos + #token_text
+    current_input.pos = pos + #token_text
     eol = (token_type == "EOL")
 --    print(string.format("[%s]=%q", token_type, token_text))
     return token_type, token_text
 end
 
 M.get_line_remainder = function()
+    local pos    = current_input.pos
     local result = current_input.text:match("^[^\n]*", pos)
     pos = pos + #result
+    current_input.pos = pos
     return result
 end
 
 M.skip_white = function()
+    local pos   = current_input.pos
     local white = current_input.text:match("^[ \t]*", pos)
     pos = pos + #white
+    current_input.pos = pos
 end
 
 
 
 M.get_assign_op = function()
     local result, discard
+    local pos  = current_input.pos
     local text = current_input.text
     discard, result = text:match("^([ \t]*)(:=)", pos)
     if not result then
@@ -132,6 +156,7 @@ M.get_assign_op = function()
     end
     assert(result) -- we should not get called unless assign op known to exist
     pos = pos + #discard + #result
+    current_input.pos = pos
     return result
 end
 
@@ -149,6 +174,7 @@ function M.get_line()
         if reread == true then
             result = current_input.previous_line
             reread = false
+            return result
         else
             current_input.previous_line = current_input.reader()
             result = current_input.previous_line
@@ -252,6 +278,7 @@ end
 
 M.get_current_line = function()
     local text = current_input.text
+    local pos  = current_input.pos
 
     while pos > 1 and text:sub(pos - 1, pos - 1) ~= "\n" do
         pos = pos - 1
@@ -266,11 +293,12 @@ M.get_current_line = function()
         line = text:sub(pos)
     end    
     pos = pos + #line
+    current_input.pos = pos
     return line
 end
     
 M.is_indented_line = function()
-    return current_input.text:match("^[ \t]+[^ \t\n]", pos)
+    return current_input.text:match("^[ \t]+[^ \t\n]", current_input.pos)
 end
 
 
@@ -280,12 +308,12 @@ M.peek_assign = function(text, position)
 
     if not text then
         text     = current_input.text
-        position = pos
+        position = current_input.pos
     end
     local pattern = anchor .. ""
     if text:match("^[ \t]*:=", position) then
         result = true
-    elseif text:match("^[ \t]*+=", position) then
+    elseif text:match("^[ \t]*%+=", position) then
         result = true
     elseif text:match("^[ \t]*=", position) then
         result = true

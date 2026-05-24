@@ -218,7 +218,7 @@ static int lua_glob_to_lua(lua_State* L){
 #endif
 
 
-static int lua_expand_path_patterns(lua_State *L) {
+static int lua_tokenize_dependency_line(lua_State *L) {
     const char* input       = luaL_checkstring(L, 1);
     const char* rover       = input;
 //    size_t      len         = strlen(input);
@@ -237,10 +237,10 @@ static int lua_expand_path_patterns(lua_State *L) {
             else
                 ++rover;
         printf("    c = '%c'\n", c);
-        start = rover; // mark possible start of word
-        if(c == '\0')
+        start = rover;      // mark possible start of word
+        if(c == '\0')       // if end of string
             break;
-        else if(c == ':'){
+        else if(c == ':'){  // if looks like operator
             const char* peek = ++rover;
             while((c=*peek++) != '\0' && (isalnum(c) || c == '_'))
                 ;
@@ -501,7 +501,7 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "get_dir_cache", lua_get_dir_cache);
     lua_register(L, "get_executable_path", lua_get_executable_path);
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
-    lua_register(L, "expand_path_patterns", lua_expand_path_patterns);
+    lua_register(L, "tokenize_dependency_line", lua_tokenize_dependency_line);
     return 0;
 }
 

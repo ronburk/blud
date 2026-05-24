@@ -402,6 +402,10 @@ do
         [["abc" -- comment]],
         'quote:"\\"abc\\"" | text:" " | comment:"-- comment"'
     )
+check_parts(
+    "-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1",
+    'text:"-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1"'
+)
 end
 
 

@@ -385,13 +385,17 @@ if luac_needs_building then
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
 
     local compile_io = require("compile_io")
+    compile_io.push_input("builtin.blud", CSTRGet("builtin.blud"))
+    compiler.compile(compile_io)
     compile_io.push_input("bludfile", f:read("*a"))
     compile_io.emit_line("blud.bludfile_code = function()")
     compile_io.emit_sourcemap()
     compiler.compile(compile_io)
     compile_io.emit_line("end")
+    local chunk, err   = loadstring(blud_module_code, "<runtime>")
+    if not chunk then error (err) end
     local runtime = string.format("loadstring(%s,\"<runtime>\")()\n",
-                                  util.chunk_to_lua(loadstring(blud_module_code,"<runtime>")))
+                                  util.chunk_to_lua(chunk))
     compile_io.emit_line(runtime)
 --    compile_io.emit_file("<blud_module_code>", blud_module_code)
     

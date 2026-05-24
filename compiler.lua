@@ -282,7 +282,7 @@ end
 
 local TC_EMPTY = { LEADWHITE=true, COMMENT=true }
 local TC_END   = { EOF=true, EOL=true }
-local TC_IDENT = { LUASTART=true, LUAEND=true, IDENT=true }
+local TC_WORD  = { LUASTART=true, LUAEND=true, WORD=true }
 
 function compile_empty_line(compile_io, token_type, token_text)
     while TC_EMPTY[token_type] do
@@ -405,6 +405,12 @@ local function split_parts_at_colon_operator(parts)
     return nil
 end
 
+-- We don't know what this line is, so we hope it is a dependency rule
+--    a b c d :OP: d e f
+-- or a target assignment
+--    a b c d : name <assign_op> text
+-- we are called with the first token on the line, which we know started
+-- in column 1.
 function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     local parts = m.parts_from_text(compile_io.get_current_line())
     local left, operator, right = split_parts_at_colon_operator(parts)
@@ -438,7 +444,10 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
         print("ACTION = " .. action)
         token_type, token_text = compile_io.get_token()
     end
-    compile_io.emit_line("blud.eval_rule(%q, %s, %s)", operator, m.parts_to_lua(left), m.parts_to_lua(right))
+    compile_io.emit_line("blud.eval_rule(%q, %s, %s)",
+                         operator,
+                         parts_to_body_lua(left),
+                         parts_to_body_lua(right))
     util.printf("-----------------\n")
 end
 
@@ -447,9 +456,10 @@ function compile(compile_io)
     local token_type, token_text = compile_io.get_token()
 
     while token_type ~= "EOF" do
+        util.printf("token_type='%s'\n", token_type)
         if TC_EMPTY[token_type] then -- if could be empty line
             compile_empty_line(compile_io, token_type, token_text)
-        elseif TC_IDENT[token_type] and compile_io.peek_assign() then
+        elseif TC_WORD[token_type] and compile_io.peek_assign() then
             compile_macro_assign(compile_io, token_text)
         elseif token_type == "LEADWHITE" then
             util.printf("[%s] = %q\n", token_type, token_text)
