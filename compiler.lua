@@ -405,6 +405,33 @@ local function split_parts_at_colon_operator(parts)
     return nil
 end
 
+-- we compile an action into a function that accepts a scope as an
+-- argument.
+function compile_action(compile_io)
+    print("compile_action!")
+    local action = ""
+    if compile_io.is_indented_line() then
+        while compile_io.is_indented_line() do
+            compile_io.skip_white()
+            local macro_text = compile_io.get_line_remainder()
+            assert(compile_io.get_token() == "EOL")
+            local parts = m.parts_from_text(macro_text)
+            if #action > 0 then action = action .. ", " end
+            action =  action .. m.parts_to_lua_function(parts) 
+            action = "status =  blud.execute(scope, " .. action .. ")" ..
+                "; if status ~= 0 then return status end"
+        end
+        if action ~= "" then
+            action = "function(scope) " .. action .. " end "
+        end
+    end
+--    action = "function (scope)
+    print("ACTION = " .. util.dump(action))
+    if action == "" then action = "nil" end
+    return action
+end
+
+
 -- We don't know what this line is, so we hope it is a dependency rule
 --    a b c d :OP: d e f
 -- or a target assignment
@@ -437,18 +464,14 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     local token_type, token_text = compile_io.get_token()
     if token_type ~= "EOF" then
         assert(token_type == "EOL")
-        while compile_io.is_indented_line() do
-            action = action .. compile_io.get_current_line()
-            token_type, token_text = compile_io.get_token()
-        end
-        print("ACTION = " .. action)
+        action = compile_action(compile_io)
         token_type, token_text = compile_io.get_token()
     end
-    compile_io.emit_line("blud.eval_rule(%q, %s, %s, %q)",
+    compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
                          operator,
                          parts_to_body_lua(left),
                          parts_to_body_lua(right),
-                         action)
+                         action or "nil")
     util.printf("-----------------\n")
 end
 

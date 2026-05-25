@@ -87,9 +87,9 @@ local function scan_dependency_word(text, pos)
         end
         pos = pos + 1
     end
-    assert(pos > start)
     return text:sub(start, pos - 1)
 end
+
 M.get_token = function()
     local token_type, token_text
     local text = current_input.text
@@ -123,6 +123,8 @@ M.get_token = function()
             token_text = ""
         end
     else
+        print("fooooooo")
+        util.printf("char=%q, pos = %d\n", char, pos)
         token_type = "WORD"
         token_text = char .. scan_dependency_word(text, pos+1)
         print(string.format("token_text=%q\n", token_text))
@@ -309,7 +311,14 @@ M.get_current_line = function()
 end
     
 M.is_indented_line = function()
-    return current_input.text:match("^[ \t]+[^ \t\n]", current_input.pos)
+    local pos  = current_input.pos
+    local text = current_input.text
+
+    if not(pos == 1 or text:sub(pos - 1, pos - 1) == "\n") then
+        error(string.format("M.is_indented_line() pos=%d", pos))
+    end
+
+    return text:find("^[ \t]+[^ \t\n]", pos) ~= nil
 end
 
 

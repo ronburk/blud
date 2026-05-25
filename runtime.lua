@@ -202,6 +202,10 @@ local function expand_dependency_words(input)
 end
 
 
+blud.execute = function(scope, text)
+    print("blud.execute: ", text)
+end
+
  blud.eval_rule = function(operator, left_parts, right_parts, action)
 --customDebugger("Debug> ", customHandler)
 
@@ -490,8 +494,10 @@ if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(s
     end
 end
 function blud.Scope:get_text(name)
+    print("get_text ", name)
     blud.assert(self.get)
     local tokens = self:get(name)
+    print("    value =", util.dump(tokens))
     local result = ""
     if tokens then
         result = blud.Macro.expand_tokens(self, tokens)
@@ -563,6 +569,7 @@ end
 -- macro_call is an unexpanded macro call, where [1] == macro name, [2] == arg#1, etc.
 -- macro_actual is the expanded macro call we are inside of, if any, needed for $(1), $(2), etc.
 function blud.Macro.expand_call(scope, macro_call, stack)
+    stack = stack or {}
     -- expand macro_call to get all its actual parameters (including name)
     local new_actual = {}
     for _, macro_arg in ipairs(macro_call) do
@@ -1348,7 +1355,7 @@ blud.super_atom = {
     end,
     ADD_RULE = function(target, prerequisites, action)
         print("super_atom ADD_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
-        if type(action) == 'string' and action ~= '' then
+        if action then
             target:ADD_ACTION(action)
         end
         target.HAS_RULE = true
@@ -1361,7 +1368,6 @@ blud.super_atom = {
     -- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
-
         local new_prereqs = {}
         local link_macro  = "LINK.o"
 
@@ -1389,7 +1395,13 @@ blud.super_atom = {
         end
 
         if action == nil or action == "" then
-            action = "$(" .. link_macro .. ")"
+            action = function(scope)
+                local command_tokens = {
+                    ["macro"] = true, [1] = {["type"]="text", ["text"]= link_macro}
+                }
+                local command = blud.Macro.expand_tokens(scope, command_tokens)
+            end
+--            action = "$(" .. link_macro .. ")"
         end
 
         target:ADD_RULE(new_prereqs, action)
@@ -1433,7 +1445,7 @@ util.printf("%s had NO ACTION\n", atom.NAME)
         print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
         if timestamp < blud.current_time then
             if target.ACTION then
-                print("execute: '" .. target.ACTION .. "'")
+                print("execute action function for: '" .. target.NAME .. "'")
 --                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
             elseif timestamp == 0 and not target.HAS_RULE then
@@ -1461,11 +1473,12 @@ util.printf("%s had NO ACTION\n", atom.NAME)
             target.SCOPE = blud.ScopeTarget:new(target)
         end
         local exit_code
-        print("DO_ACTION in super atom for " .. target.NAME .. " : " .. target.ACTION)
-        local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
-        print(action)
-        exit_code = os.execute(action)
-        exit_code = 0
+        print("DO_ACTION in super atom for " .. target.NAME)
+--        local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
+--        print(action)
+--        exit_code = os.execute(target.ACTION)
+        exit_code = target.ACTION(target.SCOPE)
+--        exit_code = 0
         if exit_code ~= 0 then
             error("command failed[" .. exit_code .. "]: " .. action)
         end

@@ -217,6 +217,7 @@ end
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
 M.macro_extract_call = function(scanner, self_reference)
+    util.print("macro_extract_call")
     local arg_stack  = {type="macro"}
     local first_char = scanner:get_char()
 
@@ -228,8 +229,10 @@ M.macro_extract_call = function(scanner, self_reference)
         if #parts <= 0 then
             error("empty macro invocation")
         else
-            assert(parts[1].type == "text" and parts[1].text ~= "")
-            table.insert(arg_stack, parts[1])
+            util.print("parts scanned up to ' )' = %s", util.dump(parts))
+--            assert(parts[1].type == "text" and parts[1].text ~= "")
+            util.array_append(arg_stack, parts)
+--            table.insert(arg_stack, parts[1])
             local macro_name = parts[1].text
             local stop_part  = scanner:get_next_part(" )")
             if stop_part.text == ' ' then
@@ -245,6 +248,7 @@ M.macro_extract_call = function(scanner, self_reference)
     if self_reference then
         arg_stack = self_reference(arg_stack)
     end
+    util.print("--> returns %s", util.dump(arg_stack))
     return arg_stack
 end
 
@@ -301,6 +305,29 @@ M.parts_to_lua = function(parts)
     table.insert(result, "}")
 
     return table.concat(result, "\n")
+end
+
+M.part_to_lua_function = function(part)
+    util.printf("part_to_lua_function(%s)\n", util.dump(part))
+    assert(type(part) == "table")
+    if part.type == "text" then
+        return string.format("%q", part.text)
+    elseif part.type == "macro" then
+        local result = "scope:get_text(" .. M.parts_to_lua_function(part)
+        return result .. ")"
+    else
+        assert(false, "unknown part type!")
+    end
+    
+end
+
+M.parts_to_lua_function = function(parts)
+    local result = ""
+    for _, part in ipairs(parts) do
+        if result ~= "" then result = result .. " .. " end
+        result = result .. M.part_to_lua_function(part)
+    end
+    return result
 end
 
 

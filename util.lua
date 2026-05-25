@@ -91,6 +91,9 @@ M.dump = function(o, seen)
     end
 end
 
+M.print = function(...)
+    print(string.format(...))
+end
 M.printf = function(...)
     io.write(string.format(...))
 end
