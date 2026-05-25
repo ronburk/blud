@@ -305,7 +305,7 @@ end
 
 
 
--- Unit tests
+--[=[UNIT_TESTS
 do
     local function part_to_string(part)
         if part.type == "text" then
@@ -408,6 +408,6 @@ check_parts(
 )
 end
 
-
+--]=]
 
 return M

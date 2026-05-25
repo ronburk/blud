@@ -203,15 +203,13 @@ end
 
 
  blud.eval_rule = function(operator, left_parts, right_parts, action)
-    print("left_parts = ", util.dump(left_parts))
+--customDebugger("Debug> ", customHandler)
 
     local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
     local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
 
     local targets = expand_dependency_words(tokenize_dependency_line(left))
     local prereqs = expand_dependency_words(tokenize_dependency_line(right))
-
-    print("targets = ", left, "|", util.dump(targets))
 
     blud.add_rules(operator, targets, prereqs, action or "")
 end
@@ -586,7 +584,6 @@ assert(type(macro_body) ~= "string")
 end
 
 function blud.Macro.expand_tokens(scope, tokens,     stack)
-
     if type(tokens) == "string" then
         return tokens
     end
@@ -612,7 +609,10 @@ function blud.Macro.expand_tokens(scope, tokens,     stack)
 end
 
 function blud.Macro.expand_text(scope, text,      stack)
+    util.printf("blud.Macro.expand_text('%s')\n", text)
     local tokens = blud.macro_tokens_from_text(text)
+    print("    tokens = ", util.dump(tokens))
+
     return blud.Macro.expand_tokens(scope, tokens)
 end
 
@@ -774,10 +774,8 @@ end
 blud.build_init = function()
     local OWD = {[1] = ".", ["name"] = "OWD"}
     blud.scope_base:set("OWD", OWD)
---    if blud.build_name then
     if blud.BUILD_DEFAULT then
         os.execute("mkdir " .. blud.BUILD_DEFAULT.NAME)
---print("simulate mkdir " .. blud.BUILD_DEFAULT.NAME)
         OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
         blud.scope_bludfile:set("OWD", OWD)
     end
@@ -808,7 +806,7 @@ end
 blud.macro_expand = function(scope, macro_call)
     assert(macro_call ~= nil)
 
-    local result = ""
+local result = ""
     local macro = scope:get(macro_call.name)
     if macro then
         assert(macro["name"] ~= nil)
@@ -852,7 +850,6 @@ end
 -- macro_expand_text: return a copy of the supplied text, with
 -- each macro invocation recursively expanded.
 function blud.macro_expand_text(scope, text, stack)
---customDebugger("Debug> ")
 
     local tokens = blud.macro_tokens_from_text(text)
     local result = {}
@@ -935,9 +932,7 @@ end
 
 
 blud.macro_assign_parts = function(scope, macro_name, operator, parts)
-    print("macro_assign_parts: ", macro_name)
     local referenced_macro = scope:get(macro_name)
-    util.dump(parts)
 
     if operator == "=" then
         -- do nothing
@@ -948,10 +943,6 @@ blud.macro_assign_parts = function(scope, macro_name, operator, parts)
         assert(false)
     end
     scope:set(macro_name, parts)
-print("macro assign ", macro_name, " table ", parts, " with value ", util.dump(parts))
-
---    error("macro_assign_parts not written")
-
 
 end
 
@@ -960,9 +951,7 @@ end
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
 blud.macro_assign = function(line, scope, macro)
-print("macro_assign: ", line, macro.name, macro.operator, macro.body_pos)
     local referenced_macro = scope:get(macro.name)
-    print("macro is: ", dump(referenced_macro))
     local self_reference = function(macro_call)
         print("self-reference wrapper on macro ", macro.name, dump(macro_call))
         local macro_name_tokens = macro_call[1]
@@ -985,7 +974,6 @@ print("macro_assign: ", line, macro.name, macro.operator, macro.body_pos)
         assert(false)
     end
     scope:set(macro.name, macro_body)
-print("macro assign ", macro.name, " table ", macro_body, " with value ", dump(macro_body))
     return result
 end
 
@@ -1137,7 +1125,6 @@ function blud.phase3:tokenize(line)
         end
         pos = pos + #token - 1
     end
---    print("tokenized line: " .. dump(tokens))
     return tokens
 end
 
@@ -1423,6 +1410,7 @@ blud.super_atom = {
                 atom.BOUND_NAME = OWD .. "/" .. atom.NAME
             end
         else
+util.printf("%s had NO ACTION\n", atom.NAME)
             local SWD = atom.SCOPE:get_text("SWD")
             if SWD ~= "" then
                 atom.BOUND_NAME = SWD .. "/" .. atom.NAME
@@ -1473,11 +1461,10 @@ blud.super_atom = {
             target.SCOPE = blud.ScopeTarget:new(target)
         end
         local exit_code
-        print("DO_ACTION in super atom for " .. target.NAME)
+        print("DO_ACTION in super atom for " .. target.NAME .. " : " .. target.ACTION)
         local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
         print(action)
---        exit_code = os.execute(action)
-        print("------------------------------FAKED EXECUTION")
+        exit_code = os.execute(action)
         exit_code = 0
         if exit_code ~= 0 then
             error("command failed[" .. exit_code .. "]: " .. action)

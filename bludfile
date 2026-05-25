@@ -1,14 +1,12 @@
 -- bludfile for building/testing blud
 
-CC  = gcc $(EMPTY)
+CC  = gcc 
 CXX = g++
 CFLAGS = -g
 LDFLAGS = -L./luajit/src -lluajit
 CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
-
 all : blud test
-
 
 test :TEST:
     ./blud -f $<
@@ -16,15 +14,13 @@ test :TEST:
 debug release :BUILD:
 debug: CFLAGS += -g
 
+SRCS = blud.c bludlua.c oslinux.c
 
+blud :: $(SRCS)
 
-SRC_FILES = blud.c bludlua.c
-
-blud :: *.c
-
--- use cstr to convert Lua source into a C string
-STRFILES = blud.lua builtin.blud
-bludlua.c : $(STRFILES) cstr
+-- use cstr to convert Lua source into a C string, they all will reside in bludlua.c
+STRFILES = *.lua builtin.blud
+bludlua.c :  cstr
     $(OWD)/cstr $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)

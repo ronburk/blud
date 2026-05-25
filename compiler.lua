@@ -444,10 +444,11 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
         print("ACTION = " .. action)
         token_type, token_text = compile_io.get_token()
     end
-    compile_io.emit_line("blud.eval_rule(%q, %s, %s)",
+    compile_io.emit_line("blud.eval_rule(%q, %s, %s, %q)",
                          operator,
                          parts_to_body_lua(left),
-                         parts_to_body_lua(right))
+                         parts_to_body_lua(right),
+                         action)
     util.printf("-----------------\n")
 end
 
