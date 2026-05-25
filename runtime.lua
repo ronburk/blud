@@ -577,6 +577,10 @@ function blud.Macro.expand_call(scope, macro_call, stack)
     end
     local result
     local name_string = new_actual[1]
+    for i = 1, #stack do
+        if stack[i] == name_string then error("recursive macro call of: ", name_string) end
+    end
+    table.insert(stack, name_string)
     local macro_body  = scope:get(name_string) or ""
     if type(macro_body) == "string" then -- if macro is simple string
         result = { macro_body }
@@ -587,6 +591,7 @@ assert(type(macro_body) ~= "string")
     else
         blud.error("Can't happen.")
     end
+    table.remove(stack)
     return result
 end
 
