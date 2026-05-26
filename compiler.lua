@@ -422,7 +422,7 @@ function compile_action(compile_io)
                 "; if status ~= 0 then return status end"
         end
         if action ~= "" then
-            action = "function(scope) " .. action .. " end "
+            action = "function(scope, status) " .. action .. " end "
         end
     end
 --    action = "function (scope)

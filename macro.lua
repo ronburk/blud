@@ -187,7 +187,6 @@ M.parts_from_text = function(text)
     assert(text)
     local scanner = Scanner.new(text)
     local result  = M.parts_from_text_(scanner)
-    print(util.dump(result))
     return result
 end
 
@@ -217,7 +216,6 @@ end
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
 M.macro_extract_call = function(scanner, self_reference)
-    util.print("macro_extract_call")
     local arg_stack  = {type="macro"}
     local first_char = scanner:get_char()
 
@@ -229,7 +227,6 @@ M.macro_extract_call = function(scanner, self_reference)
         if #parts <= 0 then
             error("empty macro invocation")
         else
-            util.print("parts scanned up to ' )' = %s", util.dump(parts))
 --            assert(parts[1].type == "text" and parts[1].text ~= "")
             util.array_append(arg_stack, parts)
 --            table.insert(arg_stack, parts[1])
@@ -248,7 +245,6 @@ M.macro_extract_call = function(scanner, self_reference)
     if self_reference then
         arg_stack = self_reference(arg_stack)
     end
-    util.print("--> returns %s", util.dump(arg_stack))
     return arg_stack
 end
 
@@ -308,7 +304,6 @@ M.parts_to_lua = function(parts)
 end
 
 M.part_to_lua_function = function(part)
-    util.printf("part_to_lua_function(%s)\n", util.dump(part))
     assert(type(part) == "table")
     if part.type == "text" then
         return string.format("%q", part.text)

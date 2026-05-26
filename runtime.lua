@@ -202,8 +202,22 @@ local function expand_dependency_words(input)
 end
 
 
+blud.default_action = function (scope)
+    blud.execute(scope, nil)
+end
+
+
 blud.execute = function(scope, text)
-    print("blud.execute: ", text)
+    local status
+    if text then
+        print("blud.execute: ", text)
+        status = os.execute(text)
+        print("    status = ", status)
+    else
+        print("<no action>") 
+    end
+    
+    return status
 end
 
  blud.eval_rule = function(operator, left_parts, right_parts, action)
@@ -215,7 +229,7 @@ end
     local targets = expand_dependency_words(tokenize_dependency_line(left))
     local prereqs = expand_dependency_words(tokenize_dependency_line(right))
 
-    blud.add_rules(operator, targets, prereqs, action or "")
+    blud.add_rules(operator, targets, prereqs, action)
 end
 
 
@@ -480,11 +494,12 @@ end
 function blud.Scope:set(name, value)
     self.variables[name] = value
 end
+
 function blud.Scope:get(name)
     if self == blud.Scope then
         return nil
     end
-if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(self)) end
+    if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(self)) end
     if self.variables[name] ~= nil then
         return self.variables[name]
     elseif self.parent then
@@ -493,11 +508,10 @@ if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(s
         return nil
     end
 end
+
 function blud.Scope:get_text(name)
-    print("get_text ", name)
     blud.assert(self.get)
     local tokens = self:get(name)
-    print("    value =", util.dump(tokens))
     local result = ""
     if tokens then
         result = blud.Macro.expand_tokens(self, tokens)
@@ -578,7 +592,10 @@ function blud.Macro.expand_call(scope, macro_call, stack)
     local result
     local name_string = new_actual[1]
     for i = 1, #stack do
-        if stack[i] == name_string then error("recursive macro call of: ", name_string) end
+        if stack[i] == name_string then
+            util.print("recursive macro call of: %s", name_string)
+            error("die")
+        end
     end
     table.insert(stack, name_string)
     local macro_body  = scope:get(name_string) or ""
@@ -621,10 +638,7 @@ function blud.Macro.expand_tokens(scope, tokens,     stack)
 end
 
 function blud.Macro.expand_text(scope, text,      stack)
-    util.printf("blud.Macro.expand_text('%s')\n", text)
     local tokens = blud.macro_tokens_from_text(text)
-    print("    tokens = ", util.dump(tokens))
-
     return blud.Macro.expand_tokens(scope, tokens)
 end
 
@@ -943,21 +957,43 @@ blud.macro_expand_self_reference = function(macro_call, macro_tokens)
 end
 
 
-blud.macro_assign_parts = function(scope, macro_name, operator, parts)
-    local referenced_macro = scope:get(macro_name)
-
-    if operator == "=" then
-        -- do nothing
-    elseif operator == ":=" then
-        macro_body = blud.Macro.expand_text(scope, input)
-    else
-        error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
-        assert(false)
+do
+    local ref_count = 0  -- counter for making unique names
+    -- traverse parts, change any macro call named 'old_name' to 'new_name'
+    local function rewrite_self_references(parts, old_name, new_name)
+        local result = false   -- assume we won't find any
+        for i = 1, #parts do
+            part = parts[i]
+            if part.macro then
+                local arg = part[1]
+                if #arg == 1 and arg[1] == old_name then
+                    result = true   -- let caller know we found at least one
+                    arg[1] = { new_name }
+                end
+                
+            else
+            end
+            
+        end
+        return result
     end
-    scope:set(macro_name, parts)
+    blud.macro_assign_parts = function(scope, macro_name, operator, parts)
+        local referenced_macro = scope:get(macro_name) or {}
 
+        if operator == "=" then
+            local new_name = string.format("%s %3d", macro_name, ref_count + 1)
+            if rewrite_self_references(parts, macro_name, new_name) then
+                scope:set(new_name, referenced_macro)
+            end
+        elseif operator == ":=" then
+            macro_body = blud.Macro.expand_text(scope, input)
+        else
+            error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
+            assert(false)
+        end
+        scope:set(macro_name, parts)
+    end
 end
-
 
 -- macro_assign: assign a body to a macro
 -- the value of a macro will always be a function which returns either
@@ -1484,8 +1520,8 @@ util.printf("%s had NO ACTION\n", atom.NAME)
 --        exit_code = os.execute(target.ACTION)
         exit_code = target.ACTION(target.SCOPE)
 --        exit_code = 0
-        if exit_code ~= 0 then
-            error("command failed[" .. exit_code .. "]: " .. action)
+        if exit_code and exit_code ~= 0 then
+            error("command failed[" .. exit_code .. "]: ")
         end
     end,
 }
@@ -1654,6 +1690,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
         if operator == nil then
             errorf("'#1': undefined operator.", colon_operator)
         end
+        action = action or blud.default_action
         operator(colon_operator, target, prereq_atoms, action)
 --        target.ADD_RULE(target, prereq_atoms, action)
     end

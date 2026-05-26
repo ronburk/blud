@@ -123,17 +123,12 @@ M.get_token = function()
             token_text = ""
         end
     else
-        print("fooooooo")
-        util.printf("char=%q, pos = %d\n", char, pos)
         token_type = "WORD"
         token_text = char .. scan_dependency_word(text, pos+1)
-        print(string.format("token_text=%q\n", token_text))
---        error("Unknown char: '" .. char .. "'")
     end
     
     current_input.pos = pos + #token_text
     current_input.eol = (token_type == "EOL")
---    print(string.format("[%s]=%q", token_type, token_text))
     return token_type, token_text
 end
 
@@ -356,7 +351,6 @@ function M.close()
     local sourcemap_lua = sourcemap_to_lua(sourcemap)
     local line_count    = count_nl(sourcemap_lua)
     local entry         = sourcemap[sourcemap_gap]
-    print("sourcemap_gap =", sourcemap_gap, "  #sourcemap =", #sourcemap)
 --    local new_entry     = {filename="<sourcemap>", source_ln=1, dest_ln=entry.dest_ln}
 --    table.insert(sourcemap, sourcemap_gap, new_entry);
     for i = sourcemap_gap+1, #sourcemap do
