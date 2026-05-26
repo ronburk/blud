@@ -1435,13 +1435,16 @@ blud.super_atom = {
             table.insert(new_prereqs, output)
         end
 
-        if action == nil or action == "" then
+        if action == nil or action == ""  or action == blud.default_action then
             action = function(scope)
                 local command_tokens = {
                     ["macro"] = true, [1] = {["type"]="text", ["text"]= link_macro}
                 }
                 local command = blud.Macro.expand_tokens(scope, command_tokens)
             end
+            action = function(scope, status)
+                status = blud.execute(scope, scope:get_text(link_macro))
+                end
 --            action = "$(" .. link_macro .. ")"
         end
 
