@@ -1210,7 +1210,6 @@ end
 
 
 function is_pattern(word)
-    print("is_pattern(", word, ")")
     if word:sub(1,2) == "[[" then
         return false
     elseif word:find("[%[?*]") == nil then
@@ -1460,7 +1459,7 @@ blud.super_atom = {
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
         if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
-        if atom.ACTION then
+        if atom.ACTION and atom.ACTION ~= blud.default_action then
             local OWD = atom.SCOPE:get_text("OWD")
             if OWD ~= "" then
                 atom.BOUND_NAME = OWD .. "/" .. atom.NAME
@@ -1484,33 +1483,39 @@ util.printf("%s had NO ACTION\n", atom.NAME)
             error("circular dependency on " .. target.NAME)
         end
         target.BUILDING = true
-        target.BUILD_PREREQUISITES(target)
-        local timestamp = blud.get_fs_timestamp(target.BOUND_NAME)
+        local newest_prerequisite = target.BUILD_PREREQUISITES(target)
+        local timestamp           = blud.get_fs_timestamp(target.BOUND_NAME)
         print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
-        if timestamp < blud.current_time then
+        print("    versus ", newest_prerequisite)
+        if newest_prerequisite > timestamp then
             if target.ACTION then
-                print("execute action function for: '" .. target.NAME .. "'")
---                print(" meta is " .. dump(getmetatable(target)))
                 target:DO_ACTION()
+                target.timestamp = blud.current_time
             elseif timestamp == 0 and not target.HAS_RULE then
                 error("Don't know how to build: " .. target.NAME);
             end
         end
+        target.TIMESTAMP = timestamp
         target.BUILDING = false
-        return true   -- default is to pretend we successfully built it
+        return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)
         print("BUILD_PREREQUISITES('" .. blud.dump_atom(atom) .. "')")
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
+        local newest_time = 0
         if prerequisites then
             for _, prereq_name in ipairs(prerequisites) do
                 prerequisite = atom.BIND(prereq_name)
                 prerequisite.PARENT = atom
-                prerequisite.BUILD(prerequisite)
+                local this_time = prerequisite.BUILD(prerequisite)
+                if this_time > newest_time then
+                    newest_time = this_time
+                end
             end
         end
-
+        print("newest time is ", newest_time)
+        return newest_time
     end,
     DO_ACTION = function(target)
         if target.SCOPE == nil then
@@ -1659,10 +1664,24 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
 end
 
 blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action)
+    util.print(":TEST:[%s] operator=%s, prereqs = %s",
+               target.NAME, colon_operator, util.dump(prereq_atoms))
+    if not action or action == blud.default_action then
+        blud.error(":TEST: target #1 requires an action", target.NAME)
+    end
+    
     if target.TEST then
         blud.error("Target #1 already has a :TEST: rule.", target.NAME)
     end
 
+    if prereq_atoms ==nil or not next(prereq_atoms) then
+        local entries = {}
+--        blud.glob.expand_pattern(entries, target.NAME, "*")
+        blud.glob.expand_pattern(entries, "./test/*")
+        util.print("glob: %s", util.dump(entries))
+        error("die")
+    end
+    
     target.TEST = {
         prerequisites = prereq_atoms,
         action = action,

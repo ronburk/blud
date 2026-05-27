@@ -3,7 +3,6 @@ local M    = {}
 local m         = require("macro")
 local util      = require("util")
 
-print("loaded compiler.lua")
 
 local function is_blank_or_comment(line)
     assert(type(line) == "string")
@@ -254,7 +253,6 @@ do
     end
 
     function translate_make_directive(compile_io, line)
-        print("translate_make_directive: " .. tostring(line))
         local macro = match_macro_assign(line)
         if macro then
             compile_io.emit_line("blud.macro_assign(%q,%q,%q)",
@@ -272,7 +270,6 @@ end
 local translate_lua
 do
     function translate_lua(compile_io, line)
-        print("translate_lua: " .. tostring(line))
         local keyword_stack = {}
         local keyword_top   = leading_keyword(line)
         compile_io.emit_line(line)
@@ -408,7 +405,6 @@ end
 -- we compile an action into a function that accepts a scope as an
 -- argument.
 function compile_action(compile_io)
-    print("compile_action!")
     local action = ""
     if compile_io.is_indented_line() then
         while compile_io.is_indented_line() do
@@ -426,7 +422,6 @@ function compile_action(compile_io)
         end
     end
 --    action = "function (scope)
-    print("ACTION = " .. util.dump(action))
     if action == "" then action = "nil" end
     return action
 end
@@ -442,11 +437,6 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     local parts = m.parts_from_text(compile_io.get_current_line())
     local left, operator, right = split_parts_at_colon_operator(parts)
 
-    -- temporary proof of parse
-    print("left     = " .. util.dump(left))
-    print("operator = " .. util.dump(operator))
-    print("right    = " .. util.dump(right))
-
     if not operator then
         compile_io.error("Expected dependency rule")
     end
@@ -454,8 +444,6 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
         print("Should check for target-scoiped macro assign")
     end
     
-    print("left = " .. m.parts_to_lua(left))
-    print("right = " .. m.parts_to_lua(right))
     -- next step:
     -- decide whether right begins with target-specific macro assignment
     -- otherwise emit blud.add_rule_parts(left, operator, right, action)
@@ -472,7 +460,6 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
                          parts_to_body_lua(left),
                          parts_to_body_lua(right),
                          action or "nil")
-    util.printf("-----------------\n")
 end
 
 
@@ -480,13 +467,11 @@ function compile(compile_io)
     local token_type, token_text = compile_io.get_token()
 
     while token_type ~= "EOF" do
-        util.printf("token_type='%s'\n", token_type)
         if TC_EMPTY[token_type] then -- if could be empty line
             compile_empty_line(compile_io, token_type, token_text)
         elseif TC_WORD[token_type] and compile_io.peek_assign() then
             compile_macro_assign(compile_io, token_text)
         elseif token_type == "LEADWHITE" then
-            util.printf("[%s] = %q\n", token_type, token_text)
             compile_io.error("Line looks like action, but is not part of rule")
         elseif token_type == "LUASTART" then
             compile_lua(compile_io, token_text)
@@ -503,7 +488,6 @@ end
 local translate
 do
     function translate(compile_io)
-        print("translate()")
         while true do
             local line = compile_io.get_line()
             if line == nil then break end
@@ -542,11 +526,9 @@ do
             local keyword     = leading_keyword(line)
             local top_keyword = keyword_stack[#keyword_stack]
             if not keyword then -- if not Lua block start/end
-                print("parse blud directive: " .. line .. " top=" .. tostring(top_keyword))
                 local macro = match_macro_assign(line)
                 if top_keyword then   -- copying Lua code ??? handle embedded make code
                     line = phase1_embedded_make(line)
-                    print(">>>>", line)
                 else -- copying non-Lua code
                     line = "blud.phase2_append(" .. lua_quote(line) .. ")"
                 end
@@ -633,7 +615,6 @@ end
 
 -- function M.compile(name, get_line)
 function M.compile(compile_io)
-    print("blud.compile()")
     local source_ln = 1
 --XXX    sourcemap:append("<internal>", source_ln, "function blud.bludfile_main()\n")
     source_ln = source_ln + 1

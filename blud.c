@@ -161,7 +161,7 @@ static int lua_glob_expand(lua_State* L) {
     if (!lua_isstring(L, 2))
         return luaL_error(L, "'pattern' must be a string");
     if (!lua_isstring(L, 3))
-        return luaL_error(L, "'names' must be a string");
+        return luaL_error(L, "'names' must be NUL-separated names in string");
     const char* pattern         = lua_tostring(L, 2);
     size_t      names_length;
     const char* names           = lua_tolstring(L, 3, &names_length); // Get pointer to 'names' and its length
@@ -236,7 +236,10 @@ static int lua_tokenize_dependency_line(lua_State *L) {
                 break;
             else
                 ++rover;
-        printf("    c = '%c'\n", c);
+        if(isprint((unsigned char)c))
+            printf("    c = '%c'\n", c);
+        else
+            printf("  c = 0x%02X\n", c);
         start = rover;      // mark possible start of word
         if(c == '\0')       // if end of string
             break;
