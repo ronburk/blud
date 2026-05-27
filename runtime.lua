@@ -302,6 +302,7 @@ end
 blud.glob = {}
 -- Main function to expand the glob pattern
 function blud.glob.expand_pattern(words, pattern)
+    assert(type(pattern) == 'string', "expand_pattern expecting string argument")
     -- Split the pattern into path components
     local path_components = blud.glob.path_split(pattern)
     local dir = path_components[1]  -- Start with the root directory (or "." for current directory)
@@ -1027,7 +1028,7 @@ end
 
 
 
-blud.phase2_text  = ""
+
 blud.phase2_append= function(str)
     blud.phase2_text = blud.phase2_text .. str .. "\n"
 end
@@ -1680,6 +1681,14 @@ blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action
         blud.glob.expand_pattern(entries, "./test/*")
         util.print("glob: %s", util.dump(entries))
         error("die")
+    else
+        for i= 1, #prereq_atoms do
+            local entries = {}
+            local atom = prereq_atoms[i]
+            blud.glob.expand_pattern(entries, prereq_atoms[i])
+            util.print("glob: %s", util.dump(entries))
+        end
+        error("die glob")
     end
     
     target.TEST = {
@@ -1713,6 +1722,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
             errorf("'#1': undefined operator.", colon_operator)
         end
         action = action or blud.default_action
+        util.print("    calling operator %s with prereqs %s", colon_operator, util.dump(prereq_atoms))
         operator(colon_operator, target, prereq_atoms, action)
 --        target.ADD_RULE(target, prereq_atoms, action)
     end

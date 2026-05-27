@@ -8,7 +8,7 @@ CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
 
 all : blud test
 
-test :TEST:
+test :TEST: test[0-9][0-9][0-9][0-9]
     ./blud -f $<
 
 debug release :BUILD:
