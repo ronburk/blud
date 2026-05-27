@@ -220,18 +220,26 @@ blud.execute = function(scope, text)
     return status
 end
 
- blud.eval_rule = function(operator, left_parts, right_parts, action)
+blud.eval_rule = function(operator, left_parts, right_parts, action)
 --customDebugger("Debug> ", customHandler)
 
     local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
     local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
 
     local targets = expand_dependency_words(tokenize_dependency_line(left))
-    local prereqs = expand_dependency_words(tokenize_dependency_line(right))
+--    local prereqs = expand_dependency_words(tokenize_dependency_line(right))
+-- operator will have to glob prerequisites; :TEST: needs this
+    local prereqs = tokenize_dependency_line(right)
 
     blud.add_rules(operator, targets, prereqs, action)
 end
 
+blud.eval_rule = function(operator_name, left_parts, right_parts, action)
+    local operator = blud.operators[operator_name]
+    if not blud.operators[operator] then
+        blud.error("Unknown operator: #1", operator)
+    end
+end
 
 function blud.macro(name, ...)
     local macro_call = { { tostring(name) } }
