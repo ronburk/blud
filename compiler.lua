@@ -441,7 +441,7 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
         compile_io.error("Expected dependency rule")
     end
     if right and #right > 0 and right[1].type == "text" then
-        print("Should check for target-scoiped macro assign")
+--        print("Should check for target-scoiped macro assign")
     end
     
     -- next step:

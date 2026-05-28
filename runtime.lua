@@ -220,13 +220,16 @@ blud.execute = function(scope, text)
     return status
 end
 
+-- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator, left_parts, right_parts, action)
 --customDebugger("Debug> ", customHandler)
 
+    -- no known reason to want to overwrite macro expansion, so do that here
     local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
     local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
 
-    local targets = expand_dependency_words(tokenize_dependency_line(left))
+    -- seems sketchy for some operators to tokenize differently, so do that here
+    local targets = tokenize_dependency_line(left)
 --    local prereqs = expand_dependency_words(tokenize_dependency_line(right))
 -- operator will have to glob prerequisites; :TEST: needs this
     local prereqs = tokenize_dependency_line(right)
@@ -235,10 +238,23 @@ blud.eval_rule = function(operator, left_parts, right_parts, action)
 end
 
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
+    util.print("blud.eval_rule, %s, %s, %s, action",
+               util.dump(operator_name),
+               util.dump(left_parts),
+               util.dump(right_parts))
     local operator = blud.operators[operator_name]
-    if not blud.operators[operator] then
-        blud.error("Unknown operator: #1", operator)
+    if not operator then
+        blud.error("Unknown operator: #1", operator_name)
     end
+    -- everybody wants their macros expanded, you can't override this
+    local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
+    local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
+
+    -- seems sketchy for some operators to tokenize differently, so do that here
+    local targets = tokenize_dependency_line(left)
+    local prereqs = tokenize_dependency_line(right)
+
+    operator:EVAL_RULE(left, right, action)
 end
 
 function blud.macro(name, ...)
@@ -1628,8 +1644,34 @@ blud.get_fs_timestamp = function (filepath)
     return timestamp
 end
 
+blud.operator_super = {}   -- super class for all operators
+blud.operator_super.__index = blud.operator_super  -- search super class for missing fields
+blud.operator_new   = function(t)
+    assert(type(t) == 'table')
+    return setmetatable(t, blud.operator_super)
+end
 
--- killme!
+function blud.operator_super:EVAL_RULE(left_text, right_text, action)
+    util.print("operation_super:EVAL_RULE(%q, %q, action)", left_text, right_text)
+end
+
+function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
+    print("blud.operator_super:ADD_RULES")
+    local target_words2 = self:prepare_target_words(target_words, prereq_words, action)
+    local target_atoms  = self:target_words_to_atoms(target_words2)
+
+    for _, target in ipairs(target_atoms) do
+        local prereq_words2 = self:prepare_prereq_words(target, prereq_words, action)
+        local prereq_atoms  = self:prereq_words_to_atoms(target, prereq_words2)
+
+        self:validate_rule(target, prereq_atoms, action)
+        self:maybe_record_primary_target(target)
+        self:install_rule(target, prereq_atoms, action)
+    end
+end
+
+
+--[[ killme!
 blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
     if target.NAME:find("%%") then
         local rule = {target=target, prerequisites = prereq_atoms, action = action}
@@ -1651,6 +1693,16 @@ blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
         return target:ADD_RULE(prereq_atoms, action)
     end
 end
+
+--]]
+blud.operators[":"] = blud.operator_new({
+    choose_operator = function(self, target_words, prereq_words, action)
+        if blud.has_pattern_word(target_words) then
+            return blud.operators["%:"]
+        end
+        return self
+    end,
+})
 
 blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
     return target:SOURCE_RULE(prereq_atoms, action)
@@ -1769,7 +1821,7 @@ blud.run_build = function(primary_target)
     end
 end
 
----[[UNIT_TESTS
+--[[UNIT_TESTS
 do
 print("runtime.lua unit tests")
 
