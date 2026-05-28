@@ -1,6 +1,4 @@
 -- bludfile for building/testing blud
-a :FOO: b
-
 CC  = gcc 
 CXX = g++
 CFLAGS = -g

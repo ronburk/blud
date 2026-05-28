@@ -218,50 +218,26 @@ static int lua_glob_to_lua(lua_State* L){
 #endif
 
 
+/* we are called only after macro expansion and operators are removed,
+ * so all we care about are sequences of non-white characters
+ */
 static int lua_tokenize_dependency_line(lua_State *L) {
     const char* input       = luaL_checkstring(L, 1);
     const char* rover       = input;
-//    size_t      len         = strlen(input);
-//    int*        indices     = (int*)malloc(sizeof(int)*len*2);
     int         index       = 0;
-    int         c;
     const char* start;
-    size_t      wordlen;
 
     lua_newtable(L);  // create table to return
-    printf("input='%s'\n", input);
     for(;;){
-        while((c = *rover) != '\0')  // skip whitespace
-            if(c != ' ' && c != '\t')
-                break;
-            else
-                ++rover;
-        if(isprint((unsigned char)c))
-            printf("    c = '%c'\n", c);
-        else
-            printf("  c = 0x%02X\n", c);
-        start = rover;      // mark possible start of word
-        if(c == '\0')       // if end of string
+        while(*rover && isspace((unsigned char)*rover))
+            ++rover;
+        if(!*rover) // if end of string
             break;
-        else if(c == ':'){  // if looks like operator
-            const char* peek = ++rover;
-            while((c=*peek++) != '\0' && (isalnum(c) || c == '_'))
-                ;
-            if(c == ':'){
-                wordlen = peek - start;
-                rover   = peek;
-            } else {
-                wordlen    = 1;
-            }
-        } else if(c == '[' && *rover == '['){
-            assert(0); // not written yet
-        } else {
-            while(c != ' ' && c != '\t' && c != '\0' && c != ':')
-                c = *++rover;
-            wordlen     =  (rover - start);
-        }
-        printf("    [%d]>%s\n", (int)wordlen, start);
-        lua_pushlstring(L, start, wordlen);
+        start = rover;      // mark possible start of word
+        while(*rover && !isspace((unsigned char)*rover))
+            ++rover;
+        printf("token='%*.*s'\n", (int)(rover-start), (int)(rover-start), start);
+        lua_pushlstring(L, start, rover - start);
         lua_rawseti(L, -2, ++index);
     }
 

@@ -1724,6 +1724,16 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
     -- need to give .GLOBAL_MACRO attribute to target
 end
 
+blud.operators[":TEST:"] = blud.operator_new({
+    choose_operator = function(self, target_words, prereq_words, action)
+        if blud.has_pattern_word(target_words) then
+            return blud.operators["%:"]
+        end
+        return self
+    end,
+})
+
+--[[
 blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action)
     util.print(":TEST:[%s] operator=%s, prereqs = %s",
                target.NAME, colon_operator, util.dump(prereq_atoms))
@@ -1758,6 +1768,8 @@ blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action
 
     target.HAS_RULE = true
 end
+
+--]]
 
 -- we have a dependency rule, possibly with multiple targets
 -- for each target create the rule
