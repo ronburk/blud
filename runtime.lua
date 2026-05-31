@@ -220,6 +220,7 @@ blud.execute = function(scope, text)
     return status
 end
 
+--[[
 -- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator, left_parts, right_parts, action)
 --customDebugger("Debug> ", customHandler)
@@ -236,6 +237,7 @@ blud.eval_rule = function(operator, left_parts, right_parts, action)
 
     blud.add_rules(operator, targets, prereqs, action)
 end
+--]]
 
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     util.print("blud.eval_rule, %s, %s, %s, action",
@@ -254,7 +256,8 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     local targets = tokenize_dependency_line(left)
     local prereqs = tokenize_dependency_line(right)
 
-    operator:EVAL_RULE(left, right, action)
+--    operator:EVAL_RULE(left, right, action)
+    operator:EVAL_RULE(targets, prereqs, action)
 end
 
 function blud.macro(name, ...)
@@ -1563,8 +1566,7 @@ setmetatable(blud.super_atom, blud.global)
 blud.global.__index      = blud.global
 blud.super_atom.__index  = blud.super_atom
 
-blud.new_atom = (function()
-    -- simulate static local var with upvalue and returning closure
+do
     local suffix_map = {
         [".obj"] = ".o",
         [".lib"] = ".a",
@@ -1573,24 +1575,19 @@ blud.new_atom = (function()
         [".cxx"] = ".cpp",
         [".c++"] = ".cpp",
     }
-    setmetatable(suffix_map, suffix_map)
-    suffix_map.__index = function(_, key) return key end
-
-    return function(atom_name)
-        local atom = {}
-        -- atom must always have a name
-        atom.NAME  = atom_name
+    blud.new_atom = function(atom_name)
+        local atom = {
+            NAME          = atom_name,
         -- atom must always have a prerequisite list, even if it is empty
         -- this guarantees prerequisites are not inherited
-        atom.PREREQUISITES = {}
-        -- extract any suffix
-        atom.SUFFIX = atom_name:match("^.+(%..+)$")
-        atom.TYPE   = suffix_map[atom.SUFFIX]
-        -- the initial metatable for an atom is the "super atom", which
-        -- provides the default behavior
+            PREREQUISITES = {},
+            SUFFIX        = atom_name:match("^.+(%..+)$"),
+        }
+        atom.TYPE         = suffix_map[atom.SUFFIX] or atom.SUFFIX
         return setmetatable(atom, blud.super_atom)
     end
-end)()
+end
+
 
 blud.is_special_atom = function(atom)
     return string.sub(atom.NAME, 1, 1) == "."
@@ -1644,6 +1641,14 @@ blud.get_fs_timestamp = function (filepath)
     return timestamp
 end
 
+blud.target_super = {}   -- super class for all operators
+blud.target_super.__index = blud.target_super  -- search super class for missing fields
+blud.target_new   = function(t)
+    assert(type(t) == 'table')
+    return setmetatable(t, blud.target_super)
+end
+
+
 blud.operator_super = {}   -- super class for all operators
 blud.operator_super.__index = blud.operator_super  -- search super class for missing fields
 blud.operator_new   = function(t)
@@ -1651,24 +1656,68 @@ blud.operator_new   = function(t)
     return setmetatable(t, blud.operator_super)
 end
 
-function blud.operator_super:EVAL_RULE(left_text, right_text, action)
-    util.print("operation_super:EVAL_RULE(%q, %q, action)", left_text, right_text)
+function blud.operator_super:EVAL_RULE(left_tokens, right_tokens, action)
+    util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
+    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
+    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
+    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
+    local prerequisite_atoms = self:ATOMIZE_PREREQUISTE_WORDS(prerequisite_words)
+    self:ADD_RULES(targets, prerequisites, action)
+    if not blud.primary_targets and #targets > 0 then
+        blud.primary_targets = self:SET_PRIMARY_TARGETS(targets)
+    end
+
+end
+function blud.operator_super:GLOB_TARGET_WORDS(words)
+    return expand_dependency_words(words)
+end
+function blud.operator_super:GLOB_PREREQUISITE_WORDS(words)
+    return expand_dependency_words(words)
+end
+function atomize_words(t)
+    local result = {}
+    for i, v in ipairs(t) do
+        result[i] = blud.get_or_create_target(t[v])
+    end
+    return t
+end
+function blud.operator_super:ATOMIZE_TARGET_WORDS(target_words)
+    return atomize_words(target_words)
+end
+function blud.operator_super:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
+    return atomize_words(prerequisite_words)
 end
 
-function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
-    print("blud.operator_super:ADD_RULES")
-    local target_words2 = self:prepare_target_words(target_words, prereq_words, action)
-    local target_atoms  = self:target_words_to_atoms(target_words2)
 
-    for _, target in ipairs(target_atoms) do
-        local prereq_words2 = self:prepare_prereq_words(target, prereq_words, action)
-        local prereq_atoms  = self:prereq_words_to_atoms(target, prereq_words2)
+function blud.operator_super:SET_PRIMARY_TARGETS(targets)
+    return { targets[1] }
+end
 
-        self:validate_rule(target, prereq_atoms, action)
-        self:maybe_record_primary_target(target)
-        self:install_rule(target, prereq_atoms, action)
+
+
+function blud.operator_super:ADD_RULES(targets, prereqs, action)
+    print("blud.operator_super:ADD_RULES(%s,%s,action)",
+          util.dump(targets), util.dump(prereqs))
+
+    local function atomize(names)
+        result = {}
+        for i=1, #targets do
+            result[i] = blud.get_or_create_target(names[i])
+        end
+        return result
+    end
+    targets = atomize(targets)
+    prereqs = atomize(prereqs)
+    
+    for i=1, #targets do
+        local target = targets[i]
+        self:ADD_RULE(target, prereqs, action)
     end
 end
+function blud.operator_super:ADD_RULE(target, prereqs, action)
+
+end
+
 
 
 --[[ killme!
@@ -1704,10 +1753,21 @@ blud.operators[":"] = blud.operator_new({
     end,
 })
 
+blud.operators["::"] = blud.operator_new({
+    choose_operator = function(self, target_words, prereq_words, action)
+        if blud.has_pattern_word(target_words) then
+            return blud.operators["%:"]
+        end
+        return self
+    end,
+})
+
+--[[
 blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
     return target:SOURCE_RULE(prereq_atoms, action)
 end
-
+]]
+--[[
 blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)
     print("Do :BUILD: for target " .. target.NAME .. " with " .. #prereq_atoms .. " args ")
     -- determine value of OWD
@@ -1723,8 +1783,18 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
 
     -- need to give .GLOBAL_MACRO attribute to target
 end
+--]]
 
 blud.operators[":TEST:"] = blud.operator_new({
+    choose_operator = function(self, target_words, prereq_words, action)
+        if blud.has_pattern_word(target_words) then
+            return blud.operators["%:"]
+        end
+        return self
+    end,
+})
+
+blud.operators[":BUILD:"] = blud.operator_new({
     choose_operator = function(self, target_words, prereq_words, action)
         if blud.has_pattern_word(target_words) then
             return blud.operators["%:"]
