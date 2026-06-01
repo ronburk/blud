@@ -44,7 +44,7 @@ end
 
 function implicit.find_match(name, prerequisites)
     for _, prerequisite in ipairs(prerequisites) do
-        local stem, dir_stem = match_pattern(name, prerequisite)
+        local stem, dir_stem = match_parsed_pattern(name, prerequisite)
         if stem then
             return stem, dir_stem  -- Return the matched stem and dir_stem immediately
         end
@@ -60,7 +60,7 @@ function implicit.find_reverse(prereq_name)
     for i = #candidates, 1, -1 do
         local rule = candidates[i]
         for _, prereq in ipairs(rule.prerequisites) do
-            local dir_stem, file_stem = match_pattern(parse_pattern(prereq), prereq_name)
+            local dir_stem, file_stem = match_parsed_pattern(parse_pattern(prereq), prereq_name)
             if dir_stem then
                 return rule, file_stem, dir_stem
             end
@@ -90,29 +90,49 @@ function implicit.add_rule(target, prerequisites, action)
     end
 end
 
+-- Match a concrete name against an unparsed implicit-rule pattern.
+--
+-- Returns:
+--     { name = name, stem = stem, dir_stem = dir_stem }
+--
+-- or nil if the pattern does not match.
+--
+-- '%' captures a non-empty filename stem that does not contain '/'.
+-- '%%/' captures zero or more directory components, including the trailing
+-- slash when non-empty. When '%%/' matches nothing, dir_stem is "".
+-- Examples:
+--     name                    pattern             result
+--     "cstr.o"                "%.o"               { stem = "cstr", dir_stem = "" }
+--     "src/foo/cstr.o"        "src/%%/%.o"        { stem = "cstr", dir_stem = "foo/" }
+--     "src/cstr.o"            "src/%%/%.o"        { stem = "cstr", dir_stem = "" }
 function implicit.match_pattern(name, pattern)
-    -- Prepare Pattern A (with directory)
+    local result = nil -- assume no match
+
+    -- We can translate this pattern style to Lua pattern format, but
+    -- must handle two cases because Lua patterns don't support alternation
+    -- "src/%%/%.o" => "src/(.*/)?([^/]+)\.o"  (if we had true regular expressions)
+
+    -- first case is when a "%%/" operator matches something
     local pattern_with_dir = "^" .. pattern
         :gsub("%%%%/", "(.+/)")
         :gsub("%%", "([^/]+)") .. "$"
 
     local dir_stem, stem = name:match(pattern_with_dir)
     if stem then
-        return { name = name, stem = stem, dir_stem = dir_stem }
+        result =  { name = name, stem = stem, dir_stem = dir_stem }
+    else
+        -- second case is when a "%%/" operator must match the empty string
+        local pattern_without_dir = "^" .. pattern
+            :gsub("%%%%/", "")
+            :gsub("%%", "([^/]+)") .. "$"
+
+        stem = name:match(pattern_without_dir)
+        if stem then
+            result =  { name = name, stem = stem, dir_stem = "" }
+        end
     end
 
-    -- Prepare Pattern B (without directory)
-    local pattern_without_dir = "^" .. pattern
-        :gsub("%%%%/", "")
-        :gsub("%%", "([^/]+)") .. "$"
-
-    stem = name:match(pattern_without_dir)
-    if stem then
-        return { name = name, stem = stem, dir_stem = "" }
-    end
-
-    -- No match found
-    return nil
+    return result
 end
 
 function dump(t)
@@ -160,7 +180,7 @@ function parse_pattern(pattern)
     return result
 end
 
-function match_pattern(pattern, path)
+function match_parsed_pattern(pattern, path)
     local dir_stem, file_stem
 
     -- Separate the path into directory and filename components
@@ -217,7 +237,7 @@ if true then
     function test_pattern(pattern, path, dir_stem_expected, file_stem_expected)
         local parsed, dir_stem, file_stem        
         parsed = parse_pattern(pattern)
-        dir_stem, file_stem = match_pattern(parsed, path)
+        dir_stem, file_stem = match_parsed_pattern(parsed, path)
         local msg = string.format("pattern=%q, path=%q\n" ..
                                "dir_stem=%q, expected=%q\n" ..
                                "file_stem=%q, expected=%q\n",
