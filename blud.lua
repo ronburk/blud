@@ -539,12 +539,14 @@ end
 execute_bytecode(luac_path)
 print("now run user code")
 blud.bludfile_code()
-print("OK, now ready to update")
+util.print("OK, now ready to update: ", util.dump(blud.primary_targets))
+print(type(blud.primary_targets), #blud.primary_targets)
 if blud.primary_targets == nil then
     error("no targets to build")
 end
 blud.build_init()
 for _,target in ipairs(blud.primary_targets) do
+    util.print("build target '%s'", util.dump(target))
     target:BUILD()
 end
 

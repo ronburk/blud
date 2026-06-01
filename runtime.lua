@@ -220,30 +220,22 @@ blud.execute = function(scope, text)
     return status
 end
 
---[[
 -- eval_rule does minimal processing then goes into the operator hook system
-blud.eval_rule = function(operator, left_parts, right_parts, action)
---customDebugger("Debug> ", customHandler)
-
-    -- no known reason to want to overwrite macro expansion, so do that here
-    local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
-    local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
-
-    -- seems sketchy for some operators to tokenize differently, so do that here
-    local targets = tokenize_dependency_line(left)
---    local prereqs = expand_dependency_words(tokenize_dependency_line(right))
--- operator will have to glob prerequisites; :TEST: needs this
-    local prereqs = tokenize_dependency_line(right)
-
-    blud.add_rules(operator, targets, prereqs, action)
-end
---]]
-
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     util.print("blud.eval_rule, %s, %s, %s, action",
                util.dump(operator_name),
                util.dump(left_parts),
                util.dump(right_parts))
+    -- now is the time to identify implicit rules
+    if operator_name == ":" then
+        for i=1, #left_parts do
+            local part = left_parts[i]
+            if type(part) == 'string' and part:find("%", 1, true) then
+                operator_name = "%:"
+                break
+            end
+        end
+    end
     local operator = blud.operators[operator_name]
     if not operator then
         blud.error("Unknown operator: #1", operator_name)
@@ -253,11 +245,10 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
 
     -- seems sketchy for some operators to tokenize differently, so do that here
-    local targets = tokenize_dependency_line(left)
-    local prereqs = tokenize_dependency_line(right)
+    local target_names = tokenize_dependency_line(left)
+    local prereq_names = tokenize_dependency_line(right)
 
---    operator:EVAL_RULE(left, right, action)
-    operator:EVAL_RULE(targets, prereqs, action)
+    operator:EVAL_RULE(target_names, prereq_names, action)
 end
 
 function blud.macro(name, ...)
@@ -1504,15 +1495,26 @@ util.printf("%s had NO ACTION\n", atom.NAME)
         return atom
     end,
     BUILD = function(target)
-        print("BUILD('" .. blud.dump_atom(target) .. "')")
+        util.print("BUILD('%s') prereq=%s", blud.dump_atom(target), util.dump(target.PREREQUISITES))
         if target.PARENT then print("PARENT('" .. blud.dump_atom(target.PARENT) .. "')") end
         target:BIND()
         if target.BUILDING == true then
             error("circular dependency on " .. target.NAME)
         end
         target.BUILDING = true
-        local newest_prerequisite = target.BUILD_PREREQUISITES(target)
         local timestamp           = blud.get_fs_timestamp(target.BOUND_NAME)
+        if not target.HAS_RULE then
+            if timestamp == 0 then
+                -- must try implicit rules now
+                local rule, match, prereq_names = blud.implicit.find_forward(target.NAME)
+                util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_names))
+                error("Don't know how to build: " .. target.NAME)
+            end
+            target.TIMESTAMP = timestamp
+            return timestamp
+        end
+        
+        local newest_prerequisite = target.BUILD_PREREQUISITES(target)
         print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
         print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
@@ -1661,12 +1663,14 @@ function blud.operator_super:EVAL_RULE(left_tokens, right_tokens, action)
     local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
     local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
     local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
-    local prerequisite_atoms = self:ATOMIZE_PREREQUISTE_WORDS(prerequisite_words)
-    self:ADD_RULES(targets, prerequisites, action)
-    if not blud.primary_targets and #targets > 0 then
-        blud.primary_targets = self:SET_PRIMARY_TARGETS(targets)
+    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
+    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
+    if not blud.primary_targets and #target_atoms > 0 then
+        util.print("    -> call self(%s):SET_PRIMARY_TARGETS(%s)",
+                   util.dump(self),
+                   util.dump(target_atoms))
+        blud.primary_targets = self:SET_PRIMARY_TARGETS(target_atoms)
     end
-
 end
 function blud.operator_super:GLOB_TARGET_WORDS(words)
     return expand_dependency_words(words)
@@ -1677,9 +1681,9 @@ end
 function atomize_words(t)
     local result = {}
     for i, v in ipairs(t) do
-        result[i] = blud.get_or_create_target(t[v])
+        result[i] = blud.get_or_create_target(v)
     end
-    return t
+    return result
 end
 function blud.operator_super:ATOMIZE_TARGET_WORDS(target_words)
     return atomize_words(target_words)
@@ -1690,32 +1694,29 @@ end
 
 
 function blud.operator_super:SET_PRIMARY_TARGETS(targets)
-    return { targets[1] }
+    local result = nil
+    if #targets > 0 then
+        result = {targets[1]}
+    end
+    return result
 end
 
 
 
+-- all atoms by now
 function blud.operator_super:ADD_RULES(targets, prereqs, action)
-    print("blud.operator_super:ADD_RULES(%s,%s,action)",
+    util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
           util.dump(targets), util.dump(prereqs))
 
-    local function atomize(names)
-        result = {}
-        for i=1, #targets do
-            result[i] = blud.get_or_create_target(names[i])
-        end
-        return result
-    end
-    targets = atomize(targets)
-    prereqs = atomize(prereqs)
-    
     for i=1, #targets do
         local target = targets[i]
         self:ADD_RULE(target, prereqs, action)
     end
 end
 function blud.operator_super:ADD_RULE(target, prereqs, action)
-
+   -- util.array_append(target.PREREQUISITES, prereqs)
+    util.print("ADD_RULE %s", util.dump(target))
+    target:ADD_RULE(prereqs, action)
 end
 
 
@@ -1745,21 +1746,27 @@ end
 
 --]]
 blud.operators[":"] = blud.operator_new({
-    choose_operator = function(self, target_words, prereq_words, action)
-        if blud.has_pattern_word(target_words) then
-            return blud.operators["%:"]
-        end
-        return self
-    end,
 })
 
-blud.operators["::"] = blud.operator_new({
-    choose_operator = function(self, target_words, prereq_words, action)
-        if blud.has_pattern_word(target_words) then
-            return blud.operators["%:"]
+do  -- %: operator
+    local op = blud.operator_new({})
+    blud.operators["%:"] = op
+    function op:SET_PRIMARY_TARGETS(target_atoms)
+        util.print("[%%:]:SET_PRIMARY_TARGETS()")
+        -- implicit rules are not candidates for primary targets
+        return nil
+    end
+    function op:ADD_RULE(target, prereqs, action)
+        util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target), util.dump(prereqs))
+        local prereq_names = {}
+        for i = 1, #prereqs do
+            prereq_names[i] = prereqs[i].NAME
         end
-        return self
-    end,
+        blud.implicit.add_rule(target.NAME, prereq_names, action)
+    end
+end
+
+blud.operators["::"] = blud.operator_new({
 })
 
 --[[
@@ -1786,21 +1793,9 @@ end
 --]]
 
 blud.operators[":TEST:"] = blud.operator_new({
-    choose_operator = function(self, target_words, prereq_words, action)
-        if blud.has_pattern_word(target_words) then
-            return blud.operators["%:"]
-        end
-        return self
-    end,
 })
 
 blud.operators[":BUILD:"] = blud.operator_new({
-    choose_operator = function(self, target_words, prereq_words, action)
-        if blud.has_pattern_word(target_words) then
-            return blud.operators["%:"]
-        end
-        return self
-    end,
 })
 
 --[[

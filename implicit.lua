@@ -5,6 +5,35 @@ local rules = {}
 local rules_from_suffix = {}
 
 
+function implicit.find_forward(target_name, exists)
+    for i = 1, #rules do
+        local rule = rules[i]
+        util.print("implicit, rule is %s", util.dump(rule))
+        local match = implicit.match_pattern(target_name, rule.target)
+        util.print("implicit, match is %s", util.dump(match))
+        if match then
+            local prereq_names = {}
+            local ok = true
+            for j = 1, #rule.prerequisites do
+                local prereq_pattern = rule.prerequisites[j]
+                local prereq_name = implicit.expand_pattern(prereq_pattern, match)
+
+                if not get_path_timestamp(prereq_name) then
+                    ok = false
+                    break
+                end
+                prereq_names[#prereq_names + 1] = prereq_name
+            end
+            if ok then
+                return rule, match, prereq_names
+            end
+        end
+    end
+
+    return nil
+end
+
+
 function implicit.literal_length(pattern)
     return #pattern:gsub("%%%%/", ""):gsub("%%", "")
 end
