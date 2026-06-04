@@ -1,4 +1,6 @@
-LINK.o = $(CC) -o $@ $^ $(LDFLAGS)
+CC         = gcc
+CXX        = gcc
+LINK.o     = $(CC) -o $@ $^ $(LDFLAGS)
 LINK.cxx.o = $(CXX) -o $@ $^ $(LDFLAGS)
 
 %.o : %.c

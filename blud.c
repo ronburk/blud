@@ -180,13 +180,17 @@ static int lua_glob_expand(lua_State* L) {
         }
         names += name_len + 1;
     }
+#if 0
     if(matched == 0){
         lua_pushinteger(L, ++size);
         lua_pushlstring(L, pattern, strlen(pattern));
         lua_settable(L, 1);
     }
-
     return 0;
+#else
+    lua_pushinteger(L, matched);
+    return 1;
+#endif
 }
 
 

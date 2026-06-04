@@ -330,20 +330,23 @@ function blud.glob.expand_pattern(words, pattern)
 
     -- Call the recursive helper function to match the pattern, starting with an empty path
     local initial_cache = blud.glob.get_cached_dir(dir)  -- Cache for the root directory
-    local match_count = blud.glob.recursive_glob_match(new_words, path_components, 2, "", initial_cache)  -- Empty path
+    local match_count   = blud.glob.recursive_glob_match(new_words, path_components, 2, "", initial_cache)  -- Empty path
 
     -- If no matches were found, treat the pattern as a literal and add it to 'new_words'
-    if match_count == 0 then
-        table.insert(new_words, pattern)
-    end
+--    if match_count == 0 then
+--        table.insert(new_words, pattern)
+--    end
 
-    -- Sort the new words
-    table.sort(new_words)
+    if match_count > 0 then
+        -- Sort the new words
+        table.sort(new_words)
 
-    -- Append the sorted new_words to words
-    for _, word in ipairs(new_words) do
-        table.insert(words, word)
+        -- Append the sorted new_words to words
+        for _, word in ipairs(new_words) do
+            table.insert(words, word)
+        end
     end
+    return match_count
 end
 
 -- Recursive function to handle glob pattern matching
@@ -374,8 +377,11 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
         end
     else
         -- Normal matching for the current component (using glob_expand for wildcards)
-        local matched = {}
-        glob_expand(matched, part, dir_cache["."])
+        local matched       = {}
+        local matched_count = glob_expand(matched, part, dir_cache["."])
+        if matched_count == 0 then
+            return 0
+        end
 
         -- For each matched entry, continue matching the remaining pattern components
         for _, matched_entry in ipairs(matched) do
@@ -484,11 +490,12 @@ function blud.Scope:new(parent)
         parent     = parent,
         __index    = parent,
     }
-
     -- no need for separate metatable; each instance is its own metatable
     setmetatable(instance, instance)
     return instance
 end
+
+
 
 -- a param scope filters out any numeric macro name references
 -- it never allows those references to search any higher scope
@@ -1238,6 +1245,7 @@ function is_pattern(word)
     end
 end
 
+--[=[
 -- only handle '*', only handle current directory
 -- Take glob pattern and add to table all the matching names in current directory
 function expand_pattern(words, pattern)
@@ -1260,6 +1268,7 @@ function expand_pattern(words, pattern)
         table.insert(words, pattern)  -- no match, so treat pattern as literal
     end
 end
+--]=]
 
 function blud.phase3:parse()
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -1403,6 +1412,7 @@ blud.super_atom = {
             target_copy.__index = target_copy
             setmetatable(prerequisite, target_copy)
         end
+        prerequisite.USED_AS_PREREQUISITE = true
     end,
     ADD_ACTION = function(target, action)
         if target.ACTION then
@@ -1412,17 +1422,18 @@ blud.super_atom = {
             target.ACTION = action
         end
     end,
-    ADD_RULE = function(target, prerequisites, action)
-        print("super_atom ADD_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
+    ADD_RULE = function(self, prerequisites, action)
+--        print(">>>super_atom ADD_RULE target = " .. dump(self) .. ": " .. dump(prerequisites))
         if action then
-            target:ADD_ACTION(action)
+            self:ADD_ACTION(action)
         end
-        target.HAS_RULE = true
+        self.HAS_RULE = true
         if prerequisites ~= nil then
             for _, prerequisite in ipairs(prerequisites) do
-                target.ADD_PREREQUISITE(target, prerequisite)
+                self.ADD_PREREQUISITE(self, prerequisite)
             end
         end
+--        print("<<<super_atom ADD_RULE target = " .. dump(self) .. ": " .. dump(prerequisites))
     end,
     -- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
@@ -1484,7 +1495,7 @@ blud.super_atom = {
                 atom.BOUND_NAME = OWD .. "/" .. atom.NAME
             end
         else
-util.printf("%s had NO ACTION\n", atom.NAME)
+--util.printf("%s had NO ACTION\n", atom.NAME)
             local SWD = atom.SCOPE:get_text("SWD")
             if SWD ~= "" then
                 atom.BOUND_NAME = SWD .. "/" .. atom.NAME
@@ -1494,39 +1505,41 @@ util.printf("%s had NO ACTION\n", atom.NAME)
         end
         return atom
     end,
-    BUILD = function(target)
-        util.print("BUILD('%s') prereq=%s", blud.dump_atom(target), util.dump(target.PREREQUISITES))
-        if target.PARENT then print("PARENT('" .. blud.dump_atom(target.PARENT) .. "')") end
-        target:BIND()
-        if target.BUILDING == true then
-            error("circular dependency on " .. target.NAME)
+    BUILD = function(self)
+        util.print("BUILD('%s') prereq=%s", blud.dump_atom(self), util.dump(self.PREREQUISITES))
+        if self.PARENT then print("PARENT('" .. blud.dump_atom(self.PARENT) .. "')") end
+        if self.BUILDING == true then
+            error("circular dependency on " .. self.NAME)
         end
-        target.BUILDING = true
-        local timestamp           = blud.get_fs_timestamp(target.BOUND_NAME)
-        if not target.HAS_RULE then
-            if timestamp == 0 then
-                -- must try implicit rules now
-                local rule, match, prereq_names = blud.implicit.find_forward(target.NAME)
-                util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_names))
-                error("Don't know how to build: " .. target.NAME)
+        self.BUILDING   = true
+        if not self.HAS_RULE then
+            -- must try implicit rules now
+            local rule, match, prereq_atoms = blud.implicit.find_forward(self.NAME)
+            util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_atoms))
+            if rule then
+                self:ADD_RULE(prereq_atoms, rule.action)
             end
-            target.TIMESTAMP = timestamp
-            return timestamp
         end
+        self:BIND()
+        local timestamp = blud.get_fs_timestamp(self.BOUND_NAME)
+        if not self.HAS_RULE and timestamp == 0 then
+                error("Don't know how to build: " .. self.NAME)            
+        end
+        self.TIMESTAMP = timestamp
         
-        local newest_prerequisite = target.BUILD_PREREQUISITES(target)
-        print("timestamp for '" .. target.BOUND_NAME .. "' is " .. timestamp)
+        local newest_prerequisite = self.BUILD_PREREQUISITES(self)
+        print("timestamp for '" .. self.BOUND_NAME .. "' is " .. timestamp)
         print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
-            if target.ACTION then
-                target:DO_ACTION()
-                target.timestamp = blud.current_time
-            elseif timestamp == 0 and not target.HAS_RULE then
-                error("Don't know how to build: " .. target.NAME);
+            if self.ACTION then
+                self:DO_ACTION()
+                self.TIMESTAMP = blud.current_time
+            elseif timestamp == 0 and not self.HAS_RULE then
+                error("Don't know how to build: " .. self.NAME);
             end
         end
-        target.TIMESTAMP = timestamp
-        target.BUILDING = false
+        self.TIMESTAMP = timestamp
+        self.BUILDING = false
         return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)
@@ -1561,6 +1574,7 @@ util.printf("%s had NO ACTION\n", atom.NAME)
         if exit_code and exit_code ~= 0 then
             error("command failed[" .. exit_code .. "]: ")
         end
+        return 0
     end,
 }
 
@@ -1762,7 +1776,10 @@ do  -- %: operator
         for i = 1, #prereqs do
             prereq_names[i] = prereqs[i].NAME
         end
-        blud.implicit.add_rule(target.NAME, prereq_names, action)
+        local errmsg = blud.implicit.add_rule(target.NAME, prereq_names, action)
+        if errmsg then
+            blud.error(errmsg)
+        end
     end
 end
 
@@ -1795,8 +1812,45 @@ end
 blud.operators[":TEST:"] = blud.operator_new({
 })
 
-blud.operators[":BUILD:"] = blud.operator_new({
-})
+
+-- :BUILD: operator
+do
+    local op = blud.operator_new({})
+    blud.operators[":BUILD:"] = op
+
+    -- a build name cannot be a primary target
+    function op:SET_PRIMARY_TARGETS(target_atoms)
+        util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
+        return nil
+    end
+
+    function op:ADD_RULE(target, prereqs, action)
+        util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
+                   util.dump(target), util.dump(prereqs))
+
+        if target.USED_AS_PREREQUISITE then
+            blud.error("%s: build name was previously used as prerequisite.", target.NAME)
+        end
+        target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
+        target.ACTION = action
+        -- is this the default build (first one mentioned?)
+        if blud.BUILD_DEFAULT == nil then
+            blud.BUILD_DEFAULT = target
+            print("default build is: ", blud.BUILD_DEFAULT.NAME)
+        end
+        local old_do_action = target.DO_ACTION
+        target.DO_ACTION = function (target)
+            local result = old_do_action(target)
+            if result == 0 then  -- if action didn't fail
+                assert(target.SCOPE)
+                blud.scope_build.variables = target.SCOPE.variables
+            end
+            return result
+        end
+        -- Important: do not call target:ADD_RULE().
+        -- A :BUILD: declaration is not a build dependency rule.
+    end
+end
 
 --[[
 blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action)
