@@ -1752,7 +1752,11 @@ function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
     for i=1, #targets do
         local target_atom = targets[i]
         if not blud.primary_targets then
-            blud.primary_targets = self:SET_PRIMARY_TARGETS(target_atom)
+            local new_primary = self:SET_PRIMARY_TARGETS(target_atom)
+            if new_primary then
+                blud.primary_targets = {}
+                table.insert(blud.primary_targets,new_primary)
+            end
         end
         self:ADD_RULE(target_atom, prereq_words, action)
     end

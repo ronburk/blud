@@ -545,6 +545,7 @@ if blud.primary_targets == nil then
     error("no targets to build")
 end
 blud.build_init()
+util.print("%d targets %s", #blud.primary_targets, util.dump(blud.primary_targets))
 for _,target in ipairs(blud.primary_targets) do
     util.print("build target '%s'", util.dump(target))
     target:BUILD()
