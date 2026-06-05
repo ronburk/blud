@@ -148,7 +148,9 @@ function implicit.find_reverse(prereq_name)
 end
 
 
+-- add a rule to the implicit rule database
 function implicit.add_rule(target, prerequisites, action)
+    util.print("implicit.add_rule(%s,%s,action)", util.dump(target), util.dump(prerequisites))
     local parsed, errmsg
     -- Add the rule as usual
     local rule = {target = target, prerequisites = prerequisites, action = action, order = #rules + 1}

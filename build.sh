@@ -7,7 +7,7 @@ g++ -o cstr cstr.cpp $CFLAGS
 ./cstr runtime.lua util.lua macro.lua main.lua init.lua blud.lua builtin.blud debug.lua implicit.lua compiler.lua compile_io.lua >./bludlua.c
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
-zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud
+zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh test.blud test/*
 
 exit 0
 

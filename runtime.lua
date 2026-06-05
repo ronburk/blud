@@ -6,6 +6,31 @@
 -- macro_call := { macro=true, arg_array... }
 -- arg_array  := { part... }
 
+--[[
+text
+    Raw uninterpreted input text from a line or action body.
+
+part
+    A parsed piece of text before macro expansion is complete.
+    Either:
+        - a string/text fragment
+        - a table representing a macro invocation
+
+token
+    A whitespace-delimited string after macro expansion/tokenization.
+    It has not been globbed.
+    It should not yet be assumed to name an atom.
+
+name
+    A string that has passed operator-specific interpretation.
+    It is intended to become an atom.NAME.
+    Glob expansion, path-prefixing, implicit naming rules, etc. produce names.
+
+atom
+    A table with at least:
+        NAME = name
+    May also contain PREREQUISITES, ACTION, TYPE, BOUND_NAME, etc.
+--]]
 
 -- Insert custom loader at the beginning of package.loaders
 table.insert(package.loaders, 1, function(modname)
@@ -188,6 +213,7 @@ function errorf(format_string, ...)
 end
 
 local function expand_dependency_words(input)
+    util.print("expand_dependency_words(%s)", util.dump(input))
     local output = {}
 
     for _, word in ipairs(input) do
@@ -1396,7 +1422,8 @@ blud.global = {
 blud.super_atom = {
     NAME = "",
     ADD_PREREQUISITE = function(target, prerequisite)
-        print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. prerequisite.NAME .. ")")
+        util.print("ADD_PREREQUISITE target=%s", util.dump(target))
+        print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. util.dump(prerequisite) .. ")")
         local prerequisites = target.PREREQUISITES
         if prerequisites ~= nil then
             table.insert(prerequisites, prerequisite)
@@ -1422,18 +1449,19 @@ blud.super_atom = {
             target.ACTION = action
         end
     end,
-    ADD_RULE = function(self, prerequisites, action)
---        print(">>>super_atom ADD_RULE target = " .. dump(self) .. ": " .. dump(prerequisites))
+    ADD_RULE = function(target_atom, prerequisites, action)
+        print(">>>super_atom ADD_RULE target = " .. dump(target_atom) .. ": " .. dump(prerequisites))
         if action then
-            self:ADD_ACTION(action)
+            target_atom:ADD_ACTION(action)
         end
-        self.HAS_RULE = true
+        target_atom.HAS_RULE = true
         if prerequisites ~= nil then
             for _, prerequisite in ipairs(prerequisites) do
-                self.ADD_PREREQUISITE(self, prerequisite)
+                util.print("    target_atom.NAME = %s", target_atom.NAME)
+                target_atom.ADD_PREREQUISITE(target_atom, prerequisite)
             end
         end
---        print("<<<super_atom ADD_RULE target = " .. dump(self) .. ": " .. dump(prerequisites))
+--        print("<<<super_atom ADD_RULE target = " .. dump(target_atom) .. ": " .. dump(prerequisites))
     end,
     -- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
@@ -1674,17 +1702,20 @@ end
 
 function blud.operator_super:EVAL_RULE(left_tokens, right_tokens, action)
     util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
-    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
-    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
-    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
-    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
-    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
+--    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
+--    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
+--    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
+--    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
+    self:ADD_RULES(left_tokens, right_tokens, action)
+--    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
+--[[
     if not blud.primary_targets and #target_atoms > 0 then
         util.print("    -> call self(%s):SET_PRIMARY_TARGETS(%s)",
                    util.dump(self),
                    util.dump(target_atoms))
         blud.primary_targets = self:SET_PRIMARY_TARGETS(target_atoms)
     end
+--]]
 end
 function blud.operator_super:GLOB_TARGET_WORDS(words)
     return expand_dependency_words(words)
@@ -1707,30 +1738,31 @@ function blud.operator_super:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
 end
 
 
-function blud.operator_super:SET_PRIMARY_TARGETS(targets)
-    local result = nil
-    if #targets > 0 then
-        result = {targets[1]}
-    end
-    return result
+-- override and return nil if your target cannot be primary build target
+function blud.operator_super:SET_PRIMARY_TARGETS(target_atom)
+    return target_atom
 end
 
-
-
--- all atoms by now
-function blud.operator_super:ADD_RULES(targets, prereqs, action)
+-- tokenized, but not yet atomized
+function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
-          util.dump(targets), util.dump(prereqs))
+          util.dump(target_words), util.dump(prereq_words))
 
+    local targets = atomize_words(target_words)
     for i=1, #targets do
-        local target = targets[i]
-        self:ADD_RULE(target, prereqs, action)
+        local target_atom = targets[i]
+        if not blud.primary_targets then
+            blud.primary_targets = self:SET_PRIMARY_TARGETS(target_atom)
+        end
+        self:ADD_RULE(target_atom, prereq_words, action)
     end
 end
-function blud.operator_super:ADD_RULE(target, prereqs, action)
+function blud.operator_super:ADD_RULE(target, prereq_words, action)
    -- util.array_append(target.PREREQUISITES, prereqs)
-    util.print("ADD_RULE %s", util.dump(target))
-    target:ADD_RULE(prereqs, action)
+    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
+    local prereq_names = expand_dependency_words(prereq_words)
+    local prereq_atoms = atomize_words(prereq_names)
+    target:ADD_RULE(prereq_atoms, action)
 end
 
 
@@ -1770,13 +1802,13 @@ do  -- %: operator
         -- implicit rules are not candidates for primary targets
         return nil
     end
-    function op:ADD_RULE(target, prereqs, action)
-        util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target), util.dump(prereqs))
-        local prereq_names = {}
-        for i = 1, #prereqs do
-            prereq_names[i] = prereqs[i].NAME
+    function op:ADD_RULE(target_atom, prereq_words, action)
+        util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+        local prereq_names = expand_dependency_words(prereq_words)
+        for i = 1, #prereq_names do
+            prereq_words[i] = prereq_words[i].NAME
         end
-        local errmsg = blud.implicit.add_rule(target.NAME, prereq_names, action)
+        local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_names, action)
         if errmsg then
             blud.error(errmsg)
         end
@@ -1809,8 +1841,11 @@ blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, actio
 end
 --]]
 
-blud.operators[":TEST:"] = blud.operator_new({
-})
+do
+    local op = blud.operator_new({})
+    blud.operators[":TEST:"] = op
+
+end
 
 
 -- :BUILD: operator
