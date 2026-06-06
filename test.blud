@@ -1,0 +1,5 @@
+debug :BUILD:
+
+all : cstr.o
+
+    
