@@ -19,7 +19,7 @@ blud :: $(SRCS)
 
 -- use cstr to convert Lua source into a C string, they all will reside in bludlua.c
 STRFILES = *.lua builtin.blud
-bludlua.c :  cstr
+bludlua.c :  cstr $(STRFILES)
     $(OWD)/cstr $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)

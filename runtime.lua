@@ -1819,8 +1819,53 @@ do  -- %: operator
     end
 end
 
-blud.operators["::"] = blud.operator_new({
-})
+do  -- :: operator
+    local op = blud.operator_new({})
+    blud.operators["::"] = op
+    function op:ADD_RULE(target_atom, prereq_words, action)
+        util.print("(::):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+        local new_prereqs = {}
+        local link_macro  = "LINK.o"
+
+        for _, prerequisite in ipairs(prerequisites or {}) do
+            local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite.NAME)
+            if rule == nil then
+                error("no reverse rule for " .. prerequisite.NAME)
+            end
+            if prerequisite.TYPE == ".cpp" then
+                link_macro = "LINK.cxx.o"
+            end
+            local output_name = blud.implicit.expand(rule.target, file_stem, dir_stem)
+            local output      = blud.get_or_create_target(output_name)
+
+            -- Materialize the implicit rule:
+            --     output : prerequisite
+            --         rule.action
+            --
+            -- This is intentionally OK if the same exact rule is added twice,
+            -- but ADD_RULE may still complain if the target already has a
+            -- different action.
+            output:ADD_RULE({ prerequisite }, rule.action)
+
+            table.insert(new_prereqs, output)
+        end
+
+        if action == nil or action == ""  or action == blud.default_action then
+            action = function(scope)
+                local command_tokens = {
+                    ["macro"] = true, [1] = {["type"]="text", ["text"]= link_macro}
+                }
+                local command = blud.Macro.expand_tokens(scope, command_tokens)
+            end
+            action = function(scope, status)
+                status = blud.execute(scope, scope:get_text(link_macro))
+            end
+            --            action = "$(" .. link_macro .. ")"
+        end
+
+        target:ADD_RULE(new_prereqs, action)
+    end
+end
 
 --[[
 blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
