@@ -1754,8 +1754,7 @@ function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
         if not blud.primary_targets then
             local new_primary = self:SET_PRIMARY_TARGETS(target_atom)
             if new_primary then
-                blud.primary_targets = {}
-                table.insert(blud.primary_targets,new_primary)
+                blud.primary_targets = { new_primary }
             end
         end
         self:ADD_RULE(target_atom, prereq_words, action)
