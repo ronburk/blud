@@ -189,6 +189,7 @@ end
 
 
 
+--[[
 local macro_name_pattern = "([%a_][%w_%.]*)"
 
 -- parse a line that looks like macro assign, or return nil
@@ -198,10 +199,13 @@ do
         ["="]   = true,
         [":="]  = true,
         ["+="]  = true,
+        ["?="]  = true,
     }
-    function match_macro_assign(line)
-        --    print("match_macro_assign(\"" .. line .. "\")")
-        local pattern = "^" .. macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
+    function match_macro_assign(line, skip_leading_white)
+        print("match_macro_assign(\"" .. line .. "\")")
+        local anchor = "^"
+        if skip_leading_white then anchor = "" end
+        local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
         local macro_name, operator, remainder = line:match(pattern)
         if macro_name and operator then
             if operators[operator] == true then
@@ -211,6 +215,7 @@ do
         return nil
     end
 end
+--]]
 
 local translate_make_rule
 do
@@ -256,7 +261,7 @@ do
         local macro = match_macro_assign(line)
         if macro then
             compile_io.emit_line("blud.macro_assign(%q,%q,%q)",
-            macro.name, macro.operator, macro.value)
+            macro.name, macro.operator, macro.macro_text)
         elseif is_blank_or_comment(line) then
             compile_io.emit_line(line)
         else
@@ -292,6 +297,8 @@ function compile_empty_line(compile_io, token_type, token_text)
 end
 
 local function parts_to_body_lua(parts)
+    return util.dump(parts)
+--[[
     local result = "{"
     for i, part in ipairs(parts) do
         if i > 1 then
@@ -310,6 +317,7 @@ local function parts_to_body_lua(parts)
         end
     end
     return result .. "}"
+--]]
 end
 
 function compile_macro_assign(compile_io, macro_name)
@@ -363,7 +371,7 @@ local function find_colon_operator_in_text(text)
 end
 
 local function append_if_nonempty(parts, part)
-    if part.type ~= "text" or part.text ~= "" then
+    if  part ~= "" then
         table.insert(parts, part)
     end
 end
@@ -372,26 +380,14 @@ local function split_parts_at_colon_operator(parts)
     local left = {}
 
     for i, part in ipairs(parts) do
-        if part.type == "comment" then
-            break
-        end
-        if part.type == "text" then
-            local op_start, op_stop = find_colon_operator_in_text(part.text)
+        if type(part) == "string" then
+            local op_start, op_stop = find_colon_operator_in_text(part)
             if op_start then
                 local right = {}
-                local operator = part.text:sub(op_start, op_stop)
-                append_if_nonempty(left, {
-                    type = "text",
-                    text = part.text:sub(1, op_start - 1),
-                })
-                append_if_nonempty(right, {
-                    type = "text",
-                    text = part.text:sub(op_stop + 1),
-                })
+                local operator = part:sub(op_start, op_stop)
+                append_if_nonempty(left, part:sub(1, op_start - 1))
+                append_if_nonempty(right, part:sub(op_stop + 1))
                 for j = i + 1, #parts do
-                    if parts[j].type == "comment" then
-                        break
-                    end
                     table.insert(right, parts[j])
                 end
                 return left, operator, right
@@ -413,7 +409,8 @@ function compile_action(compile_io)
             assert(compile_io.get_token() == "EOL")
             local parts = m.parts_from_text(macro_text)
             if #action > 0 then action = action .. ", " end
-            action =  action .. m.parts_to_lua_function(parts) 
+--            action =  action .. m.parts_to_lua_function(parts) 
+            action =  action .. util.dump(parts)
             action = "status =  blud.execute(scope, " .. action .. ")" ..
                 "; if status ~= 0 then return status end"
         end
@@ -435,17 +432,36 @@ end
 -- in column 1.
 function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     local parts = m.parts_from_text(compile_io.get_current_line())
-    local left, operator, right = split_parts_at_colon_operator(parts)
+    util.print("parts=%s", util.dump(parts))
+    local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
+    util.print("left=%s, op=%s, right=%s", left_parts, operator, right_parts)
     if not operator then
         compile_io.error("Expected dependency rule")
     end
-    if right and #right > 0 and right[1].type == "text" then
---        print("Should check for target-scoiped macro assign")
-    end
-    
     -- next step:
     -- decide whether right begins with target-specific macro assignment
+    print("right = " .. util.dump(right_parts))
+--[[
+    if right_parts and #right_parts > 0 and right_parts[1].type == "text" then
+        print("Should check for target-scoiped macro assign")
+        local macro = match_macro_assign(right_parts[1].text, true)
+        if macro then
+            util.print("Found target-scoped assign: %s", util.dump(macro))
+            -- ok, got to turn lhs into an array of target atoms
+            local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
+            local target_names = tokenize_dependency_line(left)
+
+            for i = 1, #target_names do
+                compile_io.emit_line(
+                    "blud.macro_assign_parts(%q, %q, %q, %s)",
+                    target_names[i], macro_name, assign_op, parts_to_body_lua(parts))
+            end
+            error("x")
+        end
+    end
+--]]
+    
     -- otherwise emit blud.add_rule_parts(left, operator, right, action)
     local action = ""
     -- eat end of line, if any
@@ -457,8 +473,8 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     end
     compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
                          operator,
-                         parts_to_body_lua(left),
-                         parts_to_body_lua(right),
+                         parts_to_body_lua(left_parts),
+                         parts_to_body_lua(right_parts),
                          action or "nil")
 end
 

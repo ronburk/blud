@@ -2,6 +2,27 @@ local M = {}
 string_buf = require("string.buffer")
 
 
+
+M.deep_copy = function(value, seen)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    seen = seen or {}
+    if seen[value] then
+        return seen[value]
+    end
+
+    local result = {}
+    seen[value] = result
+
+    for k, v in pairs(value) do
+        result[M.deep_copy(k, seen)] = M.deep_copy(v, seen)
+    end
+
+    return result
+end
+
 -- array_append: append one array to another
 M.array_append    = function(array, more)
     if not (type(array) == "table" and type(more) == "table") then
@@ -63,8 +84,8 @@ M.dump = function(o, seen)
         if seen[o] then
             return '"<circular reference>"'
         end
-        seen[o] = true
         local s = '{ '
+        seen[o] = true
 
         -- non-numeric keys first
         local numeric = {}
@@ -80,6 +101,49 @@ M.dump = function(o, seen)
         table.sort(numeric)
         for _, k in ipairs(numeric) do
             s = s .. '[' .. k .. '] = ' .. M.dump(o[k], seen) .. ', '
+        end
+
+        seen[o] = nil
+        return s .. '}'
+    elseif t == 'string' then
+        return string.format("%q", o)
+    else
+        return tostring(o)
+    end
+end
+
+
+M.dump = function(o, seen, path)
+    seen = seen or {}
+    path = path or "root"
+    local t = type(o)
+    
+    if t == 'table' then
+        -- If seen, we can now output exactly WHICH ancestor path it refers to
+        if seen[o] then
+            return '"<circular reference to ' .. seen[o] .. '>"'
+        end
+        
+        local s = '{ '
+        seen[o] = path -- Store the path string instead of true
+
+        -- non-numeric keys first
+        local numeric = {}
+        for k, v in pairs(o) do
+            if type(k) == 'number' then
+                numeric[#numeric + 1] = k
+            else
+                local k_str = tostring(k)
+                local next_path = path .. '["' .. k_str .. '"]'
+                s = s .. '["' .. k_str .. '"] = ' .. M.dump(v, seen, next_path) .. ', '
+            end
+        end
+
+        -- numeric keys in ascending order
+        table.sort(numeric)
+        for _, k in ipairs(numeric) do
+            local next_path = path .. '[' .. k .. ']'
+            s = s .. '[' .. k .. '] = ' .. M.dump(o[k], seen, next_path) .. ', '
         end
 
         seen[o] = nil

@@ -698,6 +698,11 @@ main lib :EVAL:
 
 <><><><><>
 
+
+* TODO
+** target-specific assignment
+When does the macro "value" get evaluated? Do we understand the behavior?
+
 * Open Problems TODO
 ** multiple outputs from one action
 See the '&:' operator in Gnu Make.
@@ -733,6 +738,29 @@ Should be able to achieve same behavior as Gnu "&:".
 
 
 * log
+** <2026-06-11 Thu>
+
+Considering = vs :=, versus moving the decision to macro invocation:
+$(CC) vs ${CC} (the latter meaning immediate expansion).
+But there is a subtle problem here. Delayed versus immediate expansion
+only makes sense when actually assigning macro values. Consider:
+
+OBJS = a.o b.o
+prog: $(OBJS)
+
+We are going to evaluate $(OBJS) exactly when our algorithm dictates,
+and there is no meaning to "delayed vs immediate" expansion there.
+
+
+** <2026-06-09 Tue>
+
+Scan source directory for all candidate source files (may scoop
+up output and intermediate files as well, that's OK). Use implicit
+rule database to generate all the files we *could* generate from
+these files.
+
+
+
 ** <2026-05-13 Wed>
 
 Token types:
@@ -2516,3 +2544,5 @@ program: program.c
 Now want to put products in a different directory.
 
 all: program
+
+* 

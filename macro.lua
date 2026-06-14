@@ -3,6 +3,31 @@ local M = {}
 local util = require("util")
 
 
+local macro_name_pattern = "([%a_][%w_%.]*)"
+
+-- parse a line that looks like macro assign, or return nil
+do
+    local operators = {
+        ["="]   = true,
+        ["+="]  = true,
+        ["?="]  = true,
+    }
+    function M.match_macro_assign(line, skip_leading_white)
+        print("match_macro_assign(\"" .. util.dump(line) .. "\")")
+        local anchor = "^"
+        if skip_leading_white then anchor = "" end
+        local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
+        local macro_name, operator, remainder = line:match(pattern)
+        if macro_name and operator then
+            if operators[operator] == true then
+                return { name=macro_name, operator=operator, macro_text=remainder }
+            end
+        end
+        return nil
+    end
+end
+
+
 --[[
 
     parts_from_text() - break text into parts
@@ -86,7 +111,8 @@ do
                     result   = { type="text", text=self.text:sub(start_pos) }
                     self.pos = self.len + 1
                 elseif self.text:sub(stop_pos, stop_pos+1) == '--' then -- if comment
-                    result = { type="comment", text=self.text:sub(start_pos) }
+--                  result = { type="comment", text=self.text:sub(start_pos) }
+                    result = nil
                     self.pos = self.len + 1
                 elseif stop_char == '-' then -- stopped in case it was --, but it wasn't so look further
                     self.pos = stop_pos + 1  -- scan will resume after this '-'
@@ -94,7 +120,7 @@ do
                 elseif stop_char == '"' or stop_char == "'" then
                     stop_pos = self:find_lua_short_string_end(stop_char, self.pos)
                     if stop_pos then
-                        result = { type="quote", text=self.text:sub(self.pos, stop_pos) }
+                        result = { type="text", text=self.text:sub(self.pos, stop_pos) }
                         self.pos = stop_pos + 1
                     else
                         result   = { type="text", text=self.text:sub(self.pos) }
@@ -139,7 +165,7 @@ do
     assert_eq(
         "comment after text should return text first, then comment",
         collect("abc -- comment"),
-        "text:abc |comment:-- comment"
+        "text:abc "
     )
 
     assert_eq(
@@ -156,7 +182,7 @@ do
     assert_eq(
         "quoted Lua short string should be one quote token",
         collect("\"abc\" tail"),
-        "quote:\"abc\"|text: tail"
+        "text:\"abc\"|text: tail"
     )
 
     assert_eq(
@@ -166,10 +192,10 @@ do
     )
 end
 
+--[[
 local function append_part(parts, part)
     assert(parts)
     assert(part)
-    assert(part.type)
 
     local previous = parts[#parts]
 
@@ -178,6 +204,23 @@ local function append_part(parts, part)
         and previous.type == "text"
     then
         previous.text = previous.text .. part.text
+    else
+        table.insert(parts, part)
+    end
+    end
+--]]
+
+local function append_part(parts, part)
+    assert(parts)
+    assert(part)
+
+    local previous = parts[#parts]
+
+    if previous ~= nil
+        and type(previous) == "string"
+        and type(part) == "string"
+    then
+        parts[#parts] = previous .. part
     else
         table.insert(parts, part)
     end
@@ -191,19 +234,21 @@ M.parts_from_text = function(text)
 end
 
 
-M.parts_from_text_ = function(scanner,     stop_chars, self_reference)
+M.parts_from_text_ = function(scanner,     stop_chars)
     stop_chars        = stop_chars or ""
     local result      = {}
     local part        = scanner:get_next_part(stop_chars)
     while part do
         if part.type == "stop" and part.text == "$" then
-            local macro_call = M.macro_extract_call(scanner, self_reference)
+            local macro_call = M.macro_extract_call(scanner)
             append_part(result, macro_call)
         elseif part.type == "stop" then
             scanner:unget_part(part)
             return result
         else
-            append_part(result, part)
+            assert(part.type == "text")
+--            append_part(result, part)
+            append_part(result, part.text)
         end
         part = scanner:get_next_part(stop_chars)
     end
@@ -215,35 +260,34 @@ end
 --     extract macro invocation from scanner. No error return,
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
-M.macro_extract_call = function(scanner, self_reference)
-    local arg_stack  = {type="macro"}
+M.macro_extract_call = function(scanner)
+    local arg_stack  = {macro=true, eval="delay"}
     local first_char = scanner:get_char()
+    local close_char = ({["("]=")", ["{"]="}"})[first_char]
 
-    if first_char ~= '(' then    -- if single-char macro with no arguments
-        table.insert(arg_stack, {type="text", text=first_char})
+    if not close_char then    -- if single-char macro with no arguments
+        arg_stack[1] = {first_char}
     else    -- else looks like paren-style macro invocation
+        if close_char == '}' then arg_stack.eval = "immediate" end
         local parts
-        parts = M.parts_from_text_(scanner, " )", self_reference)
+        parts = M.parts_from_text_(scanner, " "..close_char)
         if #parts <= 0 then
             error("empty macro invocation")
         else
 --            assert(parts[1].type == "text" and parts[1].text ~= "")
-            util.array_append(arg_stack, parts)
---            table.insert(arg_stack, parts[1])
-            local macro_name = parts[1].text
-            local stop_part  = scanner:get_next_part(" )")
+--            util.array_append(arg_stack, parts)
+            table.insert(arg_stack, parts)
+            local macro_name = parts[1]
+            local stop_part  = scanner:get_next_part(" "..close_char)
             if stop_part.text == ' ' then
                 error("can't handle macro args yet")
-            elseif stop_part.text ~= ')' then
+            elseif stop_part.text ~= close_char then
                 error(string.format("malformed macro call '%s' because of '%s'",
                                     macro_name, stop_part.text))
             else  -- else we hit closing paren of macro call
                 
             end
         end
-    end
-    if self_reference then
-        arg_stack = self_reference(arg_stack)
     end
     return arg_stack
 end
@@ -272,7 +316,8 @@ local function part_to_lua(part)
 
     if part.type == "macro" then
         local result = {
-            string.format("{ type = %q,", part.type)
+--            string.format("{ type = %q,", part.type)
+            string.format("{ type = %q, eval = %q,", part.type, part.eval or "delay")
         }
 
         for i = 1, #part do
@@ -291,7 +336,8 @@ end
 
 M.parts_to_lua = function(parts)
     assert(type(parts) == "table")
-
+    return util.dump(parts)
+--[[
     local result = { "{" }
 
     for _, part in ipairs(parts) do
@@ -301,13 +347,16 @@ M.parts_to_lua = function(parts)
     table.insert(result, "}")
 
     return table.concat(result, "\n")
+--]]
 end
 
 M.part_to_lua_function = function(part)
+    if type(part) == "string" then
+        return string.format("%q", part)
+    end
     assert(type(part) == "table")
-    if part.type == "text" then
-        return string.format("%q", part.text)
-    elseif part.type == "macro" then
+    
+   if part.macro then
         local result = "scope:get_text(" .. M.parts_to_lua_function(part)
         return result .. ")"
     else
@@ -327,26 +376,30 @@ end
 
 
 
---[=[UNIT_TESTS
+---[=[UNIT_TESTS
 do
     local function part_to_string(part)
-        if part.type == "text" then
-            return "text:" .. string.format("%q", part.text)
-        elseif part.type == "quote" then
-            return "quote:" .. string.format("%q", part.text)
-        elseif part.type == "comment" then
-            return "comment:" .. string.format("%q", part.text)
-        elseif part.type == "stop" then
-            return "stop:" .. string.format("%q", part.text)
-        elseif part.type == "macro" then
+        if type(part) == "string" then
+            return "text:" .. string.format("%q", part)
+        end
+
+        assert(type(part) == "table")
+
+        if part.macro then
             local args = {}
             for i = 1, #part do
-                table.insert(args, part_to_string(part[i]))
+                table.insert(args, parts_to_string(part[i]))
             end
-            return "macro(" .. table.concat(args, ", ") .. ")"
-        else
-            return "unknown:" .. tostring(part.type)
+
+            local open, close = "(", ")"
+            if part.eval == "immediate" then
+                open, close = "{", "}"
+            end
+
+            return "macro" .. open .. table.concat(args, ", ") .. close
         end
+
+        error("unknown part: " .. util.dump(part))
     end
 
     function parts_to_string(parts)
@@ -357,10 +410,30 @@ do
         return table.concat(result, " | ")
     end
 
+    local function check_final_format(parts)
+        assert(type(parts) == "table")
+
+        for i = 1, #parts do
+            local part = parts[i]
+
+            if type(part) == "string" then
+                -- OK
+            elseif type(part) == "table" and part.macro then
+                assert(part.eval == "delay" or part.eval == "immediate")
+                for j = 1, #part do
+                    check_final_format(part[j])
+                end
+            else
+                error("not final parts format: " .. util.dump(part))
+            end
+        end
+    end
+
     local function check_parts(text, expected)
         local parts = M.parts_from_text(text)
-        local actual = parts_to_string(parts)
+        check_final_format(parts)
 
+        local actual = parts_to_string(parts)
         if actual ~= expected then
             error(
                 "parts_from_text(" .. string.format("%q", text) .. ") failed\n" ..
@@ -371,9 +444,23 @@ do
         end
     end
 
+    local function check_error(text)
+        local ok = pcall(function()
+            M.parts_from_text(text)
+        end)
+        if ok then
+            error("parts_from_text(" .. string.format("%q", text) .. ") should have failed", 2)
+        end
+    end
+
     check_parts(
-        "$(FOO)",
-        'macro(text:"FOO")'
+        "abc",
+        'text:"abc"'
+    )
+
+    check_parts(
+        "abc$",
+        'text:"abc$"'
     )
 
     check_parts(
@@ -382,8 +469,38 @@ do
     )
 
     check_parts(
+        "$(FOO)",
+        'macro(text:"FOO")'
+    )
+
+    check_parts(
+        "${FOO}",
+        'macro{text:"FOO"}'
+    )
+
+    check_parts(
         "a$b",
         'text:"a" | macro(text:"b")'
+    )
+
+    check_parts(
+        "abc$(FOO)def",
+        'text:"abc" | macro(text:"FOO") | text:"def"'
+    )
+
+    check_parts(
+        "abc${FOO}def",
+        'text:"abc" | macro{text:"FOO"} | text:"def"'
+    )
+
+    check_parts(
+        "$($(NAME))",
+        'macro(macro(text:"NAME"))'
+    )
+
+    check_parts(
+        "$(${NAME})",
+        'macro(macro{text:"NAME"})'
     )
 
     check_parts(
@@ -393,43 +510,42 @@ do
 
     check_parts(
         "a--comment",
-        'text:"a" | comment:"--comment"'
-    )
-
-    check_parts(
-        "'abc'",
-        'quote:"\'abc\'"'
-    )
-
-    check_parts(
-        [["a\"b"]],
-        'quote:"\\"a\\\\\\"b\\""'
-    )
-
-    check_parts(
-        "abc$",
-        'text:"abc$"'
-    )
-    check_parts(
-        "abc",
-        'text:"abc"'
-    )
-
-    check_parts(
-        "abc$(FOO)def",
-        'text:"abc" | macro(text:"FOO") | text:"def"'
+        'text:"a"'
     )
 
     check_parts(
         [["abc" -- comment]],
-        'quote:"\\"abc\\"" | text:" " | comment:"-- comment"'
+        'text:"\\"abc\\" "'
     )
-check_parts(
-    "-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1",
-    'text:"-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1"'
-)
-end
 
+    check_parts(
+        "'abc'",
+        'text:"\'abc\'"'
+    )
+
+    check_parts(
+        [["a\"b"]],
+        'text:"\\"a\\\\\\"b\\""'
+    )
+
+    check_parts(
+        [["$FOO"]],
+        'text:"\\"$FOO\\""'
+    )
+
+    check_parts(
+        [['$@']],
+        'text:"\'$@\'"'
+    )
+
+    check_parts(
+        "-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1",
+        'text:"-Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1"'
+    )
+
+    check_error("$()")
+    check_error("${}")
+end
 --]=]
 
 return M

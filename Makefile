@@ -1,3 +1,6 @@
+%.x : foo.y
+	echo Making .x
+
 all : myprog
 
 foo : fee

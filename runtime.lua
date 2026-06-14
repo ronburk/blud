@@ -1,10 +1,11 @@
 --blud_module_code = [==[
 
 
--- parts      := { part... }
+-- parts      := { part* }
 -- part       := string | macro_call
--- macro_call := { macro=true, arg_array... }
--- arg_array  := { part... }
+-- macro_call := { macro=true, eval="delay"|"immediate" stack_frame }
+-- stack_frame:= [1] = parts, [2] = parts, ...
+
 
 --[[
 text
@@ -228,6 +229,7 @@ local function expand_dependency_words(input)
 end
 
 
+blud.rules          = {}
 blud.default_action = function (scope)
     blud.execute(scope, nil)
 end
@@ -246,6 +248,22 @@ blud.execute = function(scope, text)
     return status
 end
 
+blud.eval_target_assign_rule = function(left_parts, macro, action)
+    if action then
+        error("Can't have action on target-specific assignment")
+    end
+    local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
+    local target_names = tokenize_dependency_line(left)
+
+    for i = 1, #target_names do
+        util.print("%s: %q %s %q",
+                   target_names[i], macro.name, macro.operator, macro.macro_text)
+        local target = blud.get_or_create_target(target_names[i])
+        target:set_variable(macro)
+    end
+end
+
+
 -- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     util.print("blud.eval_rule, %s, %s, %s, action",
@@ -253,12 +271,19 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
                util.dump(left_parts),
                util.dump(right_parts))
     -- now is the time to identify implicit rules
+    -- note that "%" hidden inside macro call is a literal
     if operator_name == ":" then
         for i=1, #left_parts do
             local part = left_parts[i]
             if type(part) == 'string' and part:find("%", 1, true) then
                 operator_name = "%:"
                 break
+            end
+        end
+        if operator_name == ":" and #right_parts > 0 then
+            local macro = blud.macro.match_macro_assign(right_parts[1], true)
+            if macro then
+                return blud.eval_target_assign_rule(left_parts, macro, action)
             end
         end
     end
@@ -1015,7 +1040,7 @@ do
     local function rewrite_self_references(parts, old_name, new_name)
         local result = false   -- assume we won't find any
         for i = 1, #parts do
-            part = parts[i]
+            local part = parts[i]
             if part.macro then
                 local arg = part[1]
                 if #arg == 1 and arg[1] == old_name then
@@ -1030,23 +1055,38 @@ do
         return result
     end
     blud.macro_assign_parts = function(scope, macro_name, operator, parts)
-        local referenced_macro = scope:get(macro_name) or {}
-
-        if operator == "=" then
-            local new_name = string.format("%s %3d", macro_name, ref_count + 1)
-            if rewrite_self_references(parts, macro_name, new_name) then
-                scope:set(new_name, referenced_macro)
-            end
-        elseif operator == ":=" then
-            macro_body = blud.Macro.expand_text(scope, input)
+        local existing_parts = scope:get(macro_name)
+        if parts then
+            parts = util.deep_copy(parts)
         else
-            error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
+            parts = {}
+        end
+        if operator == "?=" then -- if set-if-not-set operator
+            if existing_parts ~= nil then return end
+            operator = "="   -- if not set, then it's an ordinary assignment
+        end
+        if operator == "=" then
+            ref_count = ref_count + 1
+            local new_name = string.format("%s %3d", macro_name, ref_count)
+            if rewrite_self_references(parts, macro_name, new_name) then
+                scope:set(new_name, existing_parts)
+            end
+        elseif operator == "+=" then
+            local new_parts = util.deep_copy(existing_parts or {})
+            if #new_parts > 0 and #parts > 0 then
+                table.insert(new_parts, " ")
+            end
+            util.array_append(new_parts, parts)
+            parts = new_parts
+        else
+            error("Unknown assignment operator '" .. operator .. "':")
             assert(false)
         end
         scope:set(macro_name, parts)
     end
 end
 
+--[[
 -- macro_assign: assign a body to a macro
 -- the value of a macro will always be a function which returns either
 -- a string, or the macro-expanded value of a string.
@@ -1077,7 +1117,7 @@ blud.macro_assign = function(line, scope, macro)
     return result
 end
 
-
+--]]
 
 
 blud.phase2_append= function(str)
@@ -1391,6 +1431,7 @@ blud.phase3       = function ()
 end
 ]=]
 
+blud.macro = require("macro")
 blud.current_time = os.time()
 blud.shallow_copy = function (original)
     local copy = {}
@@ -1421,6 +1462,20 @@ blud.global = {
     }
 blud.super_atom = {
     NAME = "",
+    set_variable = function(target, macro)
+        assert(target)
+        assert(macro)
+        assert(macro.name)
+        assert(macro.operator)
+        assert(macro.macro_text ~= nil)
+
+        if not target.SCOPE then
+            target.SCOPE = blud.ScopeTarget:new(target)
+        end
+
+        local parts = blud.macro_tokens_from_text(macro.macro_text)
+        blud.macro_assign_parts(target.SCOPE, macro.name, macro.operator, parts)
+    end,
     ADD_PREREQUISITE = function(target, prerequisite)
         util.print("ADD_PREREQUISITE target=%s", util.dump(target))
         print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. util.dump(prerequisite) .. ")")
@@ -1470,13 +1525,14 @@ blud.super_atom = {
         local link_macro  = "LINK.o"
 
         for _, prerequisite in ipairs(prerequisites or {}) do
-            local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite.NAME)
+            util.print("_,prerequisite = %s,%s", _, prerequisite)
+            local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite)
             if rule == nil then
-                error("no reverse rule for " .. prerequisite.NAME)
+                error("no reverse rule for " .. prerequisite)
             end
-            if prerequisite.TYPE == ".cpp" then
-                link_macro = "LINK.cxx.o"
-            end
+--            if prerequisite.TYPE == ".cpp" then
+--                link_macro = "LINK.cxx.o"
+--            end
             local output_name = blud.implicit.expand(rule.target, file_stem, dir_stem)
             local output = blud.get_or_create_target(output_name)
 
@@ -1535,6 +1591,7 @@ blud.super_atom = {
     end,
     BUILD = function(self)
         util.print("BUILD('%s') prereq=%s", blud.dump_atom(self), util.dump(self.PREREQUISITES))
+        
         if self.PARENT then print("PARENT('" .. blud.dump_atom(self.PARENT) .. "')") end
         if self.BUILDING == true then
             error("circular dependency on " .. self.NAME)
@@ -1571,7 +1628,13 @@ blud.super_atom = {
         return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)
-        print("BUILD_PREREQUISITES('" .. blud.dump_atom(atom) .. "')")
+        if atom.RULE and atom.RULE.prereq_words then
+            util.print("RULE.prereq_words = %s", util.dump(atom.RULE.prereq_words))
+            local prereq_names = expand_dependency_words(atom.RULE.prereq_words)
+            util.print("names=%s", util.dump(prereq_names))
+            atom.PREREQUISITES = atomize_words(prereq_names)
+        end
+        util.print("BUILD_PREREQUISITES(%s)", blud.dump_atom(atom))
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
         local newest_time = 0
@@ -1743,30 +1806,62 @@ function blud.operator_super:SET_PRIMARY_TARGETS(target_atom)
     return target_atom
 end
 
+function blud.operator_super:GROUP_TARGETS(target_words, prereq_words, action)
+    return false
+end
+
 -- tokenized, but not yet atomized
 function blud.operator_super:ADD_RULES(target_words, prereq_words, action)
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
           util.dump(target_words), util.dump(prereq_words))
 
     local targets = atomize_words(target_words)
+    local group   = self:GROUP_TARGETS(target_words, prereq_words, action)
+    
     for i=1, #targets do
         local target_atom = targets[i]
         if not blud.primary_targets then
-            local new_primary = self:SET_PRIMARY_TARGETS(target_atom)
-            if new_primary then
-                blud.primary_targets = { new_primary }
+            local primary =  self:SET_PRIMARY_TARGETS(target_atom)
+            if primary then
+                blud.primary_targets = {primary}
             end
         end
-        self:ADD_RULE(target_atom, prereq_words, action)
+        if not group then -- multiple targets synonym for multiple rules
+            self:ADD_RULE(target_atom, prereq_words, action)
+        end
+    end
+    if group then
+        self:ADD_RULE(targets, prereq_words, action)
     end
 end
+
 function blud.operator_super:ADD_RULE(target, prereq_words, action)
    -- util.array_append(target.PREREQUISITES, prereqs)
     util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
-    local prereq_names = expand_dependency_words(prereq_words)
-    local prereq_atoms = atomize_words(prereq_names)
-    target:ADD_RULE(prereq_atoms, action)
+    local rule = target.RULE
+    if not rule then
+        rule              = {}
+        table.insert(blud.rules, rule)
+        rule.targets      = { target }
+        rule.prereq_words = prereq_words
+        rule.action       = action
+        target.RULE       = rule
+        target.operator   = self
+    else
+        assert(not rule.action)
+        rule.action       = action
+        util.array_append(rule.prereq_words, prereq_words)
+        if rule.operator ~= self then
+            error("target used with more than one operator!")
+        end
+    end
+
+    
+--    local prereq_names = expand_dependency_words(prereq_words)
+--    local prereq_atoms = atomize_words(prereq_names)
+--    target:ADD_RULE(prereq_atoms, action)
 end
+
 
 
 
@@ -1794,8 +1889,15 @@ blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
 end
 
 --]]
-blud.operators[":"] = blud.operator_new({
-})
+
+do  -- : operator
+    local op = blud.operator_new({})
+    blud.operators[":"] = op
+    function op:SET_PRIMARY_TARGETS(target_atoms)
+        util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
+        return target_atoms[1]
+    end
+end
 
 do  -- %: operator
     local op = blud.operator_new({})
@@ -1821,8 +1923,8 @@ end
 do  -- :: operator
     local op = blud.operator_new({})
     blud.operators["::"] = op
-    function op:ADD_RULE(target_atom, prereq_words, action)
-        util.print("(::):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+    function op:ADD_RULE2(target_atom, prerequisites, action)
+        util.print("(::):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prerequisites))
         local new_prereqs = {}
         local link_macro  = "LINK.o"
 
@@ -1893,6 +1995,11 @@ do
     local op = blud.operator_new({})
     blud.operators[":TEST:"] = op
 
+    -- a :TEST: name cannot be a primary target
+    function op:SET_PRIMARY_TARGETS(target_atoms)
+        util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
+        return nil
+    end
 end
 
 
