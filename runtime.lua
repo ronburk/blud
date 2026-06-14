@@ -1861,18 +1861,16 @@ function blud.operator_super:ADD_RULE(target, prereq_words, action)
         table.insert(blud.rules, rule)
         rule.targets      = { target }
         rule.prereq_words = prereq_words
-        rule.action       = action
         target.RULE       = rule
         target.operator   = self
-
     else
         assert(not rule.action)
-        rule.action       = action
         util.array_append(rule.prereq_words, prereq_words)
         if rule.operator ~= self then
             error("target used with more than one operator!")
         end
     end
+    rule.action       = action
 
     
 --    local prereq_names = expand_dependency_words(prereq_words)

@@ -75,19 +75,19 @@ function implicit.find_forward(target_name, exists)
         local match = implicit.match_pattern(target_name, rule.target)
         util.print("implicit, match is %s", util.dump(match))
         if match then -- if target_name matches this pattern rule
-            local prereq_atoms = {}
+            local prereq_words = {}
             local ok = true
             for j = 1, #rule.prerequisites do -- do prerequisites exist?
                 local prereq_pattern = rule.prerequisites[j]
-                local prereq_name    = implicit.expand(prereq_pattern, match.stem, match.dir_stem)
-                if not get_path_timestamp(prereq_name) then
+                local prereq_word    = implicit.expand(prereq_pattern, match.stem, match.dir_stem)
+                if not get_path_timestamp(prereq_word) then
                     ok = false
                     break
                 end
-                prereq_atoms[#prereq_atoms + 1] = blud.get_or_create_target(prereq_name)
+                prereq_words[#prereq_atoms + 1] = blud.get_or_create_target(prereq_word)
             end
             if ok then
-                return rule, match, prereq_atoms
+                return rule, match, prereq_words
             end
         end
     end
