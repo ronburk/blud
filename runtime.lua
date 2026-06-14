@@ -1511,11 +1511,13 @@ blud.super_atom = {
         prerequisite.USED_AS_PREREQUISITE = true
     end,
     ADD_ACTION = function(target, action)
-        if target.ACTION then
+        assert(target.RULE)
+
+        if target.RULE.action then
             errorf("Target #1 already has an action (#2), so can't give it (#3)",
-                target.NAME, target.ACTION, action)
+                   target.NAME, target.RULE.action, action)
         else
-            target.ACTION = action
+            target.RULE.action = action
         end
     end,
     ADD_RULE = function(target_atom, prerequisites, action)
