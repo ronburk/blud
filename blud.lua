@@ -539,6 +539,12 @@ end
 execute_bytecode(luac_path)
 print("now run user code")
 blud.bludfile_code()
+if blud.command_line_options.target_names then
+    blud.primary_targets = {}
+    for _, name in ipairs(blud.command_line_options.target_names) do
+        table.insert(blud.primary_targets, blud.get_or_create_target(name))
+    end
+end
 util.print("----------\n%d rules", #blud.rules)
 for i=1,#blud.rules do
     util.print("[%d] %s", i, util.dump(blud.rules[i]))

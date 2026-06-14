@@ -432,16 +432,13 @@ end
 -- in column 1.
 function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     local parts = m.parts_from_text(compile_io.get_current_line())
-    util.print("parts=%s", util.dump(parts))
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
-    util.print("left=%s, op=%s, right=%s", left_parts, operator, right_parts)
     if not operator then
         compile_io.error("Expected dependency rule")
     end
     -- next step:
     -- decide whether right begins with target-specific macro assignment
-    print("right = " .. util.dump(right_parts))
 --[[
     if right_parts and #right_parts > 0 and right_parts[1].type == "text" then
         print("Should check for target-scoiped macro assign")

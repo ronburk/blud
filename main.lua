@@ -49,8 +49,11 @@ function blud.parse_command_line()
             end
         elseif arg == "-d" then
             options.debug = true
-        else
+        elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
+        else
+            options.target_names = options.target_names or {}
+            table.insert(options.target_names, arg)
         end
         i = i + 1
     end

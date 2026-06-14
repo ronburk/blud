@@ -214,7 +214,7 @@ function errorf(format_string, ...)
 end
 
 local function expand_dependency_words(input)
-    util.print("expand_dependency_words(%s)", util.dump(input))
+--    util.print("expand_dependency_words(%s)", util.dump(input))
     local output = {}
 
     for _, word in ipairs(input) do
@@ -256,8 +256,8 @@ blud.eval_target_assign_rule = function(left_parts, macro, action)
     local target_names = tokenize_dependency_line(left)
 
     for i = 1, #target_names do
-        util.print("%s: %q %s %q",
-                   target_names[i], macro.name, macro.operator, macro.macro_text)
+--        util.print("%s: %q %s %q",
+--                   target_names[i], macro.name, macro.operator, macro.macro_text)
         local target = blud.get_or_create_target(target_names[i])
         target:set_variable(macro)
     end
@@ -266,10 +266,12 @@ end
 
 -- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
+--[[
     util.print("blud.eval_rule, %s, %s, %s, action",
                util.dump(operator_name),
                util.dump(left_parts),
                util.dump(right_parts))
+--]]
     -- now is the time to identify implicit rules
     -- note that "%" hidden inside macro call is a literal
     if operator_name == ":" then
@@ -436,9 +438,21 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
 
         -- For each matched entry, continue matching the remaining pattern components
         for _, matched_entry in ipairs(matched) do
-            local next_dir_cache = blud.glob.get_cached_dir(matched_entry)
-            local full_path = current_path ~= "" and (current_path .. "/" .. matched_entry) or matched_entry  -- Concatenate the full path, avoiding "./"
-            match_count = match_count + blud.glob.recursive_glob_match(words, pattern_components, index + 1, full_path, next_dir_cache)
+            local full_path = current_path ~= "" and (current_path .. "/" .. matched_entry) or matched_entry
+
+            if index == #pattern_components then
+                table.insert(words, full_path)
+                match_count = match_count + 1
+            else
+                local next_dir_cache = blud.glob.get_cached_dir(full_path)
+                match_count = match_count + blud.glob.recursive_glob_match(
+                    words,
+                    pattern_components,
+                    index + 1,
+                    full_path,
+                    next_dir_cache
+                                                                          )
+            end
         end
     end
 
@@ -1616,9 +1630,10 @@ blud.super_atom = {
         print("timestamp for '" .. self.BOUND_NAME .. "' is " .. timestamp)
         print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
-            if self.ACTION then
-                self:DO_ACTION()
-                self.TIMESTAMP = blud.current_time
+            local rule = self.RULE
+            if rule and rule.action then
+                rule.action()
+                timestamp = blud.current_time
             elseif timestamp == 0 and not self.HAS_RULE then
                 error("Don't know how to build: " .. self.NAME);
             end
@@ -1847,6 +1862,7 @@ function blud.operator_super:ADD_RULE(target, prereq_words, action)
         rule.action       = action
         target.RULE       = rule
         target.operator   = self
+
     else
         assert(not rule.action)
         rule.action       = action
