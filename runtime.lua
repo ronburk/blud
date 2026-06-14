@@ -1615,10 +1615,10 @@ blud.super_atom = {
         self.BUILDING   = true
         if not self.HAS_RULE then
             -- must try implicit rules now
-            local rule, match, prereq_atoms = blud.implicit.find_forward(self.NAME)
-            util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_atoms))
+            local rule, match, prereq_words = blud.implicit.find_forward(self.NAME)
+            util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_words))
             if rule then
-                self:ADD_RULE(prereq_atoms, rule.action)
+                self:ADD_RULE(prereq_words, rule.action)
             end
         end
         self:BIND()
