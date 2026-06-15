@@ -153,9 +153,9 @@ M.get_assign_op = function()
     local result, discard
     local pos  = current_input.pos
     local text = current_input.text
-    discard, result = text:match("^([ \t]*)(:=)", pos)
+    discard, result = text:match("^([ \t]*)(%?=)", pos)
     if not result then
-        discard, result = text:match("^([ \t]*)(+=)", pos)
+        discard, result = text:match("^([ \t]*)(%+=)", pos)
     end
     if not result then
         discard, result = text:match("^([ \t]*)(=)", pos)
@@ -326,7 +326,7 @@ M.peek_assign = function(text, position)
         position = current_input.pos
     end
     local pattern = anchor .. ""
-    if text:match("^[ \t]*:=", position) then
+    if text:match("^[ \t]*%?=", position) then
         result = true
     elseif text:match("^[ \t]*%+=", position) then
         result = true

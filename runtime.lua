@@ -236,6 +236,8 @@ end
 
 
 blud.execute = function(scope, text)
+    util.print("blud.execute(text=%s)", util.dump(text))
+    assert(type(text) == "string")
     local status
     if text then
         print("blud.execute: ", text)
@@ -658,6 +660,14 @@ blud.scope_environment = blud.Scope:new(blud.scope_base)
 blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
 blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
 blud.scope_build       = blud.Scope:new(blud.scope_commandline)
+
+function blud.scope_environment:get(name)
+    local value = os.getenv(name)
+    if value ~= nil then
+        return { value }
+    end
+    return self.parent:get(name)
+end
 
 -- macro class
 blud.Macro = {}
@@ -1490,6 +1500,14 @@ blud.super_atom = {
         local parts = blud.macro_tokens_from_text(macro.macro_text)
         blud.macro_assign_parts(target.SCOPE, macro.name, macro.operator, parts)
     end,
+    get_action = function(target)
+        local action
+        if target.RULE then
+            action = target.RULE.action
+        end
+        return action
+    end
+    ,
     ADD_PREREQUISITE = function(target, prerequisite)
         util.print("ADD_PREREQUISITE target=%s", util.dump(target))
         print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. util.dump(prerequisite) .. ")")
@@ -1589,7 +1607,8 @@ blud.super_atom = {
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
         if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
-        if atom.ACTION and atom.ACTION ~= blud.default_action then
+        local action = atom:get_action()
+        if action then
             local OWD = atom.SCOPE:get_text("OWD")
             if OWD ~= "" then
                 atom.BOUND_NAME = OWD .. "/" .. atom.NAME
@@ -1605,43 +1624,43 @@ blud.super_atom = {
         end
         return atom
     end,
-    BUILD = function(self)
-        util.print("BUILD('%s') prereq=%s", blud.dump_atom(self), util.dump(self.PREREQUISITES))
+    BUILD = function(target_atom)
+        util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
         
-        if self.PARENT then print("PARENT('" .. blud.dump_atom(self.PARENT) .. "')") end
-        if self.BUILDING == true then
-            error("circular dependency on " .. self.NAME)
+        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+        if target_atom.BUILDING == true then
+            error("circular dependency on " .. target_atom.NAME)
         end
-        self.BUILDING   = true
-        if not self.HAS_RULE then
+        target_atom.BUILDING   = true
+        if not target_atom.RULE then
             -- must try implicit rules now
-            local rule, match, prereq_words = blud.implicit.find_forward(self.NAME)
-            util.print("IMPLICIT %s | %s | %s", util.dump(rule), util.dump(match), util.dump(prereq_words))
-            if rule then
-                self:ADD_RULE(prereq_words, rule.action)
+            local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
+            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
+            if implicit_rule then
+                blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
             end
         end
-        self:BIND()
-        local timestamp = blud.get_fs_timestamp(self.BOUND_NAME)
-        if not self.HAS_RULE and timestamp == 0 then
-                error("Don't know how to build: " .. self.NAME)            
+        target_atom:BIND()
+        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
+        if not target_atom.RULE and timestamp == 0 then
+                error("Don't know how to build: " .. target_atom.NAME)            
         end
-        self.TIMESTAMP = timestamp
+        target_atom.TIMESTAMP = timestamp
         
-        local newest_prerequisite = self.BUILD_PREREQUISITES(self)
-        print("timestamp for '" .. self.BOUND_NAME .. "' is " .. timestamp)
+        local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
+        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
         print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
-            local rule = self.RULE
+            local rule = target_atom.RULE
             if rule and rule.action then
-                rule.action()
+                target_atom:DO_ACTION()
                 timestamp = blud.current_time
-            elseif timestamp == 0 and not self.HAS_RULE then
-                error("Don't know how to build: " .. self.NAME);
+            elseif timestamp == 0 and not target_atom.RULE then
+                error("Don't know how to build: " .. target_atom.NAME);
             end
         end
-        self.TIMESTAMP = timestamp
-        self.BUILDING = false
+        target_atom.TIMESTAMP = timestamp
+        target_atom.BUILDING = false
         return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)
@@ -1668,22 +1687,27 @@ blud.super_atom = {
         print("newest time is ", newest_time)
         return newest_time
     end,
-    DO_ACTION = function(target)
-        if target.SCOPE == nil then
-            target.SCOPE = blud.ScopeTarget:new(target)
+    DO_ACTION = function(target_atom)
+        if target_atom.SCOPE == nil then
+            target_atom.SCOPE = blud.ScopeTarget:new(target_atom)
         end
+
+        local action
+        if target_atom.RULE and target_atom.RULE.action then
+            action = target_atom.RULE.action
+        end
+        assert(action)
+
         local exit_code
-        print("DO_ACTION in super atom for " .. target.NAME)
---        local action = blud.Macro.expand_text(target.SCOPE, target.ACTION)
---        print(action)
---        exit_code = os.execute(target.ACTION)
-        exit_code = target.ACTION(target.SCOPE)
---        exit_code = 0
+        print("DO_ACTION in super atom for " .. target_atom.NAME)
+        exit_code = action(target_atom.SCOPE)
+
         if exit_code and exit_code ~= 0 then
             error("command failed[" .. exit_code .. "]: ")
         end
         return 0
     end,
+
 }
 
 setmetatable(blud.super_atom, blud.global)
@@ -1926,9 +1950,11 @@ do  -- %: operator
     function op:ADD_RULE(target_atom, prereq_words, action)
         util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
         local prereq_names = expand_dependency_words(prereq_words)
+--[[
         for i = 1, #prereq_names do
             prereq_words[i] = prereq_words[i].NAME
         end
+--]]
         local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_names, action)
         if errmsg then
             blud.error(errmsg)

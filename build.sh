@@ -17,4 +17,4 @@ zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh test.blud test/*
 exit 0
 
 g++ -o blud blud.cpp luawrap.cpp $LUAJIT_FLAGS $CFLAGS
-
+rm ./*.luad

@@ -2,8 +2,10 @@
 CC  = gcc 
 CXX = g++
 CFLAGS = -g
-LDFLAGS = -L./luajit/src -lluajit
-CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -I/usr/local/include/luajit-2.1
+LUAJIT_LDFLAGS ?= -L./luajit/src -lluajit
+LDFLAGS = $(LUAJIT_LDFLAGS)
+LUAJIT_CFLAGS ?= -I/usr/local/include/luajit-2.1
+CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 $(LUAJIT_CFLAGS)
 
 all : blud test
 

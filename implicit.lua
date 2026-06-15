@@ -84,7 +84,8 @@ function implicit.find_forward(target_name, exists)
                     ok = false
                     break
                 end
-                prereq_words[#prereq_atoms + 1] = blud.get_or_create_target(prereq_word)
+--                prereq_words[#prereq_words + 1] = blud.get_or_create_target(prereq_word)
+                prereq_words[#prereq_words + 1] = prereq_word
             end
             if ok then
                 return rule, match, prereq_words

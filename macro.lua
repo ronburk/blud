@@ -356,8 +356,9 @@ M.part_to_lua_function = function(part)
     end
     assert(type(part) == "table")
     
-   if part.macro then
-        local result = "scope:get_text(" .. M.parts_to_lua_function(part)
+    if part.macro then
+        assert(part[1])
+        local result = "scope:get_text(" .. M.parts_to_lua_function(part[1])
         return result .. ")"
     else
         assert(false, "unknown part type!")

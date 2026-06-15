@@ -402,6 +402,7 @@ end
 -- argument.
 function compile_action(compile_io)
     local action = ""
+    -- the 'action' text is all the indented lines starting here
     if compile_io.is_indented_line() then
         while compile_io.is_indented_line() do
             compile_io.skip_white()
@@ -409,8 +410,8 @@ function compile_action(compile_io)
             assert(compile_io.get_token() == "EOL")
             local parts = m.parts_from_text(macro_text)
             if #action > 0 then action = action .. ", " end
---            action =  action .. m.parts_to_lua_function(parts) 
-            action =  action .. util.dump(parts)
+            action =  action .. m.parts_to_lua_function(parts) 
+--            action =  action .. util.dump(parts)
             action = "status =  blud.execute(scope, " .. action .. ")" ..
                 "; if status ~= 0 then return status end"
         end
