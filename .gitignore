@@ -9,10 +9,12 @@ test/*.luac
 debug/*
 release/*
 *.luac
+*.luad
 luajit
 cstr
 bludlua.c
 blud
+.build_id
 
 # Prerequisites
 *.d

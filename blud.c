@@ -489,6 +489,7 @@ int luaopen_mylib(lua_State *L) {
 }
 
 int main(int argc, char** argv) {
+    printf("blud build %d\n", BUILD_ID);
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
     fprintf(stderr, "before initialize_lua\n");
