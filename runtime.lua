@@ -213,7 +213,7 @@ function errorf(format_string, ...)
 --    os.exit(1)
 end
 
-local function glob_words(input)
+function glob_words(input)  -- ?? must it be global???
 --    util.print("glob_words(%s)", util.dump(input))
     local output = {}
 
@@ -1701,6 +1701,9 @@ blud.super_atom = {
 
 }
 
+-- Set up atom inheritance: atom -> super_atom -> global.
+blud.global = {
+}
 setmetatable(blud.super_atom, blud.global)
 blud.global.__index      = blud.global
 blud.super_atom.__index  = blud.super_atom
