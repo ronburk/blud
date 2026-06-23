@@ -16,6 +16,17 @@ bludlua.c
 blud
 .build_id
 
+Figure1.svg
+blud.test
+blud.zip
+bludlua.cpp
+cstr.h
+foo
+out.bin
+src/
+tic.lua
+
+
 # Prerequisites
 *.d
 
