@@ -1601,6 +1601,7 @@ blud.super_atom = {
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
         local rule = atom.RULE
+        assert(rule, "atom has no rule: " .. atom.NAME )
         return rule.operator:BIND(atom)
     end,
 -- prepare prerequisites for this atom to be built
