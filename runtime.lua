@@ -550,18 +550,24 @@ end
 --blud.macros          = {}
 -- macro scopes
 blud.Scope = {}
-function blud.Scope:new(parent)
-    if parent == nil then parent = blud.Scope end
-    local instance = {
-        variables  = {},
-        parent     = parent,
-        __index    = parent,
-    }
-    -- no need for separate metatable; each instance is its own metatable
-    setmetatable(instance, instance)
-    return instance
-end
+do
+    local function get(self, name)
+        local result = self.variables[name]
+        if result == nil and self.parent then
+            result = self.parent:get(name)
+        end
+        return result
+    end
 
+    function blud.Scope.new(parent)
+        local instance = {
+            variables  = {},
+            parent     = parent,
+            get        = get,
+        }
+        return instance
+    end
+end
 
 
 -- a param scope filters out any numeric macro name references
@@ -617,7 +623,7 @@ end
 -- This handles automatic macros in its "get" function
 blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
 blud.ScopeTarget.__index = blud.ScopeTarget
-function blud.ScopeTarget:new(target)
+function blud.ScopeTarget.new(target)
     blud.assert(target)
     local scope  = blud.Scope:new(blud.scope_build)
     scope.target = target
@@ -1598,17 +1604,30 @@ blud.super_atom = {
             
         end
     end,
+    BIND_SWD = function(atom)
+        util.print("BIND_SWD(%s)", util.dump(atom))
+        local SWD = atom.SCOPE:get_text("SWD")
+        if SWD ~= "" then
+            atom.BOUND_NAME = SWD .. "/" .. atom.NAME
+        else
+            atom.BOUND_NAME = atom.NAME
+        end
+        return atom
+    end,
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
         local rule = atom.RULE
-        assert(rule, "atom has no rule: " .. atom.NAME )
-        return rule.operator:BIND(atom)
+        if rule then
+            return rule.operator:BIND(atom)
+        else
+            return atom.BIND_SWD(atom)
+        end
     end,
 -- prepare prerequisites for this atom to be built
 -- default is to let operator do the work
     PREPARE_PREREQUISITES = function(atom)
         local rule = atom.RULE
-        if rule.operator then
+        if rule then
             rule.operator.PREPARE_PREREQUISITES(atom)
         end
     end,
@@ -1726,6 +1745,7 @@ do
             PREREQUISITES = {},
             SUFFIX        = atom_name:match("^.+(%..+)$"),
         }
+        atom.SCOPE        = blud.ScopeTarget.new(atom)
         atom.TYPE         = suffix_map[atom.SUFFIX] or atom.SUFFIX
         return setmetatable(atom, blud.super_atom)
     end
