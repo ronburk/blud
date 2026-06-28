@@ -549,47 +549,10 @@ end
 
 --blud.macros          = {}
 -- macro scopes
-blud.Scope = {}
-do
-    local function get(self, name)
-        local result = self.variables[name]
-        if result == nil and self.parent then
-            result = self.parent:get(name)
-        end
-        return result
-    end
-
-    function blud.Scope.new(parent)
-        local instance = {
-            variables  = {},
-            parent     = parent,
-            get        = get,
-        }
-        return instance
-    end
-end
+blud.Scope = require("scope")
 
 
--- a param scope filters out any numeric macro name references
--- it never allows those references to search any higher scope
--- it passes all non-numeric macro name references up the scope chain
-function blud.Scope:new_param_scope(parent, macro_actual)
-    local scope = blud.Scope:new(parent)
-    scope.macro_actual = macro_actual
-    function scope:get(name)
-        blud.assert(name)
-        if name:match("^%-?%d+$") then
-            blud.error(" don't handle numerics yet!")
-        else
-            return self.parent:get(name)
-        end
-    end
-    function scope:set(name, value)
-        error("You can't set a param value macro!")
-    end
-    return scope
-end
-
+--[[
 function blud.Scope:set(name, value)
     self.variables[name] = value
 end
@@ -686,6 +649,8 @@ function blud.Macro:new(body)
     setmetatable(instance, blud.Macro)
     return instance
 end
+--]]
+
 
 -- macro_call is an unexpanded macro call, where [1] == macro name, [2] == arg#1, etc.
 -- macro_actual is the expanded macro call we are inside of, if any, needed for $(1), $(2), etc.
