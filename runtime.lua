@@ -229,7 +229,10 @@ function glob_words(input)  -- ?? must it be global???
 end
 
 
+blud.Macro = require("macro")
+
 blud.rules          = {}
+
 blud.default_action = function (scope)
     blud.execute(scope, nil)
 end
@@ -1426,7 +1429,6 @@ blud.phase3       = function ()
 end
 ]=]
 
-blud.macro = require("macro")
 blud.current_time = os.time()
 blud.shallow_copy = function (original)
     local copy = {}
