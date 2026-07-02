@@ -1632,6 +1632,7 @@ blud.super_atom = {
                 blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
             end
         end
+        target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
         local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
         target_atom.TIMESTAMP = timestamp
@@ -1639,7 +1640,6 @@ blud.super_atom = {
                 error("Don't know how to build: " .. target_atom.NAME)            
         end
         
-        target_atom:PREPARE_PREREQUISITES()
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
 --        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
 --        print("    versus ", newest_prerequisite)
