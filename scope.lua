@@ -32,8 +32,9 @@ M.set = function(self, name, value)
 end
 
 
-M.new = function(self, parent)
+M.new = function(self, parent, name)
     local instance = {
+        name       = name,
         variables  = {},
         parent     = parent,
     }
@@ -42,11 +43,11 @@ end
 
 
 -- set up (most of) the scope ordering
-M.base        = M:new()
-M.environment = M:new(M.base)
-M.bludfile    = M:new(M.environment)
-M.commandline = M:new(M.bludfile)
-M.build       = M:new(M.commandline)
+M.base        = M:new(nil, "base")
+M.environment = M:new(M.base, "environment")
+M.bludfile    = M:new(M.environment, "bludfile")
+M.commandline = M:new(M.bludfile, "commandline")
+M.build       = M:new(M.commandline, "build")
 
 
 M.environment.get = function(self, name)
@@ -110,8 +111,13 @@ local function target_get(self, name)
 end
 
 -- create a new per-target scope
+
+-- we always use M.build for the parent scope; at runtime,
+-- all but the first build target will have to adjust their
+-- parent pointer
 M.new_target_scope   = function(self, target)
-    local new_scope  = M:new(M.build)
+    local name = string.format("target(%s)", target.NAME)
+    local new_scope  = M:new(M.build, name)
     new_scope.target = target
     new_scope.get    = target_get
     return new_scope

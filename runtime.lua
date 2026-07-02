@@ -228,6 +228,13 @@ function glob_words(input)  -- ?? must it be global???
     return output
 end
 
+--[[
+    build_stack - stack of targets currently being built
+
+    .target - target (atom) being built in this frame
+blud.build_stack = {}
+--]]
+
 
 blud.Macro = require("macro")
 
@@ -257,7 +264,7 @@ blud.eval_target_assign_rule = function(left_parts, macro, action)
     if action then
         error("Can't have action on target-specific assignment")
     end
-    local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
+    local left  = blud.Macro.expand_tokens(blud.Scope.bludfile, left_parts)
     local target_names = tokenize_dependency_line(left)
 
     for i = 1, #target_names do
@@ -288,7 +295,7 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
             end
         end
         if operator_name == ":" and #right_parts > 0 then
-            local macro = blud.macro.match_macro_assign(right_parts[1], true)
+            local macro = blud.Macro.match_macro_assign(right_parts[1], true)
             if macro then
                 return blud.eval_target_assign_rule(left_parts, macro, action)
             end
@@ -299,8 +306,8 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
         blud.error("Unknown operator: #1", operator_name)
     end
     -- everybody wants their macros expanded, you can't override this
-    local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
-    local right = blud.Macro.expand_tokens(blud.scope_bludfile, right_parts)
+    local left  = blud.Macro.expand_tokens(blud.Scope.bludfile, left_parts)
+    local right = blud.Macro.expand_tokens(blud.Scope.bludfile, right_parts)
 
     -- seems sketchy for some operators to tokenize differently, so do that here
     local target_names = tokenize_dependency_line(left)
@@ -874,11 +881,11 @@ end
 
 blud.build_init = function()
     local OWD = {[1] = ".", ["name"] = "OWD"}
-    blud.scope_base:set("OWD", OWD)
+    blud.Scope.base:set("OWD", OWD)
     if blud.BUILD_DEFAULT then
         os.execute("mkdir " .. blud.BUILD_DEFAULT.NAME)
         OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
-        blud.scope_bludfile:set("OWD", OWD)
+        blud.Scope.bludfile:set("OWD", OWD)
     end
 end
 
@@ -1346,13 +1353,13 @@ function blud.phase3:parse()
         assert(line ~= nil)
         local macro = self:looks_like_macro_assign(line)
         if macro then
-            line = blud.macro_assign(line, blud.scope_bludfile, macro)
+            line = blud.macro_assign(line, blud.Scope.bludfile, macro)
             table.insert(self.text, line .. "\n")
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
 
 print("unexpanded = ", dump(line))
-            local dependency_line = blud.Macro.expand_text(blud.scope_bludfile, line)
+            local dependency_line = blud.Macro.expand_text(blud.Scope.bludfile, line)
 print("expanded = ", dump(dependency_line))
             local parsed = tokenize_dependency_line(dependency_line)
 print("parsed = ", dump(parsed))
@@ -1572,7 +1579,7 @@ blud.super_atom = {
         end
     end,
     BIND_SWD = function(atom)
-        util.print("BIND_SWD(%s)", util.dump(atom))
+--        util.print("BIND_SWD(%s)", util.dump(atom.NAME))
         local SWD = atom.SCOPE:get_text("SWD")
         if SWD ~= "" then
             atom.BOUND_NAME = SWD .. "/" .. atom.NAME
@@ -1595,16 +1602,24 @@ blud.super_atom = {
     PREPARE_PREREQUISITES = function(atom)
         local rule = atom.RULE
         if rule then
-            rule.operator.PREPARE_PREREQUISITES(atom)
+            rule.operator:PREPARE_PREREQUISITES(atom)
         end
     end,
     BUILD_PREREQUISITES = function(atom)
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
     BUILD = function(target_atom)
-        util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
+        local parent_name = ''
+        if target_atom.PARENT then
+            parent_name = target_atom.PARENT.NAME .. ' : '
+            target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
+        end
+        util.print("BUILD('%s%s') prereq=%s",
+                   parent_name,
+                   blud.dump_atom(target_atom),
+                   util.dump(target_atom.PREREQUISITES))
         
-        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+--        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -1612,7 +1627,7 @@ blud.super_atom = {
         if not target_atom.RULE then
             -- must try implicit rules now
             local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
-            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
+--            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
             if implicit_rule then
                 blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
             end
@@ -1626,8 +1641,8 @@ blud.super_atom = {
         
         target_atom:PREPARE_PREREQUISITES()
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
-        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
-        print("    versus ", newest_prerequisite)
+--        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
+--        print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
             local rule = target_atom.RULE
             if rule and rule.action then
@@ -1648,11 +1663,11 @@ blud.super_atom = {
             util.print("names=%s", util.dump(prereq_names))
             atom.PREREQUISITES = atomize_words(prereq_names)
         end
-        util.print("BUILD_PREREQUISITES(%s)", blud.dump_atom(atom))
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
         local newest_time = 0
-        if prerequisites then
+        if prerequisites and #prerequisites > 0 then
+            util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
             for _, prereq_name in ipairs(prerequisites) do
                 prerequisite = atom.BIND(prereq_name)
                 prerequisite.PARENT = atom
@@ -1662,14 +1677,10 @@ blud.super_atom = {
                 end
             end
         end
-        print("newest time is ", newest_time)
+--        print("newest time is ", newest_time)
         return newest_time
     end,
     DO_ACTION = function(target_atom)
-        if target_atom.SCOPE == nil then
-            target_atom.SCOPE = blud.ScopeTarget:new(target_atom)
-        end
-
         local action
         if target_atom.RULE and target_atom.RULE.action then
             action = target_atom.RULE.action
@@ -1712,7 +1723,7 @@ do
             PREREQUISITES = {},
             SUFFIX        = atom_name:match("^.+(%..+)$"),
         }
-        atom.SCOPE        = blud.ScopeTarget.new(atom)
+        atom.SCOPE        = blud.Scope:new_target_scope(atom)
         atom.TYPE         = suffix_map[atom.SUFFIX] or atom.SUFFIX
         return setmetatable(atom, blud.super_atom)
     end
@@ -1803,6 +1814,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
 end
 
 
+--[=[
 blud.build = function(target, parent_atom)
     print("[[[[[[[[[build " .. target.NAME .. "]]]]]]]]")
     blud.global.BIND(target)
@@ -1810,6 +1822,7 @@ blud.build = function(target, parent_atom)
     target:BUILD_PREREQUISITES()
     return target:BUILD()
 end
+--]=]
 
 blud.get_or_create_target = function(target_name)
     local target = blud.TARGETS[target_name]
@@ -1817,6 +1830,7 @@ blud.get_or_create_target = function(target_name)
         target = blud.new_atom(target_name)
         blud.TARGETS[target_name] = target
         blud.PREREQUISITES = {}
+        target.SCOPE = blud.Scope:new_target_scope(target)
         if target_name:find("%%") then
             target.IMPLICIT = true
         end

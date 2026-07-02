@@ -120,9 +120,10 @@ end
 
 -- tokenized, but not yet atomized
 function M:ADD_RULES(target_words, prereq_words, action)
+--[[
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
           util.dump(target_words), util.dump(prereq_words))
-
+--]]
     local targets = atomize_words(target_words)
     local group   = self:GROUP_TARGETS(target_words, prereq_words, action)
     
@@ -143,12 +144,48 @@ function M:ADD_RULES(target_words, prereq_words, action)
     end
 end
 
+local function words_dump(words)
+    local result = {}
+    for i = 1, #(words or {}) do
+        result[i] = tostring(words[i])
+    end
+    return table.concat(result, ", ")
+end
+
+local function targets_dump(targets)
+    local result = {}
+    for i = 1, #(targets or {}) do
+        result[i] = targets[i].NAME
+    end
+    return table.concat(result, ", ")
+end
+
+local function rule_dump(rule)
+    local lines = {}
+
+    table.insert(lines, string.format(
+        "%s %s %s",
+        targets_dump(rule.targets),
+        rule.operator.name or rule.operator.NAME or "?",
+        words_dump(rule.prereq_words)
+    ))
+
+    if rule.action then
+        table.insert(lines, "    action: " .. tostring(rule.action))
+    else
+        table.insert(lines, "    action: <none>")
+    end
+
+    return table.concat(lines, "\n")
+end
+
 function M:ADD_RULE(target, prereq_words, action)
    -- util.array_append(target.PREREQUISITES, prereqs)
-    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
+--    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
     local rule = target.RULE
     if not rule then
         rule              = {}
+        rule.dump         = rule_dump
         table.insert(blud.rules, rule)
         rule.targets      = { target }
         rule.prereq_words = prereq_words
@@ -232,6 +269,39 @@ end
 do  -- :: operator
     local op = M.operator_new({})
     blud.operators["::"] = op
+    op.PREPARE_PREREQUISITES = function(self, target)
+        local source_rule = target.RULE
+
+        local prereq_words = glob_words(source_rule.prereq_words)
+        local new_prereqs  = {}
+        local link_macro   = "LINK.o"
+
+        for _, prereq_name in ipairs(prereq_words) do
+            local implicit_rule, file_stem, dir_stem = blud.implicit.find_reverse(prereq_name)
+            if not implicit_rule then
+                blud.error("no reverse rule for %s", prereq_name)
+            end
+
+            if prereq_name:match("%.cpp$") or prereq_name:match("%.cxx$") or prereq_name:match("%.cc$") then
+                link_macro = "LINK.cxx.o"
+            end
+
+            local prereq_atom = blud.get_or_create_target(prereq_name)
+            local output_name = blud.implicit.expand(implicit_rule.target, file_stem, dir_stem)
+            local output_atom = blud.get_or_create_target(output_name)
+
+            blud.operators[":"]:ADD_RULE(output_atom, { prereq_name }, implicit_rule.action)
+            table.insert(new_prereqs, output_atom)
+        end
+
+        target.PREREQUISITES = new_prereqs
+
+        if not source_rule.action or source_rule.action == blud.default_action then
+            source_rule.action = function(scope, status)
+                return blud.execute(scope, scope:get_text(link_macro))
+            end
+        end
+    end
     op.BUILD = function(target, prerequisites, action)
         print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
         local new_prereqs = {}

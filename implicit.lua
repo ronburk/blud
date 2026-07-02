@@ -71,9 +71,9 @@ end
 function implicit.find_forward(target_name, exists)
     for i = 1, #rules do
         local rule = rules[i]
-        util.print("implicit, rule is %s", util.dump(rule))
+--        util.print("implicit, rule is %s", util.dump(rule))
         local match = implicit.match_pattern(target_name, rule.target)
-        util.print("implicit, match is %s", util.dump(match))
+--        util.print("implicit, match is %s", util.dump(match))
         if match then -- if target_name matches this pattern rule
             local prereq_words = {}
             local ok = true
@@ -151,7 +151,7 @@ end
 
 -- add a rule to the implicit rule database
 function implicit.add_rule(target, prerequisites, action)
-    util.print("implicit.add_rule(%s,%s,action)", util.dump(target), util.dump(prerequisites))
+--    util.print("implicit.add_rule(%s,%s,action)", util.dump(target), util.dump(prerequisites))
     local parsed, errmsg
     -- Add the rule as usual
     local rule = {target = target, prerequisites = prerequisites, action = action, order = #rules + 1}

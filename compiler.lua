@@ -327,7 +327,7 @@ function compile_macro_assign(compile_io, macro_name)
     local macro_text = compile_io.get_line_remainder()
     local parts = m.parts_from_text(macro_text)
 
-    compile_io.emit_line("blud.macro_assign_parts(blud.scope_bludfile, %q, %q, %s)",
+    compile_io.emit_line("blud.macro_assign_parts(blud.Scope.bludfile, %q, %q, %s)",
                          macro_name, assign_op, parts_to_body_lua(parts))
 end
 

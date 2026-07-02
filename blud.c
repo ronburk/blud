@@ -172,7 +172,7 @@ static int lua_glob_expand(lua_State* L) {
     while(names < end){
         size_t name_len = strnlen(names, end - names);
         if(pattern_match(pattern, names)){
-            printf("Match on '%s'\n", names);
+            /*printf("Match on '%s'\n", names); */
             ++matched;
             lua_pushinteger(L, ++size);
             lua_pushlstring(L, names, name_len);
