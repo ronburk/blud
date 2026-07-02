@@ -1,13 +1,18 @@
+set -e
+
+LUAJIT_DIR="./luajit"
+LUAJIT_SRC="$LUAJIT_DIR/src"
+LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
+
+if [ ! -f "$LUAJIT_LIB" ]; then
+    echo "error: expected static LuaJIT library at $LUAJIT_LIB" >&2
+    echo "build LuaJIT in $LUAJIT_DIR before running this script" >&2
+    exit 1
+fi
+
+LUAJIT_FLAGS="-I$LUAJIT_SRC $LUAJIT_LIB -lm -ldl"
 BUILD_ID=$(($(cat .build_id 2>/dev/null || echo 0) + 1))
 echo $BUILD_ID > .build_id
-if [ -d /mnt/data/LuaJIT-2.1/src ]; then
-    LUAJIT_FLAGS="-I/mnt/data/LuaJIT-2.1/src -L/mnt/data/LuaJIT-2.1/src -Wl,-rpath,/mnt/data/LuaJIT-2.1/src -lluajit"
-else
-    LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit) -Wl,-rpath,/usr/local/lib"
-fi
-#LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit)"
-#LUAJIT_FLAGS="$(pkg-config --cflags --libs luajit) -Wl,-rpath,/usr/local/lib"
-#LDFLAGS="-L./luajit/src -lluajit"
 CFLAGS="-Wall -Wextra -fmax-errors=2"
 # build cstr utility
 g++ -o cstr cstr.cpp $CFLAGS
