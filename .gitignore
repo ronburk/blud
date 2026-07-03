@@ -26,7 +26,7 @@ foo
 out.bin
 src/
 tic.lua
-codex_aut_token.txt
+codex_auth_token.txt
 
 # Prerequisites
 *.d
