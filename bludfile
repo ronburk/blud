@@ -4,7 +4,8 @@ CXX = g++
 CFLAGS = -g
 LUAJIT_LDFLAGS ?= -L./luajit/src -lluajit
 LDFLAGS = $(LUAJIT_LDFLAGS)
-LUAJIT_CFLAGS ?= -I/usr/local/include/luajit-2.1
+-- LUAJIT_CFLAGS ?= -I/usr/local/include/luajit-2.1
+LUAJIT_CFLAGS ?= -I./luajit/src
 CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 $(LUAJIT_CFLAGS)  -DBUILD_ID=666
 
 all : blud test
