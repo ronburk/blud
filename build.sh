@@ -21,7 +21,7 @@ g++ -o cstr cstr.cpp $CFLAGS
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
 zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh test.blud test/* bludfile
-
+echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 exit 0
 
 g++ -o blud blud.cpp luawrap.cpp $LUAJIT_FLAGS $CFLAGS
