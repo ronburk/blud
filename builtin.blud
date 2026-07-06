@@ -3,6 +3,7 @@ CXX        = gcc
 LINK.o     = $(CC) -o $@ $^ $(LDFLAGS)
 LINK.cxx.o = $(CXX) -o $@ $^ $(LDFLAGS)
 
+
 %.o : %.c
     $(CC) $(CPPFLAGS) $(CINCLUDES) $(CFLAGS) -c $< -o $@
 

@@ -2,6 +2,7 @@
 CC  = gcc 
 CXX = g++
 CFLAGS = -g
+CINCLUDES = ./luajit/src
 LUAJIT_LDFLAGS ?= -L./luajit/src -lluajit
 LDFLAGS = $(LUAJIT_LDFLAGS)
 -- LUAJIT_CFLAGS ?= -I/usr/local/include/luajit-2.1
