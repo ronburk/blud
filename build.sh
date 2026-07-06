@@ -22,7 +22,11 @@ g++ -o cstr cstr.cpp $CFLAGS
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
 zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh test.blud test/* bludfile
-echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
+if command -v xclip >/dev/null; then
+    echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
+else
+    echo "warning: xclip not found; clipboard not updated" >&2
+fi
 exit 0
 
 g++ -o blud blud.cpp luawrap.cpp $LUAJIT_FLAGS $CFLAGS
