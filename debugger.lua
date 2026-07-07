@@ -70,6 +70,29 @@ local function print_current_line()
     end
 end
 
+
+local function print_backtrace()
+    local frame = 0
+    local level = 3
+
+    while true do
+        local info = lua_debug.getinfo(level, "nSl")
+        if not info then
+            break
+        end
+
+        local source = normalize_source_name(info)
+        if not source:match("debugger%.lua$") then
+            local name = info.name or "?"
+            local line = info.currentline or -1
+            print(string.format("#%d  %s at %s:%d", frame, name, source, line))
+            frame = frame + 1
+        end
+
+        level = level + 1
+    end
+end
+
 local function should_stop(depth)
     if step_mode == "step" then
         return true
@@ -134,11 +157,13 @@ function debugger.interactive(prompt, handler)
         arg = arg or ""
 
         if command == "?" or command == "help" then
-            print("q quit | c continue | s step | n next | e <lua> eval | ? help")
+            print("q quit | c continue | s step | n next | bt backtrace | e <lua> eval | ? help")
         elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
             break
+        elseif command == "bt" or command == "where" then
+            print_backtrace()
         elseif command == "s" or command == "step" then
             step_mode = "step"
             lua_debug.sethook(step_hook, "l")
