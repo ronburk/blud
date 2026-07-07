@@ -15,6 +15,7 @@ cstr
 bludlua.c
 blud
 .build_id
+chatgpt.patch
 
 Figure1.svg
 blud.test
