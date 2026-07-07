@@ -14,6 +14,11 @@ end
 local function step_hook(event, line)
     if event == "line" then
         debug_info = lua_debug.getinfo(2)
+
+        if debug_info.short_src:match("debugger%.lua$") then
+            return
+        end
+
         print_current_line()
         lua_debug.sethook() -- Remove the hook after printing
     end
