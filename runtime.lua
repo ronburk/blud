@@ -182,6 +182,9 @@ blud.build_stack = {}
 
 
 blud.debugger = require("debugger")
+if blud.command_line_options.debug == true then
+    blud.debugger.probe = blud.debugger.real_probe
+end
 blud.Macro = require("macro")
 
 blud.rules          = {}

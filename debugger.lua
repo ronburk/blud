@@ -24,6 +24,14 @@ local function custom_handler(command, arg)
     print("Custom handler received command: " .. command .. " with argument: " .. arg)
 end
 
+function debugger.probe()
+    return true
+end
+
+function debugger.real_probe()
+    error("debugger.real_probe not implemented")
+end
+
 function debugger.interactive(prompt, handler)
     handler = handler or custom_handler
 
