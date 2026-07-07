@@ -1,12 +1,14 @@
-local util     = require("util")
 local debugger = {}
 local lua_debug = _G.debug
 
 local debug_info
 local source_cache = {}
+local step_mode
+local step_target_depth
+local stopped_depth
 
 local function normalize_source_name(info)
-    local source = info.source or info.short_src
+    local source = info.source or info.short_src or "<unknown>"
 
     if source:sub(1, 1) == "@" then
         source = source:sub(2)
@@ -43,6 +45,16 @@ local function get_source_lines(source)
     return lines
 end
 
+local function call_depth(start_level)
+    local depth = 0
+    local level = start_level
+    while lua_debug.getinfo(level, "f") do
+        depth = depth + 1
+        level = level + 1
+    end
+    return depth
+end
+
 local function print_current_line()
     if debug_info then
         local source = normalize_source_name(debug_info)
@@ -58,6 +70,18 @@ local function print_current_line()
     end
 end
 
+local function should_stop(depth)
+    if step_mode == "step" then
+        return true
+    end
+
+    if step_mode == "next" then
+        return depth <= step_target_depth
+    end
+
+    return false
+end
+
 local function step_hook(event, line)
     if event == "line" then
         debug_info = lua_debug.getinfo(2)
@@ -66,14 +90,22 @@ local function step_hook(event, line)
             return
         end
 
+        local depth = call_depth(2)
+        if not should_stop(depth) then
+            return
+        end
+
+        lua_debug.sethook()
+        step_mode = nil
+        step_target_depth = nil
+        stopped_depth = depth
         print_current_line()
-        lua_debug.sethook() -- Remove the hook after printing
+        debugger.interactive(">")
     end
 end
 
--- Example custom command handler
 local function custom_handler(command, arg)
-    print("Custom handler received command: " .. command .. " with argument: " .. arg)
+    print("unknown debugger command: " .. tostring(command) .. " " .. tostring(arg))
 end
 
 function debugger.probe()
@@ -81,24 +113,41 @@ function debugger.probe()
 end
 
 function debugger.real_probe(args)
-    util.printf("%s", args.func)
+    print(tostring(args.func))
     debugger.interactive(">")
 end
 
 function debugger.interactive(prompt, handler)
     handler = handler or custom_handler
 
-    local debug_active = true
-    while debug_active do
+    while true do
         io.write(prompt)
         local input = io.read()
-        local command, arg = input:match("^(%S+)%s*(.*)")
-
-        if command == "quit" then
+        if not input then
             os.exit()
-        elseif command == "resume" then
+        end
+
+        local command, arg = input:match("^(%S+)%s*(.*)")
+        command = command or ""
+        arg = arg or ""
+
+        if command == "q" or command == "quit" then
+            os.exit()
+        elseif command == "c" or command == "continue" or command == "resume" then
             break
-        elseif command == "eval" then
+        elseif command == "s" or command == "step" then
+            step_mode = "step"
+            lua_debug.sethook(step_hook, "l")
+            break
+        elseif command == "n" or command == "next" then
+            step_mode = "next"
+            step_target_depth = stopped_depth or 0
+            if step_target_depth == 0 then
+                step_mode = "step"
+            end
+            lua_debug.sethook(step_hook, "l")
+            break
+        elseif command == "e" or command == "eval" then
             local chunk, err = load(arg)
             if chunk then
                 local status, result = pcall(chunk)
@@ -110,14 +159,10 @@ function debugger.interactive(prompt, handler)
             else
                 print("Compilation error: " .. err)
             end
-        elseif command == "step" then
-            lua_debug.sethook(step_hook, "l")
-            break -- Step out of the debugger to execute the next line
         else
             handler(command, arg)
         end
     end
 end
-
 
 return debugger
