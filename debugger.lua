@@ -3,12 +3,58 @@ local debugger = {}
 local lua_debug = _G.debug
 
 local debug_info
+local source_cache = {}
+
+local function normalize_source_name(info)
+    local source = info.source or info.short_src
+
+    if source:sub(1, 1) == "@" then
+        source = source:sub(2)
+    end
+
+    if source:sub(1, 1) == "[" and source:sub(-1) == "]" then
+        source = source:sub(2, -2)
+    end
+
+    return source
+end
+
+local function get_source_lines(source)
+    if source_cache[source] then
+        return source_cache[source]
+    end
+
+    local cstr_get = rawget(_G, "CSTRGet")
+    if not cstr_get then
+        return nil
+    end
+
+    local text = cstr_get(source)
+    if not text then
+        return nil
+    end
+
+    local lines = {}
+    for line in (text .. "\n"):gmatch("(.-)\n") do
+        table.insert(lines, line)
+    end
+
+    source_cache[source] = lines
+    return lines
+end
 
 local function print_current_line()
     if debug_info then
-        local source = debug_info.short_src
+        local source = normalize_source_name(debug_info)
         local line = debug_info.currentline
-        print(string.format("Stepping into %s at line %d", source, line))
+        local lines = get_source_lines(source)
+
+        print(string.format("%s:%d:", source, line))
+        if lines and lines[line] then
+            print(lines[line])
+        else
+            print("<source not available>")
+        end
     end
 end
 
@@ -16,7 +62,7 @@ local function step_hook(event, line)
     if event == "line" then
         debug_info = lua_debug.getinfo(2)
 
-        if debug_info.short_src:match("debugger%.lua$") then
+        if normalize_source_name(debug_info):match("debugger%.lua$") then
             return
         end
 
