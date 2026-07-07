@@ -113,7 +113,9 @@ function debugger.probe()
 end
 
 function debugger.real_probe(args)
-    print(tostring(args.func))
+    debug_info = lua_debug.getinfo(2)
+    stopped_depth = call_depth(2)
+    print_current_line()
     debugger.interactive(">")
 end
 
@@ -131,7 +133,9 @@ function debugger.interactive(prompt, handler)
         command = command or ""
         arg = arg or ""
 
-        if command == "q" or command == "quit" then
+        if command == "?" or command == "help" then
+            print("q quit | c continue | s step | n next | e <lua> eval | ? help")
+        elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
             break
