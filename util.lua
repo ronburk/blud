@@ -39,6 +39,18 @@ M.count_char = function(text, char)
     return select(2, text:gsub(char, char))
 end
 
+M.match_or = function(text, pattern, init)
+    assert(type(text) == "string")
+    assert(type(pattern) == "string")
+
+    for part in (pattern .. "|"):gmatch("(.-)|") do
+        local result = { text:match(part, init) }
+        if result[1] ~= nil then
+            return unpack(result)
+        end
+    end
+end
+
 -- turn a chunk into a string constant that can later be
 -- turned back into a chunk by loadstring()
 M.chunk_to_lua = function(chunk)
