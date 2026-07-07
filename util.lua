@@ -1,3 +1,4 @@
+-- Utility helpers for blud.
 local M = {}
 string_buf = require("string.buffer")
 
