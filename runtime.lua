@@ -1558,21 +1558,10 @@ blud.super_atom = {
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
     BUILD = function(target_atom)
-        local parent_name = ''
         if target_atom.PARENT then
-            parent_name = target_atom.PARENT.NAME .. ' : '
             target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
         end
-        util.print("BUILD('%s%s') prereq=%s",
-                   parent_name,
-                   blud.dump_atom(target_atom),
-                   util.dump(target_atom.PREREQUISITES))
-        
---        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
-        if target_atom.BUILDING == true then
-            error("circular dependency on " .. target_atom.NAME)
-        end
-        target_atom.BUILDING   = true
+
         if not target_atom.RULE then
             -- must try implicit rules now
             local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
@@ -1581,28 +1570,17 @@ blud.super_atom = {
                 blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
             end
         end
-        target_atom:PREPARE_PREREQUISITES()
+
+        if target_atom.RULE then
+            return target_atom.RULE.operator:BUILD(target_atom)
+        end
+
         target_atom:BIND()
         local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
         target_atom.TIMESTAMP = timestamp
-        if not target_atom.RULE and timestamp == 0 then
-                error("Don't know how to build: " .. target_atom.NAME)            
+        if timestamp == 0 then
+            error("Don't know how to build: " .. target_atom.NAME)
         end
-        
-        local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
---        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
---        print("    versus ", newest_prerequisite)
-        if newest_prerequisite > timestamp then
-            local rule = target_atom.RULE
-            if rule and rule.action then
-                target_atom:DO_ACTION()
-                timestamp = blud.current_time
-            elseif timestamp == 0 and not target_atom.RULE then
-                error("Don't know how to build: " .. target_atom.NAME);
-            end
-        end
-        target_atom.TIMESTAMP = timestamp
-        target_atom.BUILDING = false
         return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)

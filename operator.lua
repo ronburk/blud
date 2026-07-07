@@ -243,6 +243,55 @@ do  -- : operator
         util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
         return target_atoms[1]
     end
+
+    function op:BUILD(target_atom)
+        local parent_name = ''
+        if target_atom.PARENT then
+            parent_name = target_atom.PARENT.NAME .. ' : '
+            target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
+        end
+        util.print("BUILD('%s%s') prereq=%s",
+                   parent_name,
+                   blud.dump_atom(target_atom),
+                   util.dump(target_atom.PREREQUISITES))
+
+--        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+        if target_atom.BUILDING == true then
+            error("circular dependency on " .. target_atom.NAME)
+        end
+        target_atom.BUILDING   = true
+        if not target_atom.RULE then
+            -- must try implicit rules now
+            local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
+--            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
+            if implicit_rule then
+                blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
+            end
+        end
+        target_atom:PREPARE_PREREQUISITES()
+        target_atom:BIND()
+        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
+        target_atom.TIMESTAMP = timestamp
+        if not target_atom.RULE and timestamp == 0 then
+                error("Don't know how to build: " .. target_atom.NAME)
+        end
+
+        local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
+--        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
+--        print("    versus ", newest_prerequisite)
+        if newest_prerequisite > timestamp then
+            local rule = target_atom.RULE
+            if rule and rule.action then
+                target_atom:DO_ACTION()
+                timestamp = blud.current_time
+            elseif timestamp == 0 and not target_atom.RULE then
+                error("Don't know how to build: " .. target_atom.NAME);
+            end
+        end
+        target_atom.TIMESTAMP = timestamp
+        target_atom.BUILDING = false
+        return timestamp
+    end
 end
 
 do  -- %: operator
@@ -308,49 +357,8 @@ do  -- :: operator
             end
         end
     end
-    op.BUILD = function(target, prerequisites, action)
-        print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
-        local new_prereqs = {}
-        local link_macro  = "LINK.o"
-
-        for _, prerequisite in ipairs(prerequisites or {}) do
-            util.print("_,prerequisite = %s,%s", _, prerequisite)
-            local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite)
-            if rule == nil then
-                error("no reverse rule for " .. prerequisite)
-            end
---            if prerequisite.TYPE == ".cpp" then
---                link_macro = "LINK.cxx.o"
---            end
-            local output_name = blud.implicit.expand(rule.target, file_stem, dir_stem)
-            local output = blud.get_or_create_target(output_name)
-
-            -- Materialize the implicit rule:
-            --     output : prerequisite
-            --         rule.action
-            --
-            -- This is intentionally OK if the same exact rule is added twice,
-            -- but ADD_RULE may still complain if the target already has a
-            -- different action.
-            output:ADD_RULE({ prerequisite }, rule.action)
-
-            table.insert(new_prereqs, output)
-        end
-
-        if action == nil or action == ""  or action == blud.default_action then
-            action = function(scope)
-                local command_tokens = {
-                    ["macro"] = true, [1] = {["type"]="text", ["text"]= link_macro}
-                }
-                local command = blud.Macro.expand_tokens(scope, command_tokens)
-            end
-            action = function(scope, status)
-                status = blud.execute(scope, scope:get_text(link_macro))
-                end
---            action = "$(" .. link_macro .. ")"
-        end
-
-        target:ADD_RULE(new_prereqs, action)
+    function op:BUILD(target_atom)
+        return blud.operators[":"]:BUILD(target_atom)
     end
 
 --[[
