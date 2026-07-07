@@ -281,7 +281,9 @@ do  -- :: operator
 
         -- each source file must have/get a rule that produces an output file
         for _, prereq_name in ipairs(prereq_words) do
-            local implicit_rule, file_stem, dir_stem = blud.implicit.find_reverse(prereq_name)
+            -- try to find rule where prereq_name is target
+            local implicit_rule, file_stem, dir_stem =
+                blud.implicit.find_reverse(prereq_name)
             if not implicit_rule then
                 blud.error("no reverse rule for %s", prereq_name)
             end
