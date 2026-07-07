@@ -58,20 +58,5 @@ function debugger.interactive(prompt, handler)
     end
 end
 
-function debugger.dump(o)
-
-    if type(o) == 'table' then
-        local s = '{ '
-        for k,v in pairs(o) do
-            if type(k) ~= 'number' then k = '"'..k..'"' end
-            if v ~= "__index" then
-                s = s .. '['..k..'] = ' .. dump(v) .. ','
-            end
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-end
 
 return debugger
