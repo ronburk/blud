@@ -287,7 +287,6 @@ do  -- :: operator
             if not implicit_rule then
                 blud.error("no reverse rule for %s", prereq_name)
             end
-
 --            if prereq_name:match("%.cpp$") or prereq_name:match("%.cxx$") or prereq_name:match("%.cc$") then
             if util.match_or(prereq_name, "%.cpp$|%.cxx$|%.cc$") then
                 link_macro = "LINK.cxx.o"
