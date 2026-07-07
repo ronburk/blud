@@ -17,7 +17,7 @@ echo $BUILD_ID > .build_id
 CFLAGS="-Wall -Wextra -fmax-errors=2"
 # build cstr utility
 g++ -o cstr cstr.cpp $CFLAGS
-./cstr runtime.lua util.lua macro.lua main.lua init.lua blud.lua builtin.blud debug.lua implicit.lua compiler.lua compile_io.lua operator.lua scope.lua >./bludlua.c
+./cstr runtime.lua util.lua macro.lua main.lua init.lua blud.lua builtin.blud debugger.lua implicit.lua compiler.lua compile_io.lua operator.lua scope.lua >./bludlua.c
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS

@@ -1,4 +1,4 @@
-local debug = {}
+local debugger = {}
 local lua_debug = _G.debug
 
 local debug_info
@@ -24,7 +24,7 @@ local function custom_handler(command, arg)
     print("Custom handler received command: " .. command .. " with argument: " .. arg)
 end
 
-function debug.interactive(prompt, handler)
+function debugger.interactive(prompt, handler)
     handler = handler or custom_handler
 
     local debug_active = true
@@ -58,7 +58,7 @@ function debug.interactive(prompt, handler)
     end
 end
 
-function debug.dump(o)
+function debugger.dump(o)
 
     if type(o) == 'table' then
         local s = '{ '
@@ -74,4 +74,4 @@ function debug.dump(o)
     end
 end
 
-return debug
+return debugger

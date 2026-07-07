@@ -181,6 +181,7 @@ blud.build_stack = {}
 --]]
 
 
+blud.debugger = require("debugger")
 blud.Macro = require("macro")
 
 blud.rules          = {}

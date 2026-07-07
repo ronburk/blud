@@ -5,7 +5,7 @@ function require_compiled(name)
     local chunk = load(source, "internal." .. name)
     return chunk()
 end
-local foo = require_compiled("debug.lua")
+local foo = require_compiled("debugger.lua")
 print(foo.dump("foo"))
 assert(false)
 ]]
