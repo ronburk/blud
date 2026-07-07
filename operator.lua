@@ -1,3 +1,5 @@
+local debugger = require("debugger")
+
 local M= {} -- super class for all operators
 M.__index = M  -- search super class for missing fields
 M.operator_new   = function(t)
@@ -270,6 +272,7 @@ do  -- :: operator
     local op = M.operator_new({})
     blud.operators["::"] = op
     op.PREPARE_PREREQUISITES = function(self, target)
+        debugger.probe({func="PREPARE_PREREQUISITES", target=target})
         local source_rule = target.RULE
 
         local prereq_words = glob_words(source_rule.prereq_words)

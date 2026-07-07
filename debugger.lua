@@ -28,8 +28,9 @@ function debugger.probe()
     return true
 end
 
-function debugger.real_probe()
-    error("debugger.real_probe not implemented")
+function debugger.real_probe(args)
+    util.printf("%s", args.func)
+    debugger.interactive(">")
 end
 
 function debugger.interactive(prompt, handler)
