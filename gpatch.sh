@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-patch=/tmp/blud-change.patch
+patch=chatgpt.patch
 
 die() {
     echo "error: $*" >&2
@@ -54,9 +54,6 @@ offer_reset_to_upstream() {
 git rev-parse --is-inside-work-tree >/dev/null ||
     die "not inside a git repository"
 
-command -v xclip >/dev/null ||
-    die "xclip not found"
-
 git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 ||
     die "current branch has no upstream"
 
@@ -84,16 +81,15 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{u}')" ]; then
     offer_reset_to_upstream
 fi
 
-if ! xclip -selection clipboard -o > "$patch"; then
-    die "could not read text from clipboard; maybe clipboard contains image/non-text data"
-fi
+[ -f "$patch" ] ||
+    die "$patch not found"
 
 [ -s "$patch" ] ||
-    die "clipboard produced an empty patch"
+    die "$patch is empty"
 
 if ! head -n 1 "$patch" | grep -q '^From '; then
     echo
-    echo "Clipboard does not look like a git format-patch."
+    echo "$patch does not look like a git format-patch."
     echo
     echo "Expected first line to start with:"
     echo "    From "
