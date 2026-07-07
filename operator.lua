@@ -279,6 +279,7 @@ do  -- :: operator
         local new_prereqs  = {}
         local link_macro   = "LINK.o"
 
+        -- each source file must have/get a rule that produces an output file
         for _, prereq_name in ipairs(prereq_words) do
             local implicit_rule, file_stem, dir_stem = blud.implicit.find_reverse(prereq_name)
             if not implicit_rule then

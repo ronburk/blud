@@ -33,6 +33,7 @@ function blud.require(name)
 end
 
 function blud.parse_command_line()
+    local debugger = require("debugger")
     local options = {
         bludfile_path = "bludfile",
         debug = false,
@@ -49,6 +50,7 @@ function blud.parse_command_line()
             end
         elseif arg == "-d" then
             options.debug = true
+            debugger.probe = debugger.real_probe
         elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
         else
@@ -58,6 +60,7 @@ function blud.parse_command_line()
         i = i + 1
     end
 
+    debugger.probe({func="<start>"})
     blud.command_line_options = options
 end
 
