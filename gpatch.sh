@@ -119,7 +119,7 @@ grep -a -m1 '^Subject:' "$patch" || true
 
 echo
 echo "About to run:"
-echo "    git am --3way $patch"
+echo "    git am --no-3way $patch"
 echo
 echo "If git am fails, recover with:"
 echo "    git am --abort"
@@ -134,7 +134,7 @@ case "$answer" in
     *) echo "aborted"; exit 0 ;;
 esac
 
-if ! git am --3way "$patch"; then
+if ! git am --no-3way "$patch"; then
     echo
     echo "git am failed."
     echo
