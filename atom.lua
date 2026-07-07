@@ -2,7 +2,7 @@
 local dump = util.dump
 
 -- define super atom (a metatable), which contains defaults for all atoms
-blud.super_atom = {
+local super_atom = {
     NAME = "",
     set_variable = function(target, macro)
         assert(target)
@@ -226,9 +226,9 @@ blud.super_atom = {
 -- Set up atom inheritance: atom -> super_atom -> global.
 blud.global = {
 }
-setmetatable(blud.super_atom, blud.global)
+setmetatable(super_atom, blud.global)
 blud.global.__index      = blud.global
-blud.super_atom.__index  = blud.super_atom
+super_atom.__index  = super_atom
 
 do
     local suffix_map = {
@@ -249,7 +249,7 @@ do
         }
         atom.SCOPE        = blud.Scope:new_target_scope(atom)
         atom.TYPE         = suffix_map[atom.SUFFIX] or atom.SUFFIX
-        return setmetatable(atom, blud.super_atom)
+        return setmetatable(atom, super_atom)
     end
 end
 
@@ -288,7 +288,7 @@ blud.TARGETS = {
 }
 
 for atom_name, atom in pairs(blud.TARGETS) do
-    setmetatable(atom, blud.super_atom)
+    setmetatable(atom, super_atom)
 end
 
-return blud.super_atom
+return super_atom

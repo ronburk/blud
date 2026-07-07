@@ -1404,7 +1404,7 @@ blud.dump_atom = function (atom)
     return str
 end
 
-require("atom")
+blud.super_atom = require("atom")
 
 blud.get_fs_timestamp = function (filepath)
     local command = string.format("stat -c %%Y '%s' 2>/dev/null", filepath)
