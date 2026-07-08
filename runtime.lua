@@ -195,15 +195,15 @@ end
 
 
 blud.execute = function(scope, text)
-    util.print("blud.execute(text=%s)", util.dump(text))
+    -- util.print("blud.execute(text=%s)", util.dump(text))
     assert(type(text) == "string")
     local status
     if text then
-        print("blud.execute: ", text)
+        -- print("blud.execute: ", text)
         status = os.execute(text)
-        print("    status = ", status)
+        -- print("    status = ", status)
     else
-        print("<no action>") 
+        -- print("<no action>")
     end
     
     return status
@@ -624,7 +624,7 @@ function blud.Macro.expand_call(scope, macro_call, stack)
     local name_string = new_actual[1]
     for i = 1, #stack do
         if stack[i] == name_string then
-            util.print("recursive macro call of: %s", name_string)
+            -- util.print("recursive macro call of: %s", name_string)
             error("die")
         end
     end
@@ -1224,7 +1224,7 @@ end
 
 -- variables have been expanded, we have line of the form <targets> <colon_operator> <prerequisites>
 function blud.phase3:compile_rule(dependency_line, action)
-print("********************* compile_rule")
+-- print("********************* compile_rule")
     local tokens = blud.phase3:tokenize(dependency_line)
     local targets = {}
     local prerequisites = {}
@@ -1291,9 +1291,9 @@ end
 --]=]
 
 function blud.phase3:parse()
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    print(blud.phase2_text)
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!END phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    -- print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    -- print(blud.phase2_text)
+    -- print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!END phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
@@ -1307,11 +1307,11 @@ function blud.phase3:parse()
             line = get_line()
         elseif self:looks_like_dependency_line(line) then
 
-print("unexpanded = ", dump(line))
+-- print("unexpanded = ", dump(line))
             local dependency_line = blud.Macro.expand_text(blud.Scope.bludfile, line)
-print("expanded = ", dump(dependency_line))
+-- print("expanded = ", dump(dependency_line))
             local parsed = tokenize_dependency_line(dependency_line)
-print("parsed = ", dump(parsed))
+-- print("parsed = ", dump(parsed))
             local expanded = {}
             for _, word in ipairs(parsed) do
                 if is_pattern(word) then
@@ -1320,7 +1320,7 @@ print("parsed = ", dump(parsed))
                     table.insert(expanded, word)
                 end
             end
-print("expanded = ", dump(expanded))
+-- print("expanded = ", dump(expanded))
 -- ???
             dependency_line = table.concat(expanded, " ")
             table.insert(self.text, dependency_line .. "\n")
@@ -1343,13 +1343,13 @@ print("expanded = ", dump(expanded))
             error("wtf: '" .. line .. "'")
         end
     end
-    print(table.concat(self.text))
+    -- print(table.concat(self.text))
 end
 
 
 --[=[
 blud.phase3       = function ()
-    print(blud.phase2_text)
+    -- print(blud.phase2_text)
     local get_line          = blud.lines(blud.phase2_text)
     local action_legal_here = false
     local line              = get_line()
@@ -1427,7 +1427,7 @@ blud.operator_super = require("operator")
 -- for each target create the rule
 blud.add_rules = function(colon_operator, targets, prerequisites, action)
 
-print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
+-- print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
 
     local prereq_atoms = {}
     for _, prereq_name in ipairs(prerequisites) do
@@ -1446,7 +1446,7 @@ print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .
             errorf("'#1': undefined operator.", colon_operator)
         end
         action = action or blud.default_action
-        util.print("    calling operator %s with prereqs %s", colon_operator, util.dump(prereq_atoms))
+        -- util.print("    calling operator %s with prereqs %s", colon_operator, util.dump(prereq_atoms))
         operator(colon_operator, target, prereq_atoms, action)
 --        target.ADD_RULE(target, prereq_atoms, action)
     end

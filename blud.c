@@ -80,7 +80,7 @@ static int lua_get_dir_cache(lua_State *L) {
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
     {
         luaL_buffinit(L, &info.buffer);
-        printf("lua_get_dir_cache(%s)\n", dir);
+        // printf("lua_get_dir_cache(%s)\n", dir);
         os_get_dir(callback, (void*)&info, dir);
     }
     luaL_pushresult(&info.buffer);
@@ -240,7 +240,7 @@ static int lua_tokenize_dependency_line(lua_State *L) {
         start = rover;      // mark possible start of word
         while(*rover && !isspace((unsigned char)*rover))
             ++rover;
-        printf("token='%*.*s'\n", (int)(rover-start), (int)(rover-start), start);
+        // printf("token='%*.*s'\n", (int)(rover-start), (int)(rover-start), start);
         lua_pushlstring(L, start, rover - start);
         lua_rawseti(L, -2, ++index);
     }
@@ -489,16 +489,16 @@ int luaopen_mylib(lua_State *L) {
 }
 
 int main(int argc, char** argv) {
-    printf("blud build %d\n", BUILD_ID);
+    // printf("blud build %d\n", BUILD_ID);
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
-    fprintf(stderr, "before initialize_lua\n");
+    // fprintf(stderr, "before initialize_lua\n");
     initialize_lua(L, CSTRGet("init.lua"));
     luaopen_mylib(L);
 
     set_command_line(L, argc, argv);
 
-    fprintf(stderr, "before execute_lua_code\n");
+    // fprintf(stderr, "before execute_lua_code\n");
 //    execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
     execute_lua_code(L, CSTRGet("main.lua"), "[main.lua]");
 

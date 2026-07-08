@@ -27,8 +27,8 @@ local super_atom = {
     end
     ,
     ADD_PREREQUISITE = function(target, prerequisite)
-        util.print("ADD_PREREQUISITE target=%s", util.dump(target))
-        print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. util.dump(prerequisite) .. ")")
+        -- util.print("ADD_PREREQUISITE target=%s", util.dump(target))
+        -- print("ADD_PREREQUISITE(" .. target.NAME .. ", " .. util.dump(prerequisite) .. ")")
         local prerequisites = target.PREREQUISITES
         if prerequisites ~= nil then
             table.insert(prerequisites, prerequisite)
@@ -74,12 +74,12 @@ local super_atom = {
 --]]
     -- implement the "::" operator
     SOURCE_RULE = function(target, prerequisites, action)
-        print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
+        -- print("super_atom SOURCE_RULE target = " .. dump(target) .. ": " .. dump(prerequisites))
         local new_prereqs = {}
         local link_macro  = "LINK.o"
 
         for _, prerequisite in ipairs(prerequisites or {}) do
-            util.print("_,prerequisite = %s,%s", _, prerequisite)
+            -- util.print("_,prerequisite = %s,%s", _, prerequisite)
             local rule, file_stem, dir_stem = blud.implicit.find_reverse(prerequisite)
             if rule == nil then
                 error("no reverse rule for " .. prerequisite)
@@ -119,7 +119,7 @@ local super_atom = {
     end,
 
     APPLY_SPECIAL = function(atom, prerequisites)
-        print("APPLY_SPECIAL " .. dump(atom))
+        -- print("APPLY_SPECIAL " .. dump(atom))
         for _, prerequisite in ipairs(prerequisites) do
             
         end
@@ -182,16 +182,16 @@ local super_atom = {
     end,
     BUILD_PREREQUISITES = function(atom)
         if atom.RULE and atom.RULE.prereq_words then
-            util.print("RULE.prereq_words = %s", util.dump(atom.RULE.prereq_words))
+            -- util.print("RULE.prereq_words = %s", util.dump(atom.RULE.prereq_words))
             local prereq_names = glob_words(atom.RULE.prereq_words)
-            util.print("names=%s", util.dump(prereq_names))
+            -- util.print("names=%s", util.dump(prereq_names))
             atom.PREREQUISITES = atomize_words(prereq_names)
         end
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
         local newest_time = 0
         if prerequisites and #prerequisites > 0 then
-            util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
+            -- util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
             for _, prereq_name in ipairs(prerequisites) do
                 prerequisite = atom.BIND(prereq_name)
                 prerequisite.PARENT = atom
@@ -212,7 +212,7 @@ local super_atom = {
         assert(action)
 
         local exit_code
-        print("DO_ACTION in super atom for " .. target_atom.NAME)
+        -- print("DO_ACTION in super atom for " .. target_atom.NAME)
         exit_code = action(target_atom.SCOPE)
 
         if exit_code and exit_code ~= 0 then
@@ -259,7 +259,7 @@ blud.is_special_atom = function(atom)
 end
 
 blud.set_callback = function(target, hook_name, callback_func)
-print("set_callback(" .. target.NAME .. ", " .. hook_name .. ")")
+-- print("set_callback(" .. target.NAME .. ", " .. hook_name .. ")")
     -- make new metatable whose metatable is target metatable
     local new_meta      = setmetatable({}, getmetatable(target))
     new_meta.__index    = new_meta

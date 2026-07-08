@@ -188,7 +188,7 @@ int     main(int ArgCount, char**Args)
             {
 //            string simpleName {fs::path(Args[iArg]).filename().u8string()};
             string simpleName {fs::path(Args[iArg]).filename()};
-            fprintf(stderr, "name='%s'\n", simpleName.c_str());
+            // fprintf(stderr, "name='%s'\n", simpleName.c_str());
             // remember filename and its offset within big array.
             Names.push_back(simpleName);
             Offsets.push_back(Dest.GetOffset());

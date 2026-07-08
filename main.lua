@@ -91,7 +91,7 @@ function blud.luac_needs_building()
     return luac_needs_building
 end
 
-blud.printf("luac_needs_building == %s", blud.luac_needs_building())
+-- blud.printf("luac_needs_building == %s", blud.luac_needs_building())
 
 -- Example test
 blud.require("blud.lua")

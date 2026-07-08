@@ -13,7 +13,7 @@ do
         ["?="]  = true,
     }
     function M.match_macro_assign(line, skip_leading_white)
-        print("match_macro_assign(\"" .. util.dump(line) .. "\")")
+        -- print("match_macro_assign(\"" .. util.dump(line) .. "\")")
         local anchor = "^"
         if skip_leading_white then anchor = "" end
         local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"

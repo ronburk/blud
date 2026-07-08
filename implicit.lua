@@ -262,10 +262,10 @@ end
 function test_parse(pattern, pre_dir, post_dir, pre_file, post_file)
     local parsed,msg = parse_pattern(pattern)
     if not parsed then
-        util.print("test_parse of %q failed: %s", pattern, msg)
+        -- util.print("test_parse of %q failed: %s", pattern, msg)
         return
     else
-        util.print("parsed=%s", util.dump(parsed))
+        -- util.print("parsed=%s", util.dump(parsed))
     end
     msg = string.format("pattern=%q\n" ..
                               "pre_dir=%q, expected=%q\n" ..
@@ -282,7 +282,7 @@ function test_parse(pattern, pre_dir, post_dir, pre_file, post_file)
         post_dir  ~= parsed.post_dir  or
         pre_file  ~= parsed.pre_file  or
         post_file ~= parsed.post_file then
-        util.print("FAIL: %s", msg)
+        -- util.print("FAIL: %s", msg)
     end
 end
 test_parse("src/%%/build%", "src/", "", "build", "")
@@ -293,7 +293,7 @@ function test_pattern(pattern, path, dir_stem_expected, file_stem_expected)
     local parsed, msg, dir_stem, file_stem        
     parsed, msg = parse_pattern(pattern)
     if not parsed then
-        util.print("test_pattern of %q failed: %s", pattern, msg)
+        -- util.print("test_pattern of %q failed: %s", pattern, msg)
         return
     end
     dir_stem, file_stem = match_parsed_pattern(parsed, path)

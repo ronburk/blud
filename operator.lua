@@ -29,9 +29,9 @@ function M:BIND(atom)
 end
 
 function M:BUILD(target_atom)
-        util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
+        -- util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
         
-        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+        -- if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -39,7 +39,7 @@ function M:BUILD(target_atom)
         if not target_atom.RULE then
             -- must try implicit rules now
             local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
-            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
+            -- util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
             if implicit_rule then
                 blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
             end
@@ -53,8 +53,8 @@ function M:BUILD(target_atom)
         
         target_atom:PREPARE_PREREQUISITES()
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
-        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
-        print("    versus ", newest_prerequisite)
+        -- print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
+        -- print("    versus ", newest_prerequisite)
         if newest_prerequisite > timestamp then
             local rule = target_atom.RULE
             if rule and rule.action then
@@ -74,7 +74,7 @@ function M:PREPARE_PREREQUISITES(atom)
 end
 
 function M:EVAL_RULE(left_tokens, right_tokens, action)
-    util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
+    -- util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
 --    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
 --    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
 --    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
@@ -240,7 +240,7 @@ do  -- : operator
     local op = M.operator_new({})
     blud.operators[":"] = op
     function op:SET_PRIMARY_TARGETS(target_atoms)
-        util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
+        -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
         return target_atoms[1]
     end
 
@@ -250,12 +250,12 @@ do  -- : operator
             parent_name = target_atom.PARENT.NAME .. ' : '
             target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
         end
-        util.print("BUILD('%s%s') prereq=%s",
-                   parent_name,
-                   blud.dump_atom(target_atom),
-                   util.dump(target_atom.PREREQUISITES))
+        -- util.print("BUILD('%s%s') prereq=%s",
+        --            parent_name,
+        --            blud.dump_atom(target_atom),
+        --            util.dump(target_atom.PREREQUISITES))
 
---        if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+--        -- if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -298,12 +298,12 @@ do  -- %: operator
     local op = M.operator_new({})
     blud.operators["%:"] = op
     function op:SET_PRIMARY_TARGETS(target_atoms)
-        util.print("[%%:]:SET_PRIMARY_TARGETS()")
+        -- util.print("[%%:]:SET_PRIMARY_TARGETS()")
         -- implicit rules are not candidates for primary targets
         return nil
     end
     function op:ADD_RULE(target_atom, prereq_words, action)
-        util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+        -- util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
         local prereq_names = glob_words(prereq_words)
 --[[
         for i = 1, #prereq_names do
@@ -394,10 +394,10 @@ do  -- :: operator
             parent_name = target_atom.PARENT.NAME .. ' :: '
             target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
         end
-        util.print("BUILD('%s%s') prereq=%s",
-                   parent_name,
-                   blud.dump_atom(target_atom),
-                   util.dump(target_atom.PREREQUISITES))
+        -- util.print("BUILD('%s%s') prereq=%s",
+        --            parent_name,
+        --            blud.dump_atom(target_atom),
+        --            util.dump(target_atom.PREREQUISITES))
 
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
@@ -456,7 +456,7 @@ do
 
     -- a :TEST: name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atoms)
-        util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
+        -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
 end
@@ -469,13 +469,13 @@ do
 
     -- a build name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atoms)
-        util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
+        -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
 
     function op:ADD_RULE(target, prereqs, action)
-        util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
-                   util.dump(target), util.dump(prereqs))
+        -- util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
+        --            util.dump(target), util.dump(prereqs))
 
         if target.USED_AS_PREREQUISITE then
             blud.error("%s: build name was previously used as prerequisite.", target.NAME)
@@ -485,7 +485,7 @@ do
         -- is this the default build (first one mentioned?)
         if blud.BUILD_DEFAULT == nil then
             blud.BUILD_DEFAULT = target
-            print("default build is: ", blud.BUILD_DEFAULT.NAME)
+            -- print("default build is: ", blud.BUILD_DEFAULT.NAME)
         end
         local old_do_action = target.DO_ACTION
         target.DO_ACTION = function (target)

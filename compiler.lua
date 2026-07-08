@@ -202,7 +202,7 @@ do
         ["?="]  = true,
     }
     function match_macro_assign(line, skip_leading_white)
-        print("match_macro_assign(\"" .. line .. "\")")
+        -- print("match_macro_assign(\"" .. line .. "\")")
         local anchor = "^"
         if skip_leading_white then anchor = "" end
         local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
@@ -266,7 +266,7 @@ do
             compile_io.emit_line(line)
         else
             local parts = parts_from_dependency_line(line)
-            print(util.dump(parts))
+            -- print(util.dump(parts))
             compile_io.error("Don't know what this line is: %s", line)
         end
     end

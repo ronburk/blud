@@ -176,7 +176,7 @@ function emit_macro_assign(macro_name, operator, remainder)
 blud.macro_assign({macro_name}, {operator}, {remainder})
 ]]
 local var =  script:gsub("{(.-)}", variables)
-print(var)
+-- print(var)
 end
 
 
@@ -298,7 +298,7 @@ end
 
 
 
-print("start executing phase 1")
+-- print("start executing phase 1")
 local bludfile_path = get_bludfile_path()
 local luac_path = bludfile_path .. ".luac"
 local blud_exe_path = get_executable_path()
@@ -402,7 +402,7 @@ if luac_needs_building then
     
     f:close()
 --    print(blud_module_code)
-    print("phase 1 complete")
+    -- print("phase 1 complete")
     
 --    print(phase1_text)
 
@@ -411,8 +411,8 @@ if luac_needs_building then
     if not blud_primary_target_name  then
         print("No target given to build")
     else
-        print("building '" ..  blud_primary_target_name .. "'")
-        print( dump( blud_primary_target_name))
+        -- print("building '" ..  blud_primary_target_name .. "'")
+        -- print( dump( blud_primary_target_name))
     end
 
     blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
@@ -438,12 +438,12 @@ if luac_needs_building then
     if file then
         file:write(bytecode)
         file:close()
-        print("Bytecode saved to " .. luac_path)
+        -- print("Bytecode saved to " .. luac_path)
     else
         print("Failed to open file for writing")
     end
 else
-    print("using pre-compiled bludfile!")
+    -- print("using pre-compiled bludfile!")
     error("done")
 end
 
@@ -537,7 +537,7 @@ return
 end
 
 execute_bytecode(luac_path)
-print("now run user code")
+-- print("now run user code")
 blud.bludfile_code()
 if blud.command_line_options.target_names then
     blud.primary_targets = {}
@@ -545,22 +545,22 @@ if blud.command_line_options.target_names then
         table.insert(blud.primary_targets, blud.get_or_create_target(name))
     end
 end
-util.print("----------\n%d rules", #blud.rules)
+-- util.print("----------\n%d rules", #blud.rules)
 for i=1,#blud.rules do
-    util.print("[%d] %s", i, util.dump(blud.rules[i]))
+    -- util.print("[%d] %s", i, util.dump(blud.rules[i]))
 end
 
-util.print("OK, now ready to update: %s", util.dump(blud.primary_targets))
-print(type(blud.primary_targets), #blud.primary_targets)
+-- util.print("OK, now ready to update: %s", util.dump(blud.primary_targets))
+-- print(type(blud.primary_targets), #blud.primary_targets)
 if blud.primary_targets == nil then
     error("no targets to build")
 end
 blud.build_init()
 -- util.print("%d targets %s", #blud.primary_targets, util.dump(blud.primary_targets))
-util.print("%d targets", #blud.primary_targets)
+-- util.print("%d targets", #blud.primary_targets)
 for _,target in ipairs(blud.primary_targets) do
 --    util.print("build target '%s'", util.dump(target))
-    util.print("build target '%s'", target.NAME)
+    -- util.print("build target '%s'", target.NAME)
     target:BUILD()
 end
 
