@@ -499,6 +499,13 @@ do
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
     end
+
+    function op:BUILD(target)
+        util.print("[:BUILD:]:BUILD(%s)", target.NAME)
+        assert(target.SCOPE)
+        blud.scope_build.variables = target.SCOPE.variables
+        return 0
+    end
 end
 
 --[[
