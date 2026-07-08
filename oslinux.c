@@ -111,9 +111,12 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
     int             result = -1;
 
     if(path == NULL)
-        perror("malloc");
-    else if ((dp = opendir(dir)) == NULL)
-        perror("opendir");
+        perror("os_get_dir: malloc");
+    else if ((dp = opendir(dir)) == NULL) {
+        fprintf(stderr, "os_get_dir: opendir failed\n");
+        fprintf(stderr, "    dir: %s\n", dir);
+        perror("    opendir");
+    }
     else {
         while ((entry = readdir(dp)) != NULL) { // for each directory entry
             name = entry->d_name;
@@ -124,7 +127,11 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
                 break;
             }
             if (stat(path, &statbuf) == -1) {
-                perror("stat");
+                fprintf(stderr, "os_get_dir: stat failed\n");
+                fprintf(stderr, "    dir:  %s\n", dir);
+                fprintf(stderr, "    name: %s\n", name);
+                fprintf(stderr, "    path: %s\n", path);
+                perror("    stat");
                 break;
             }
             int64_t mod_time    = (int64_t)statbuf.st_mtime;
