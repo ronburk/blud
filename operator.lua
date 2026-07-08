@@ -498,6 +498,7 @@ do
         end
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
+        M.ADD_RULE(self, target, {}, nil)
     end
 
     function op:BUILD(target)
