@@ -1,4 +1,21 @@
  * blud
+** :TEST: operator
+Given:
+
+test :TEST: test[0-9][0-9][0-9][0-9]
+    : $(OWD)/blud -f $<
+
+means the following when 'test' is built:
+    - the action will be associated per-prerequisite, $< will be the prerequisite name
+    - recall that $(OWD) is the "output directory" of a given build (debug/release/etc)
+    - 'test' is a subdirectory of the cwd that contains '*.blud' files/directories
+    - 'test' will be created as a subdirectory of $(OWD)
+    - each prerequisite will be given a same-name subdirectory of $(OWD)/test/$<
+    - each prerequisite will be copied to $(OWD)/test/$<
+    - rm $(OWD)/test/$</$<.log
+    - blud will cd to $(OWD)/test/$< and execute the action
+    - blud will update $(OWD)/test/$</$<.log with the success and output of running the action
+
 ** ChatGPT conversation head
 
 I'm building a replacement for GNU Make using luajit hosted in C.
