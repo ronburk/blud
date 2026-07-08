@@ -199,7 +199,7 @@ blud.execute = function(scope, text)
     assert(type(text) == "string")
     local status
     if text then
-        -- print("blud.execute: ", text)
+        print(text)
         status = os.execute(text)
         -- print("    status = ", status)
     else
