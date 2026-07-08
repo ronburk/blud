@@ -4,31 +4,37 @@ These are working notes for ChatGPT sessions on Ron Burk's `blud` project. Sourc
 
 ## Current patch workflow
 
-The preferred workflow is deliberately simple. The sandbox source tree is `/mnt/data/blud`; the patch output is `/mnt/data/chatgpt.patch`.
+The patch workflow treats `/mnt/data/blud.zip` as the accepted baseline and `/mnt/data/blud` as disposable scratch space. Do not preserve the worktree as source-of-truth.
 
-If Ron has just uploaded a fresh current `blud.zip`, reset the sandbox from that zip:
-
-```sh
-./chatgpt_patch.sh fresh
-```
-
-For a normal patch request when no fresh zip was just uploaded, first check the sandbox:
+Commands:
 
 ```sh
 ./chatgpt_patch.sh status
+./chatgpt_patch.sh begin "Patch subject" file1 [file2 ...]
+# edit files in /mnt/data/blud
+./chatgpt_patch.sh propose
+./chatgpt_patch.sh accept
+./chatgpt_patch.sh reject
 ```
 
-Only proceed when status prints `READY`. If it prints `NEED_FRESH_ZIP`, stop and ask Ron for a fresh `blud.zip`. If it prints `DIRTY_WORKTREE` or `BAD_WORKTREE`, stop rather than guessing how to recover.
+State meanings:
 
-After editing and testing through the script, finish with the exact intended source files:
-
-```sh
-./chatgpt_patch.sh finish "Patch subject" file1 [file2 ...]
+```text
+READY              accepted baseline zip exists; no pending patch
+EDITING            begin succeeded; make the requested edits, then propose or reject
+CANDIDATE_READY    patch and candidate zip exist; Ron must accept or reject before another patch
+NEED_BASELINE_ZIP  no accepted /mnt/data/blud.zip is available
+BAD_EDIT_STATE     internal scratch/state mismatch; stop and ask Ron how to reset
+DIRTY_OR_MISMATCH  changed files differ from the file list recorded by begin
 ```
 
-`finish` runs `bash build.sh`, restores/excludes generated files, verifies that the changed files exactly match the file list, commits, writes `/mnt/data/chatgpt.patch`, and prints `PATCH READY`. Do not offer Ron a patch link unless this mechanical verification has just succeeded.
+`begin` always deletes and recreates `/mnt/data/blud` from `/mnt/data/blud.zip`, initializes a fresh git baseline, and records the patch subject and intended files.
 
-There is no `continue` mode and no active patch state. The rule is: fresh zip means `fresh`; otherwise use the existing clean sandbox; missing sandbox means stop and ask for a fresh zip.
+`propose` runs `bash build.sh`, restores/excludes generated files, verifies that the changed files exactly match the recorded file list, writes `/mnt/data/chatgpt.patch`, and writes `/mnt/data/blud_candidate.zip`. It does not overwrite `/mnt/data/blud.zip`.
+
+`accept` promotes `/mnt/data/blud_candidate.zip` to `/mnt/data/blud.zip`. `reject` deletes the candidate, patch, scratch worktree, and edit state.
+
+Do not offer Ron a patch link unless `propose` has just printed `PATCH READY`. If `status` prints `CANDIDATE_READY`, do not begin another patch; Ron must accept or reject the pending candidate first.
 
 ## Ron's local apply workflow
 

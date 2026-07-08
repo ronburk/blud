@@ -3,17 +3,24 @@ set -euo pipefail
 
 work=${CHATGPT_WORK:-/mnt/data/blud}
 zip=${CHATGPT_ZIP:-/mnt/data/blud.zip}
+candidate=${CHATGPT_CANDIDATE_ZIP:-/mnt/data/blud_candidate.zip}
 patch=${CHATGPT_PATCH:-/mnt/data/chatgpt.patch}
-patch_tmp=${CHATGPT_PATCH_TMP:-/mnt/data/chatgpt.patch.tmp}
+state_dir=${CHATGPT_STATE_DIR:-/mnt/data/chatgpt_patch_state}
 
 usage() {
     cat >&2 <<USAGE
 usage:
   $0 status
-  $0 fresh
-  $0 finish SUBJECT FILE...
+  $0 begin SUBJECT FILE...
+  $0 propose
+  $0 accept
+  $0 reject
 USAGE
     exit 2
+}
+
+say_state() {
+    echo "$1"
 }
 
 add_local_ignores() {
@@ -30,41 +37,35 @@ ensure_luajit_link() {
 }
 
 status() {
-    if [ ! -e "$work" ]; then
-        echo "NEED_FRESH_ZIP"
+    if [ -f "$candidate" ]; then
+        say_state "CANDIDATE_READY"
         return 0
     fi
 
-    if [ ! -d "$work/.git" ]; then
-        echo "BAD_WORKTREE"
+    if [ -d "$state_dir" ]; then
+        if [ -d "$work/.git" ]; then
+            say_state "EDITING"
+        else
+            say_state "BAD_EDIT_STATE"
+        fi
         return 0
     fi
 
-    cd "$work"
-
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "BAD_WORKTREE"
+    if [ ! -f "$zip" ]; then
+        say_state "NEED_BASELINE_ZIP"
         return 0
     fi
 
-    ensure_luajit_link
-
-    if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
-        echo "DIRTY_WORKTREE"
-        git status --short >&2
-        return 0
-    fi
-
-    echo "READY"
+    say_state "READY"
 }
 
-fresh() {
-    if [ ! -f "$zip" ]; then
-        echo "NEED_FRESH_ZIP" >&2
+init_work_from_zip() {
+    [ -f "$zip" ] || {
+        say_state "NEED_BASELINE_ZIP" >&2
         exit 1
-    fi
+    }
 
-    rm -rf "$work" "$patch" "$patch_tmp"
+    rm -rf "$work"
     mkdir -p "$work"
     unzip -q "$zip" -d "$work"
 
@@ -76,8 +77,40 @@ fresh() {
     ensure_luajit_link
     git add .
     git commit -q -m "Initial commit"
+}
 
-    echo "READY"
+begin() {
+    if [ "$#" -lt 2 ]; then
+        usage
+    fi
+
+    if [ -f "$candidate" ]; then
+        say_state "CANDIDATE_READY" >&2
+        echo "error: accept or reject the existing candidate before starting another patch" >&2
+        exit 1
+    fi
+
+    if [ -d "$state_dir" ]; then
+        say_state "EDITING" >&2
+        echo "error: finish or reject the current edit before starting another patch" >&2
+        exit 1
+    fi
+
+    subject=$1
+    shift
+
+    rm -rf "$patch"
+    init_work_from_zip
+
+    rm -rf "$state_dir"
+    mkdir -p "$state_dir"
+    printf '%s\n' "$subject" > "$state_dir/subject"
+    for file in "$@"; do
+        printf '%s\n' "$file"
+    done | sort -u > "$state_dir/files"
+    git rev-parse HEAD > "$state_dir/baseline"
+
+    say_state "EDITING"
 }
 
 restore_generated() {
@@ -85,16 +118,33 @@ restore_generated() {
     rm -f .build_id blud blud.d bludlua.d cstr blud.zip
 }
 
-finish() {
-    if [ "$#" -lt 2 ]; then
-        usage
+read_state() {
+    [ -d "$state_dir" ] || {
+        say_state "READY" >&2
+        echo "error: no patch is in progress; run begin first" >&2
+        exit 1
+    }
+
+    [ -f "$state_dir/subject" ] && [ -f "$state_dir/files" ] && [ -f "$state_dir/baseline" ] || {
+        say_state "BAD_EDIT_STATE" >&2
+        echo "error: incomplete patch state" >&2
+        exit 1
+    }
+}
+
+propose() {
+    [ "$#" -eq 0 ] || usage
+    read_state
+
+    if [ -f "$candidate" ]; then
+        say_state "CANDIDATE_READY" >&2
+        echo "error: accept or reject the existing candidate before proposing another patch" >&2
+        exit 1
     fi
 
-    subject=$1
-    shift
-
     [ -d "$work/.git" ] || {
-        echo "NEED_FRESH_ZIP" >&2
+        say_state "BAD_EDIT_STATE" >&2
+        echo "error: missing worktree" >&2
         exit 1
     }
 
@@ -103,32 +153,38 @@ finish() {
     git config user.email chatgpt@example.invalid
     ensure_luajit_link
 
-    rm -rf "$patch" "$patch_tmp"
+    baseline=$(cat "$state_dir/baseline")
+    current=$(git rev-parse HEAD)
+    if [ "$current" != "$baseline" ]; then
+        say_state "BAD_EDIT_STATE" >&2
+        echo "error: worktree HEAD changed since begin" >&2
+        exit 1
+    fi
 
-    bash build.sh
-    restore_generated
-
-    expected=$(mktemp)
+    patch_tmp=$(mktemp /mnt/data/chatgpt.patch.XXXXXX)
+    candidate_tmp=$(mktemp -u /mnt/data/blud_candidate.zip.XXXXXX)
     actual=$(mktemp)
     patch_files=$(mktemp)
     cleanup() {
-        rm -f "$expected" "$actual" "$patch_files"
+        rm -f "$patch_tmp" "$candidate_tmp" "$actual" "$patch_files"
     }
     trap cleanup EXIT
 
-    for file in "$@"; do
-        printf '%s\n' "$file"
-    done | sort -u > "$expected"
+    rm -rf "$patch"
+
+    bash build.sh
+    restore_generated
 
     {
         git diff --name-only
         git ls-files --others --exclude-standard
     } | sort -u > "$actual"
 
-    if ! cmp -s "$expected" "$actual"; then
-        echo "error: changed files do not match expected files" >&2
+    if ! cmp -s "$state_dir/files" "$actual"; then
+        say_state "DIRTY_OR_MISMATCH" >&2
+        echo "error: changed files do not match intended files" >&2
         echo "expected:" >&2
-        sed 's/^/    /' "$expected" >&2
+        sed 's/^/    /' "$state_dir/files" >&2
         echo "actual:" >&2
         sed 's/^/    /' "$actual" >&2
         exit 1
@@ -138,8 +194,9 @@ finish() {
 
     while IFS= read -r file; do
         git add -- "$file"
-    done < "$expected"
+    done < "$state_dir/files"
 
+    subject=$(cat "$state_dir/subject")
     git commit -q -m "$subject"
     git format-patch --stdout HEAD~1 > "$patch_tmp"
 
@@ -157,10 +214,10 @@ finish() {
         | sed -E 's#^diff --git a/([^ ]+) b/.*#\1#' \
         | sort -u > "$patch_files"
 
-    if ! cmp -s "$expected" "$patch_files"; then
-        echo "error: patch files do not match expected files" >&2
+    if ! cmp -s "$state_dir/files" "$patch_files"; then
+        echo "error: patch files do not match intended files" >&2
         echo "expected:" >&2
-        sed 's/^/    /' "$expected" >&2
+        sed 's/^/    /' "$state_dir/files" >&2
         echo "patch:" >&2
         sed 's/^/    /' "$patch_files" >&2
         exit 1
@@ -171,13 +228,40 @@ finish() {
         exit 1
     fi
 
-    mv "$patch_tmp" "$patch"
+    # The accepted baseline zip must not be overwritten until Ron accepts the patch.
+    zip -qr "$candidate_tmp" . -x '.git/*' 'luajit' 'luajit/*'
 
+    mv "$patch_tmp" "$patch"
+    mv "$candidate_tmp" "$candidate"
+    rm -rf "$state_dir"
+
+    say_state "CANDIDATE_READY"
     echo "PATCH READY"
     echo "PATCH: $patch"
+    echo "CANDIDATE: $candidate"
     grep -m1 '^Subject:' "$patch"
     echo "FILES:"
     sed 's/^/    /' "$patch_files"
+}
+
+accept() {
+    [ "$#" -eq 0 ] || usage
+
+    [ -f "$candidate" ] || {
+        say_state "READY" >&2
+        echo "error: no candidate patch to accept" >&2
+        exit 1
+    }
+
+    mv "$candidate" "$zip"
+    rm -rf "$state_dir" "$work" "$patch"
+    say_state "READY"
+}
+
+reject() {
+    [ "$#" -eq 0 ] || usage
+    rm -rf "$candidate" "$patch" "$state_dir" "$work"
+    say_state "READY"
 }
 
 case "${1:-}" in
@@ -185,13 +269,21 @@ case "${1:-}" in
         [ "$#" -eq 1 ] || usage
         status
         ;;
-    fresh)
-        [ "$#" -eq 1 ] || usage
-        fresh
-        ;;
-    finish)
+    begin)
         shift
-        finish "$@"
+        begin "$@"
+        ;;
+    propose)
+        shift
+        propose "$@"
+        ;;
+    accept)
+        shift
+        accept "$@"
+        ;;
+    reject)
+        shift
+        reject "$@"
         ;;
     *)
         usage
