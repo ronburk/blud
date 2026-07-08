@@ -29,11 +29,18 @@ expected=${CHATGPT_EXPECTED:-/mnt/data/chatgpt_patch.expected}
 actual=${CHATGPT_ACTUAL:-/mnt/data/chatgpt_patch.actual}
 expected_sorted=${CHATGPT_EXPECTED_SORTED:-/mnt/data/chatgpt_patch.expected.sorted}
 actual_patch_files=${CHATGPT_ACTUAL_PATCH_FILES:-/mnt/data/chatgpt_patch.files.actual}
+rolling_marker_name=.git/chatgpt_rolling_source
 
 add_local_ignores() {
     mkdir -p .git/info
     touch .git/info/exclude
     grep -qxF '/luajit' .git/info/exclude || printf '/luajit\n' >> .git/info/exclude
+}
+
+report_missing_rolling_source() {
+    echo "error: rolling source tree is not available" >&2
+    echo "upload a fresh blud.zip from your current repo, then use fresh mode" >&2
+    exit 1
 }
 
 ensure_luajit_link() {
@@ -43,7 +50,8 @@ ensure_luajit_link() {
     fi
 }
 
-rm -f "$patch" "$patch_tmp" "$actual" "$expected_sorted" "$actual_patch_files"
+rm -rf "$patch" "$patch_tmp"
+rm -f "$actual" "$expected_sorted" "$actual_patch_files"
 
 [ ! -f "$state" ] || {
     echo "error: active patch state already exists: $state" >&2
@@ -62,17 +70,16 @@ case "$mode" in
         git config user.email chatgpt@example.com
         git add .
         git commit -q -m "baseline from uploaded blud.zip"
+        printf '%s\n' "chatgpt rolling source" > "$rolling_marker_name"
         ensure_luajit_link
         ;;
 
     continue)
-        [ -d "$work/.git" ] || {
-            echo "error: $work is not a git repo; use fresh mode first" >&2
-            exit 1
-        }
+        [ -d "$work/.git" ] || report_missing_rolling_source
         cd "$work"
         git config user.name ChatGPT
         git config user.email chatgpt@example.com
+        [ -f "$rolling_marker_name" ] || report_missing_rolling_source
         ensure_luajit_link
         if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
             echo "error: work tree is not clean; finish or discard local changes first" >&2

@@ -9,11 +9,18 @@ expected=${CHATGPT_EXPECTED:-/mnt/data/chatgpt_patch.expected}
 actual=${CHATGPT_ACTUAL:-/mnt/data/chatgpt_patch.actual}
 expected_sorted=${CHATGPT_EXPECTED_SORTED:-/mnt/data/chatgpt_patch.expected.sorted}
 actual_patch_files=${CHATGPT_ACTUAL_PATCH_FILES:-/mnt/data/chatgpt_patch.files.actual}
+rolling_marker_name=.git/chatgpt_rolling_source
 
 add_local_ignores() {
     mkdir -p .git/info
     touch .git/info/exclude
     grep -qxF '/luajit' .git/info/exclude || printf '/luajit\n' >> .git/info/exclude
+}
+
+report_missing_rolling_source() {
+    echo "error: rolling source tree is not available" >&2
+    echo "upload a fresh blud.zip from your current repo, then use fresh mode" >&2
+    exit 1
 }
 
 ensure_luajit_link() {
@@ -23,7 +30,8 @@ ensure_luajit_link() {
     fi
 }
 
-rm -f "$patch" "$patch_tmp" "$actual" "$expected_sorted" "$actual_patch_files"
+rm -rf "$patch" "$patch_tmp"
+rm -f "$actual" "$expected_sorted" "$actual_patch_files"
 
 [ -f "$state" ] || {
     echo "error: missing $state; run chatgpt_patch_start.sh first" >&2
@@ -41,10 +49,9 @@ mode=$(sed -n '3p' "$state")
 
 cd "$work"
 
-[ -d .git ] || {
-    echo "error: $work is not a git repo" >&2
-    exit 1
-}
+[ -d .git ] || report_missing_rolling_source
+
+[ -f "$rolling_marker_name" ] || report_missing_rolling_source
 
 [ "$(git rev-parse HEAD)" = "$baseline" ] || {
     echo "error: HEAD is not the baseline recorded by chatgpt_patch_start.sh" >&2
