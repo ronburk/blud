@@ -1,11 +1,74 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include "os.h"
 
 #include <unistd.h>  // For getcwd()
-#include <stdlib.h>  // For malloc() and free()
+
+
+static int dir_exists(const char* path) {
+    struct stat statbuf;
+
+    return stat(path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
+}
+
+static int make_one_dir(const char* path) {
+    if (mkdir(path, 0777) == 0)
+        return 0;
+    if (errno == EEXIST && dir_exists(path))
+        return 1;
+    return 2;
+}
+
+int os_mkdir(const char* path) {
+    size_t      len;
+    char*       buffer;
+    char*       p;
+    int         result;
+
+    if (path == NULL || path[0] == '\0')
+        return 2;
+
+    if (dir_exists(path))
+        return 1;
+
+    len     = strlen(path);
+    buffer  = (char*)malloc(len + 1);
+    if (buffer == NULL)
+        return 2;
+    memcpy(buffer, path, len + 1);
+
+    while (len > 1 && buffer[len - 1] == '/')
+        buffer[--len] = '\0';
+
+    p = buffer;
+    while (*p == '/')
+        ++p;
+
+    for (; *p != '\0'; ++p) {
+        if (*p == '/') {
+            *p = '\0';
+            if (buffer[0] != '\0') {
+                result = make_one_dir(buffer);
+                if (result == 2) {
+                    free(buffer);
+                    return 2;
+                }
+            }
+            *p = '/';
+            while (p[1] == '/')
+                ++p;
+        }
+    }
+
+    result = make_one_dir(buffer);
+    free(buffer);
+
+    return result == 2 ? 2 : 0;
+}
 
 char* get_cwd() {
     char *buffer;
