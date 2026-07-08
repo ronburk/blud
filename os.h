@@ -7,7 +7,9 @@
 typedef void (*BLUD_DIR_CALLBACK)(void*, const char*, int64_t, int is_dir);
 extern int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir);
 extern int os_mkdir(const char* path);
+extern char* os_getcwd(void);
+extern int os_setcwd(const char* path);
 
-extern char* get_cwd();
+extern char* get_cwd(void);
 
 #endif // OS_H_

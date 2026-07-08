@@ -70,24 +70,35 @@ int os_mkdir(const char* path) {
     return result == 2 ? 2 : 0;
 }
 
-char* get_cwd() {
-    char *buffer;
-    size_t size = 256;
+char* os_getcwd(void) {
+    char*   buffer;
+    size_t  size = 256;
 
     while (1) {
         buffer = (char*)malloc(size);
-        if (buffer == NULL) {
-            return NULL; // Allocation failed
-        }
+        if (buffer == NULL)
+            return NULL;
 
-        // Use getcwd for Unix-like systems (Linux, macOS, etc.)
-        if (getcwd(buffer, size) != NULL) {
+        if (getcwd(buffer, size) != NULL)
             return buffer;
-        }
 
-        free(buffer); // Free the buffer if it was too small
-        size *= 2;    // Double the buffer size and try again
+        free(buffer);
+        if (errno != ERANGE)
+            return NULL;
+
+        size *= 2;
     }
+}
+
+int os_setcwd(const char* path) {
+    if (path == NULL || path[0] == '\0')
+        return -1;
+
+    return chdir(path) == 0 ? 0 : -1;
+}
+
+char* get_cwd(void) {
+    return os_getcwd();
 }
 
 
