@@ -2,39 +2,119 @@
 
 These are working notes for ChatGPT sessions on Ron Burk's `blud` project. Source code and Ron's current instructions override these notes if they disagree.
 
-## Current patch workflow
+## Current ChatGPT patch workflow
 
-The patch workflow treats `/mnt/data/blud.zip` as the accepted baseline and `/mnt/data/blud` as disposable scratch space. Do not preserve the worktree as source-of-truth.
+Ron controls synchronization explicitly.
 
-Commands:
+### Source authority
 
-```sh
-./chatgpt_patch.sh status
-./chatgpt_patch.sh begin "Patch subject" file1 [file2 ...]
-# edit files in /mnt/data/blud
-./chatgpt_patch.sh propose
-./chatgpt_patch.sh accept
-./chatgpt_patch.sh reject
-```
+For normal work, `/mnt/data/blud` is the only source tree.
 
-State meanings:
+Do not inspect, unpack, or compare against `/mnt/data/blud.zip` unless Ron explicitly says:
 
 ```text
-READY              accepted baseline zip exists; no pending patch
-EDITING            begin succeeded; make the requested edits, then propose or reject
-CANDIDATE_READY    patch and candidate zip exist; Ron must accept or reject before another patch
-NEED_BASELINE_ZIP  no accepted /mnt/data/blud.zip is available
-BAD_EDIT_STATE     internal scratch/state mismatch; stop and ask Ron how to reset
-DIRTY_OR_MISMATCH  changed files differ from the file list recorded by begin
+CLOBBER
 ```
 
-`begin` always deletes and recreates `/mnt/data/blud` from `/mnt/data/blud.zip`, initializes a fresh git baseline, and records the patch subject and intended files.
+`/mnt/data/blud.zip` is only an input to `CLOBBER`.
 
-`propose` runs `bash build.sh`, restores/excludes generated files, verifies that the changed files exactly match the recorded file list, writes `/mnt/data/chatgpt.patch`, and writes `/mnt/data/blud_candidate.zip`. It does not overwrite `/mnt/data/blud.zip`.
+### CLOBBER
 
-`accept` promotes `/mnt/data/blud_candidate.zip` to `/mnt/data/blud.zip`. `reject` deletes the candidate, patch, scratch worktree, and edit state.
+When Ron says `CLOBBER`, run:
 
-Do not offer Ron a patch link unless `propose` has just printed `PATCH READY`. If `status` prints `CANDIDATE_READY`, do not begin another patch; Ron must accept or reject the pending candidate first.
+```sh
+bash /mnt/data/CLOBBER.sh
+```
+
+Then report:
+
+```text
+WORKTREE: /mnt/data/blud
+HEAD: <short sha>
+STATUS: clean
+```
+
+Do not make source edits in the same response unless Ron explicitly asks.
+
+`CLOBBER.sh` deletes `/mnt/data/blud`, recreates it from `/mnt/data/blud.zip`, creates the LuaJIT symlink if available, initializes git, commits a baseline, removes stale `/mnt/data/chatgpt.patch`, runs `bash build.sh`, and requires clean git status afterward.
+
+### Normal patch work
+
+Before editing, run:
+
+```sh
+cd /mnt/data/blud
+test -d .git
+git status --porcelain
+```
+
+If `/mnt/data/blud/.git` is missing, stop and ask Ron to use `CLOBBER` with a fresh `blud.zip`.
+
+If `git status --porcelain` prints anything, stop and report the exact output. Do not guess whether the dirty files are harmless.
+
+If clean, edit only the requested files.
+
+After editing, test as requested, usually:
+
+```sh
+bash build.sh
+```
+
+Then verify patch contents:
+
+```sh
+git status --porcelain
+git diff --name-only
+```
+
+Only intended source files may be changed. Generated/build files should normally be ignored by `.gitignore`; do not add them.
+
+Create the patch with:
+
+```sh
+git add <intended files>
+git commit -m "<subject>"
+git format-patch -1 --stdout > /mnt/data/chatgpt.patch
+```
+
+Then verify:
+
+```sh
+grep '^Subject:' /mnt/data/chatgpt.patch
+grep '^diff --git' /mnt/data/chatgpt.patch
+```
+
+Offer the patch link only after this verification.
+
+### Patch acceptance/rejection
+
+If Ron accepts the patch, do nothing special. `/mnt/data/blud` already contains the patch commit.
+
+If Ron rejects the most recent ChatGPT patch, he may say:
+
+```text
+REVERT
+```
+
+Then run:
+
+```sh
+cd /mnt/data/blud
+git reset --hard HEAD~1
+rm -f /mnt/data/chatgpt.patch
+git status --porcelain
+```
+
+Report the resulting HEAD and clean/dirty status.
+
+### Hard rules
+
+- Normal work uses `/mnt/data/blud`, not `/mnt/data/blud.zip`.
+- `blud.zip` is read only by `CLOBBER.sh`.
+- No candidate zip workflow.
+- No accept/reject state files.
+- No fresh/continue mode.
+- No source patch link unless `/mnt/data/chatgpt.patch` was just generated and verified.
 
 ## Ron's local apply workflow
 
@@ -58,8 +138,8 @@ git am --abort
 
 - `build.sh` regenerates `bludlua.c`.
 - `bludlua.c` is generated and must not be included in source patches.
-- The finish script restores/excludes `bludlua.c` before committing.
-- Other build products such as `.build_id`, `blud`, `blud.d`, `bludlua.d`, `cstr`, and `blud.zip` are removed by the finish script before patch generation.
+- Generated/build files should be ignored by the repo `.gitignore` rather than special patch-script cleanup.
+- If `git status --porcelain` shows generated/build files before patch creation, stop and report the exact output instead of guessing.
 
 ## Build/test workflow
 
@@ -77,7 +157,7 @@ LuaJIT may need to exist or be symlinked as:
 /mnt/data/blud/luajit -> /mnt/data/LuaJIT-2.1
 ```
 
-The patch scripts try to create this symlink when `/mnt/data/LuaJIT-2.1` exists, and ignore it via `.git/info/exclude`.
+`CLOBBER.sh` creates this symlink when `/mnt/data/LuaJIT-2.1` exists. Normal patch work should not recreate the worktree or read `blud.zip` to fix this.
 
 ## Current source state and design direction
 
