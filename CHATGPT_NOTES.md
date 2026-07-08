@@ -4,31 +4,31 @@ These are working notes for ChatGPT sessions on Ron Burk's `blud` project. Sourc
 
 ## Current patch workflow
 
-The preferred workflow is a rolling sandbox repository in `/mnt/data/blud`.
+The preferred workflow is deliberately simple. The sandbox source tree is `/mnt/data/blud`; the patch output is `/mnt/data/chatgpt.patch`.
 
-Start from a fresh upload only when Ron uploads a new current `blud.zip` or when the rolling sandbox is missing/stale:
-
-```sh
-bash chatgpt_patch_start.sh fresh "Patch subject" file1 [file2 ...]
-```
-
-For subsequent patches made by ChatGPT in the same sandbox state, continue from the previous patch commit:
+If Ron has just uploaded a fresh current `blud.zip`, reset the sandbox from that zip:
 
 ```sh
-bash chatgpt_patch_start.sh continue "Patch subject" file1 [file2 ...]
+./chatgpt_patch.sh fresh
 ```
 
-Then edit only the requested/expected files and finish with:
+For a normal patch request when no fresh zip was just uploaded, first check the sandbox:
 
 ```sh
-bash chatgpt_patch_finish.sh
+./chatgpt_patch.sh status
 ```
 
-The finish script is the gatekeeper. It runs `bash build.sh`, restores/excludes generated files, verifies that the changed files exactly match the expected list, commits, writes `/mnt/data/chatgpt.patch`, and prints `PATCH READY` with the patch subject and file list. Do not offer Ron a patch link unless this mechanical verification has just succeeded.
+Only proceed when status prints `READY`. If it prints `NEED_FRESH_ZIP`, stop and ask Ron for a fresh `blud.zip`. If it prints `DIRTY_WORKTREE` or `BAD_WORKTREE`, stop rather than guessing how to recover.
 
-After a successful finish, `/mnt/data/blud` is intentionally left advanced to the new patch commit. The next ChatGPT-made patch should usually use `continue`, not re-unpack `blud.zip`.
+After editing and testing through the script, finish with the exact intended source files:
 
-If `continue` reports that the rolling source tree is unavailable, missing, not a git repo, not marked as ChatGPT rolling source, or not clean, stop and ask Ron for a fresh `blud.zip` before making another patch.
+```sh
+./chatgpt_patch.sh finish "Patch subject" file1 [file2 ...]
+```
+
+`finish` runs `bash build.sh`, restores/excludes generated files, verifies that the changed files exactly match the file list, commits, writes `/mnt/data/chatgpt.patch`, and prints `PATCH READY`. Do not offer Ron a patch link unless this mechanical verification has just succeeded.
+
+There is no `continue` mode and no active patch state. The rule is: fresh zip means `fresh`; otherwise use the existing clean sandbox; missing sandbox means stop and ask for a fresh zip.
 
 ## Ron's local apply workflow
 
