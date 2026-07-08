@@ -3,7 +3,7 @@ set -euo pipefail
 
 base_zip=/mnt/data/blud.zip
 work=/mnt/data/blud
-tmp=/mnt/data/blud_unpack.$$ 
+tmp=/mnt/data/blud_unpack.$$
 luajit_src=/mnt/data/LuaJIT-2.1
 
 say() {
@@ -14,6 +14,11 @@ die() {
     printf 'CLOBBER ERROR: %s\n' "$*" >&2
     exit 1
 }
+
+cleanup() {
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
 
 # Safety: this script is intentionally specific to ChatGPT's sandbox.
 [ "$work" = "/mnt/data/blud" ] || die "internal work path changed: $work"
@@ -40,7 +45,6 @@ say "source root: $src_dir"
 shopt -s dotglob nullglob
 mv "$src_dir"/* "$work"/
 shopt -u dotglob nullglob
-rm -rf "$tmp"
 
 cd "$work"
 
@@ -60,27 +64,7 @@ git init -b main >/dev/null 2>&1 || {
 git config user.name "ChatGPT"
 git config user.email "chatgpt@example.invalid"
 
-mkdir -p .git/info
-cat > .git/info/exclude <<'EXCLUDE'
-# ChatGPT sandbox build outputs and generated files
-/luajit
-/bludlua.c
-/blud
-/cstr
-/bludfile.luac
-/.build_id
-/blud.zip
-/*.d
-/*.o
-/*.luac
-/debug/
-/release/
-EXCLUDE
-
-rm -f /mnt/data/chatgpt.patch \
-      /mnt/data/blud_candidate.zip \
-      /mnt/data/chatgpt_patch.state \
-      /mnt/data/chatgpt_patch.expected
+rm -f /mnt/data/chatgpt.patch
 
 git add .
 git commit -m "baseline" >/dev/null
