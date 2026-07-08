@@ -492,7 +492,7 @@ do
             local result = old_do_action(target)
             if result == 0 then  -- if action didn't fail
                 assert(target.SCOPE)
-                blud.scope_build.variables = target.SCOPE.variables
+                blud.Scope.build.variables = target.SCOPE.variables
             end
             return result
         end
@@ -504,7 +504,7 @@ do
     function op:BUILD(target)
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE)
-        blud.scope_build.variables = target.SCOPE.variables
+        blud.Scope.build.variables = target.SCOPE.variables
         return 0
     end
 end
