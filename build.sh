@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+# ChatGPT sandbox convenience: create the LuaJIT symlink only in /mnt/data/blud.
+if [ "$PWD" = "/mnt/data/blud" ] && [ -d /mnt/data/LuaJIT-2.1 ]; then
+    if [ ! -e luajit ] && [ ! -L luajit ]; then
+        ln -s /mnt/data/LuaJIT-2.1 luajit
+    fi
+fi
+
 LUAJIT_DIR="./luajit"
 LUAJIT_SRC="$LUAJIT_DIR/src"
 LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
@@ -21,7 +28,7 @@ g++ -o cstr cstr.cpp $CFLAGS
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
-zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md test.blud test/* bludfile
+zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md test.blud test/* bludfile .gitignore
 if command -v xclip >/dev/null; then
     echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 else
