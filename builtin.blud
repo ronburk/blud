@@ -5,8 +5,8 @@ LINK.cxx.o = $(CXX) -o $@ $^ $(LDFLAGS)
 
 
 %.o : %.c
-    $(CC) $(CPPFLAGS) $(CINCLUDES) $(CFLAGS) -c $< -o $@
+    $(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 %.o : %.cpp
-    $(CXX) $(CPPFLAGS) $(CXXINCLUDES) $(CXXFLAGS) -c $< -o $@
+    $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
