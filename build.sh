@@ -28,7 +28,7 @@ g++ -o cstr cstr.cpp $CFLAGS
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
-zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md test.blud test/* bludfile .gitignore
+zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore
 if command -v xclip >/dev/null; then
     echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 else
