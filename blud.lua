@@ -14,6 +14,7 @@ util = require("util")
 
 blud_module_code = CSTRGet("runtime.lua")
 local function dump(o)
+    error("dump wasn't dead")
     if type(o) == 'table' then
         local s = '{ '
         for k,v in pairs(o) do
@@ -30,6 +31,7 @@ end
 
 
 function template(str, values)
+    error("template wasn't dead")
     return (str:gsub("{(.-)}", function(key)
                          return values[key] or "{" .. key .. "}"
     end))
@@ -45,6 +47,7 @@ blud_user_code = ""
 
 -- returns generator that lets you read/peek one line at a time from the file
 function buffered_line_io(file)
+    error("buffered_line_io wasn't dead")
     assert(io.type(file) == "file");
     local current_line; --  = file:read("*l")  -- Read the first line to prime the generator
     local has_peeked   = false
@@ -73,6 +76,7 @@ function buffered_line_io(file)
 end
 
 function buffered_line_io_string(input_string)
+    error("buffered_line_io_string wasn't dead")
     local lines = {}
     local pos = 1
 
@@ -97,6 +101,7 @@ end
 
 
 function calculate_indent(line)
+    error("calculate_indent wasn't dead")
     if line == nil then return 0 end
     local indent = 0
     for i = 1, #line do
@@ -114,6 +119,7 @@ function calculate_indent(line)
 end
 
 function atoms_to_string(atoms)
+    error("atoms_to_string wasn't dead")
     local result = ""
     for _, name in ipairs(atoms) do
         if result ~= "" then result = result .. ", " end
@@ -139,6 +145,7 @@ do
     }
 
     function line_is_lua(line)
+        error("line_is_lua wasn't dead")
         local result     = true
         local first_word = line:match("^%a+")
         if first_word ~= nil then
@@ -167,6 +174,7 @@ function lua_quote(str)
 end
 
 function emit_macro_assign(macro_name, operator, remainder)
+    error("emit_macro_assign wasn't dead")
     local variables = {
         macro_name = lua_quote(macro_name),
         operator   = lua_quote(operator),
@@ -218,6 +226,7 @@ function phase1_line_is_empty(line)
 end
 
 function preprocess(get_line)
+    error("preprocess wasn't dead")
     local previous_indent   = 0
 
     while true do     -- for line in file:lines() do
@@ -255,6 +264,7 @@ function preprocess(get_line)
 end
 
 function process_make_rule(line)
+    error("process_make_rule wasn't dead")
     local targets       = {}
     local prerequisites = {}
 
@@ -483,6 +493,7 @@ end
 
 
 local function split_lua_runtime_error(err)
+    error("split_lua_runtime_error wasn't dead")
     local chunk_name, generated_ln, message =
         text:match('^%[string "([^"]*)"%]:(%d+):%s*(.*)$')
 
@@ -649,4 +660,3 @@ end
     report_error(err, program);
     end
 ]]
-
