@@ -1481,7 +1481,9 @@ blud.get_or_create_target = function(target_name)
 end
 
 -- build
+--[[
 blud.run_build = function(primary_target)
+    error("run_build")
     local targets = {}
 --    print("blud " .. primary_target)
     table.insert(targets, blud.get_or_create_target(primary_target))
@@ -1490,6 +1492,7 @@ blud.run_build = function(primary_target)
         target:BUILD()
     end
 end
+--]]
 
 --[[UNIT_TESTS
 do
