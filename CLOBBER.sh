@@ -2,9 +2,10 @@
 set -euo pipefail
 
 base_zip=/mnt/data/blud.zip
+luajit_zip=/mnt/data/luajit.zip
 work=/mnt/data/blud
-tmp=/mnt/data/blud_unpack.$$
-luajit_src=/mnt/data/LuaJIT-2.1
+luajit_dir=$work/luajit
+patch_file=/mnt/data/chatgpt.patch
 
 say() {
     printf 'CLOBBER: %s\n' "$*"
@@ -15,46 +16,47 @@ die() {
     exit 1
 }
 
-cleanup() {
-    rm -rf "$tmp"
+need_upload() {
+    printf 'CLOBBER NEEDS UPLOAD: %s\n' "$1" >&2
+    printf 'Please upload %s, then rerun CLOBBER.sh.\n' "$(basename "$1")" >&2
+    exit 2
 }
-trap cleanup EXIT
 
-# Safety: this script is intentionally specific to ChatGPT's sandbox.
-[ "$work" = "/mnt/data/blud" ] || die "internal work path changed: $work"
-[ -f "$base_zip" ] || die "missing $base_zip"
+[ -f "$base_zip" ] || need_upload "$base_zip"
+[ -f "$luajit_zip" ] || need_upload "$luajit_zip"
 
 say "removing old scratch tree"
 rm -rf "$work"
-rm -rf "$tmp"
-mkdir -p "$work" "$tmp"
+mkdir -p "$work"
 
 say "unpacking $base_zip"
-unzip -q "$base_zip" -d "$tmp"
+unzip -q "$base_zip" -d "$work"
+[ -f "$work/build.sh" ] || die "missing $work/build.sh after unpacking $base_zip"
 
-mapfile -t build_files < <(find "$tmp" -maxdepth 2 -type f -name build.sh | sort)
-if [ "${#build_files[@]}" -ne 1 ]; then
-    printf 'CLOBBER ERROR: expected exactly one build.sh in unpacked zip, found %s\n' "${#build_files[@]}" >&2
-    printf '%s\n' "${build_files[@]}" >&2
-    exit 1
+if [ ! -d "$luajit_dir" ]; then
+    say "creating LuaJIT tree from $luajit_zip"
+    mkdir -p "$luajit_dir"
+    unzip -q "$luajit_zip" -d "$luajit_dir"
 fi
 
-src_dir=$(dirname "${build_files[0]}")
-say "source root: $src_dir"
+if [ ! -f "$luajit_dir/Makefile" ]; then
+    mapfile -t makefiles < <(find "$luajit_dir" -mindepth 2 -maxdepth 2 -type f -name Makefile | sort)
+    if [ "${#makefiles[@]}" -eq 1 ]; then
+        nested_dir=$(dirname "${makefiles[0]}")
+        say "flattening LuaJIT source root from $nested_dir"
+        shopt -s dotglob nullglob
+        mv "$nested_dir"/* "$luajit_dir"/
+        shopt -u dotglob nullglob
+        rmdir "$nested_dir"
+    fi
+fi
 
-shopt -s dotglob nullglob
-mv "$src_dir"/* "$work"/
-shopt -u dotglob nullglob
+[ -f "$luajit_dir/Makefile" ] || die "missing $luajit_dir/Makefile after unpacking $luajit_zip"
+
+say "building LuaJIT"
+make -C "$luajit_dir"
 
 cd "$work"
-
-say "setting up LuaJIT symlink if available"
-if [ -L luajit ] && [ ! -e luajit ]; then
-    rm -f luajit
-fi
-if [ ! -e luajit ] && [ -d "$luajit_src" ]; then
-    ln -s "$luajit_src" luajit
-fi
 
 say "initializing git baseline"
 git init -b main >/dev/null 2>&1 || {
@@ -64,7 +66,7 @@ git init -b main >/dev/null 2>&1 || {
 git config user.name "ChatGPT"
 git config user.email "chatgpt@example.invalid"
 
-rm -f /mnt/data/chatgpt.patch
+rm -f "$patch_file"
 
 git add .
 git commit -m "baseline" >/dev/null
