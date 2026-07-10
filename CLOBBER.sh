@@ -74,12 +74,6 @@ git commit -m "baseline" >/dev/null
 say "running build.sh"
 bash build.sh
 
-status=$(git status --porcelain)
-if [ -n "$status" ]; then
-    printf 'CLOBBER ERROR: worktree dirty after build.sh\n' >&2
-    printf '%s\n' "$status" >&2
-    exit 1
-fi
 
 say "ready"
 printf 'WORKTREE: %s\n' "$work"

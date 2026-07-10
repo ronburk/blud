@@ -32,7 +32,7 @@ zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgp
 if command -v xclip >/dev/null; then
     echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 else
-    . #echo "warning: xclip not found; clipboard not updated" >&2
+    echo "warning: xclip not found; clipboard not updated (no problem for ChatGPT)" >&2
 fi
 exit 0
 
