@@ -2,7 +2,7 @@
 set -euo pipefail
 
 base_zip=/mnt/data/blud.zip
-luajit_zip=/mnt/data/luajit.zip
+luajit_zip=/mnt/data/LuaJIT-2.1.zip
 work=/mnt/data/blud
 luajit_dir=$work/luajit
 patch_file=/mnt/data/chatgpt.patch
@@ -22,8 +22,21 @@ need_upload() {
     exit 2
 }
 
+need_fresh_blud() {
+    printf 'CLOBBER NEEDS FRESH UPLOAD: %s\n' "$base_zip" >&2
+    printf 'The uploaded files appear to have been rematerialized together.\n' >&2
+    printf 'Please upload a fresh %s, then rerun CLOBBER.sh.\n' "$(basename "$base_zip")" >&2
+    exit 2
+}
+
 [ -f "$base_zip" ] || need_upload "$base_zip"
-[ -f "$luajit_zip" ] || need_upload "$luajit_zip"
+[ -f "$luajit_zip" ] || die "missing persistent LuaJIT archive: $luajit_zip"
+
+blud_mtime=$(stat -c %Y "$base_zip")
+luajit_mtime=$(stat -c %Y "$luajit_zip")
+mtime_delta=$((blud_mtime - luajit_mtime))
+((mtime_delta < 0)) && mtime_delta=$((-mtime_delta))
+((mtime_delta > 5)) || need_fresh_blud
 
 say "removing old scratch tree"
 rm -rf "$work"
@@ -74,8 +87,6 @@ git commit -m "baseline" >/dev/null
 say "running build.sh"
 bash build.sh
 
-
 say "ready"
 printf 'WORKTREE: %s\n' "$work"
 printf 'HEAD: %s\n' "$(git rev-parse --short HEAD)"
-printf 'STATUS: clean\n'

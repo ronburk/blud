@@ -20,17 +20,44 @@ means the following when 'test' is built:
 
 In this project, it's important that you recognize the following user commands:
 
-/FRESH
-    Run the command "bash CLOBBER.sh". If you do not currently have
-    /mnt/data/CLOBBER.sh, ask the user to upload it, then run it.
-/PATCH
-    Use git to make a patch of the changes you've made in /mnt/data/blud,
-    supply the user with that patch.
-/REVERT
+.FRESH
+    Run:
+        rm -f /mnt/data/CLOBBER*.sh /mnt/data/blud*.zip
+
+    Ask the user to upload a fresh blud.zip, then stop.
+
+    When the user uploads blud.zip in response, first check to see if
+    the environment renamed it to blud(nnn).zip. If so, change the name
+    back to simply "blud.zip". Then run:
+        unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
+        bash /mnt/data/CLOBBER.sh
+.PATCH
+    Complete any unfinished changes we have been discussing.
+    In /mnt/data/blud:
+    1. Run the relevant build/tests.
+    2. Ensure only the intended non-ignored source changes remain.
+    3. Stage those changes and commit them as one commit.
+    4. Run:
+           rm -f /mnt/data/chatgpt.patch
+           git format-patch -1 --stdout HEAD > /mnt/data/chatgpt.patch
+    5. Supply the user with /mnt/data/chatgpt.patch.
+
+    The patch must be complete and usable with:
+        git am --no-3way
+    Do not provide a bare git diff instead.
+.REVERT
     Use git commands to revert the project in /mnt/data/blud. In this context,
     "revert" means use git to return it to the state it had at the
     previous /PATCH (undo the work of the current /PATCH). If there is
     no previous /PATCH, then use git to revert the repo to its initial state.
+.LS
+    Execute this command and show the results:
+        TZ=America/Los_Angeles ls -al  /mnt/data /mnt/data/blud
+    It is extremely important that you actually execute this command
+    and not just manufacture it yourself, otherwise the user has no
+    way of determining the state of your working environment.  DO NOT
+    ALTER the output of the 'ls' command before giving it to the user!
+
 
 ** ChatGPT conversation head
 
