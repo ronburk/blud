@@ -33,18 +33,22 @@ In this project, it's important that you recognize the following user commands:
         bash /mnt/data/CLOBBER.sh
 .PATCH
     Complete any unfinished changes we have been discussing.
+
     In /mnt/data/blud:
     1. Run the relevant build/tests.
     2. Ensure only the intended non-ignored source changes remain.
     3. Stage those changes and commit them as one commit.
     4. Run:
-           rm -f /mnt/data/chatgpt.patch
-           git format-patch -1 --stdout HEAD > /mnt/data/chatgpt.patch
-    5. Supply the user with /mnt/data/chatgpt.patch.
+           bash chatgpt_patch_finish.sh
+    5. If the script exits nonzero, report the failure and do not supply a patch.
+    6. Supply the exact uniquely named patch path printed by that script.
 
-    The patch must be complete and usable with:
-        git am --no-3way
-    Do not provide a bare git diff instead.
+    Never supply or link /mnt/data/chatgpt.patch.
+    Link only the exact uniquely named file printed by the script.
+    The user may download it locally under the fixed name chatgpt.patch.
+
+    Do not provide a bare git diff.
+
 .REVERT
     Use git commands to revert the project in /mnt/data/blud. In this context,
     "revert" means use git to return it to the state it had at the
