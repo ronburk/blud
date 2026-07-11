@@ -29,6 +29,20 @@ need_fresh_blud() {
     exit 2
 }
 
+shopt -s nullglob
+blud_archives=(/mnt/data/blud*.zip)
+shopt -u nullglob
+if ((${#blud_archives[@]} > 1)); then
+    printf 'CLOBBER ERROR: duplicate blud archives found:\n' >&2
+    printf '  %s\n' "${blud_archives[@]}" >&2
+    rm -f -- "${blud_archives[@]}"
+    printf 'CHATGPT_ACTION=RESTART_DOT_FRESH\n' >&2
+    printf 'All duplicate blud archives were removed. Start the .FRESH operation over from the beginning.\n' >&2
+    exit 3
+fi
+
+find /mnt/data -maxdepth 1 -type f -name '*(*).*' -delete
+
 [ -f "$base_zip" ] || need_upload "$base_zip"
 [ -f "$luajit_zip" ] || die "missing persistent LuaJIT archive: $luajit_zip"
 
