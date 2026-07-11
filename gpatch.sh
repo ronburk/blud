@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Safely apply chatgpt.patch to a clean branch synchronized with its upstream.
 set -euo pipefail
 
 patch=chatgpt.patch
