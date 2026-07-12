@@ -842,6 +842,30 @@ blud.build_init = function()
     end
 end
 
+blud.build_targets = function(targets)
+    local function build_default_target()
+        if not blud.default_target then
+            error("no default target to build")
+        end
+        blud.default_target:BUILD()
+    end
+
+    local previous_was_build = false
+    for _, target in ipairs(targets) do
+        local is_build = target.RULE and
+                         target.RULE.operator == blud.operators[":BUILD:"]
+        if previous_was_build and is_build then
+            build_default_target()
+        end
+        target:BUILD()
+        previous_was_build = is_build
+    end
+
+    if previous_was_build then
+        build_default_target()
+    end
+end
+
 -- blud.lines: return an iterator that returns one line of the string at a time
 blud.lines = function(str)
     local pos = 1
