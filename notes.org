@@ -31,6 +31,9 @@ In this project, it's important that you recognize the following user commands:
     back to simply "blud.zip". Then run:
         unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
         bash /mnt/data/CLOBBER.sh
+    If the user uploads a "blud*.zip" file, you should take that as an IMPLICIT
+    request for the .FRESH operation (though of course you no longer have to ask for it to be uploaded)
+
 .PATCH
     Complete any unfinished changes we have been discussing.
 
@@ -61,6 +64,18 @@ In this project, it's important that you recognize the following user commands:
     and not just manufacture it yourself, otherwise the user has no
     way of determining the state of your working environment.  DO NOT
     ALTER the output of the 'ls' command before giving it to the user!
+
+Preflight Check:
+
+Before reading or modifying any blud source, first run:
+
+```sh
+git -C /mnt/data/blud status --short --untracked-files=no
+```
+
+If it fails or reports any unexpected deleted tracked files (`D`),
+stop and recreate `/mnt/data/blud` from `blud.zip`. Otherwise proceed;
+expected modifications from ongoing work are allowed.
 
 
 ** ChatGPT conversation head
