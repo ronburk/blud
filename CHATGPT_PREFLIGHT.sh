@@ -3,6 +3,7 @@ set -u
 
 run_fresh()
 {
+    printf 'CHATGPT_PREFLIGHT: FAILED: %s\n' "$1" >&2
     echo "CHATGPT_PREFLIGHT: RUN .FRESH"
     exit 1
 }
@@ -11,12 +12,14 @@ archive=/mnt/data/blud.zip
 worktree=/mnt/data/blud
 
 # The authoritative archive must exist.
-[[ -f "${archive}" && -r "${archive}" ]] || run_fresh
+[[ -f "${archive}" ]] || run_fresh "${archive} does not exist"
+[[ -r "${archive}" ]] || run_fresh "${archive} is not readable"
 
 # A rematerialized environment has previously given unrelated top-level
 # files nearly identical timestamps. Ignore helper scripts that are
 # deliberately created immediately after blud.zip is uploaded.
-archive_mtime=$(stat -c %Y -- "${archive}") || run_fresh
+archive_mtime=$(stat -c %Y -- "${archive}") ||
+    run_fresh "stat failed for ${archive}"
 
 other_file_count=0
 different_timestamp_found=0
@@ -31,7 +34,8 @@ while IFS= read -r -d '' file; do
     esac
 
     other_file_count=$((other_file_count + 1))
-    file_mtime=$(stat -c %Y -- "${file}") || run_fresh
+    file_mtime=$(stat -c %Y -- "${file}") ||
+        run_fresh "stat failed for ${file}"
     difference=$((archive_mtime - file_mtime))
     if ((difference < 0)); then
         difference=$((-difference))
@@ -43,11 +47,11 @@ while IFS= read -r -d '' file; do
 done < <(find /mnt/data -maxdepth 1 -type f -print0)
 
 if ((other_file_count > 0 && different_timestamp_found == 0)); then
-    run_fresh
+    run_fresh "all ${other_file_count} unrelated top-level files have timestamps within 5 seconds of ${archive}"
 fi
 
 # The reconstructed worktree and bundled LuaJIT inputs must still exist.
-[[ -d "${worktree}" ]] || run_fresh
+[[ -d "${worktree}" ]] || run_fresh "${worktree} does not exist"
 
 for file in \
     "${worktree}/luajit/src/libluajit.a" \
@@ -56,12 +60,12 @@ for file in \
     "${worktree}/luajit/src/lauxlib.h" \
     "${worktree}/luajit/src/lualib.h"
 do
-    [[ -f "${file}" ]] || run_fresh
+    [[ -f "${file}" ]] || run_fresh "required file ${file} does not exist"
 done
 
 # Git must recognize the worktree, and no tracked file may be deleted.
 status=$(git -C "${worktree}" status --short --untracked-files=no 2>/dev/null) ||
-    run_fresh
+    run_fresh "git status failed in ${worktree}"
 
 if printf '%s\n' "${status}" |
     awk '
@@ -73,7 +77,7 @@ if printf '%s\n' "${status}" |
         }
     '
 then
-    run_fresh
+    run_fresh "git reports one or more deleted tracked files in ${worktree}"
 fi
 
 echo "CHATGPT_PREFLIGHT: OK"

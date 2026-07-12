@@ -42,7 +42,7 @@ unzip -p /mnt/data/blud.zip CHATGPT_PREFLIGHT.sh > /mnt/data/CHATGPT_PREFLIGHT.s
 bash /mnt/data/CHATGPT_PREFLIGHT.sh
 ```
 
-Proceed only when it prints `CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do not attempt manual recovery.
+Proceed only when it prints `CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do not attempt manual recovery. When asking for a fresh archive, include the specific failed command or preflight test and its diagnostic output; never merely say "Please upload a fresh `blud.zip`."
 
 ### `.PATCH`
 
