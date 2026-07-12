@@ -19,7 +19,8 @@ means the following when 'test' is built:
 ** ChatGPT Project Instructions
 
 Unless otherwise requested, show details of what you're thinking/doing
-when forming responses. Especially show the Linux commands you run.
+when forming responses. Do this in real time as you progress along each
+step in forming the response. Especially show the Linux commands you run.
 
 In this project, it's important that you recognize the following user commands:
 
@@ -70,11 +71,9 @@ In this project, it's important that you recognize the following user commands:
 
 Preflight Check:
 
-Before reading or modifying any blud source, extract and run the preflight
-script from the authoritative archive:
+Before reading or modifying any blud source, extract and run the preflight script:
 
-    unzip -p /mnt/data/blud.zip CHATGPT_PREFLIGHT.sh > /mnt/data/CHATGPT_PREFLIGHT.sh
-    bash /mnt/data/CHATGPT_PREFLIGHT.sh
+    bash /mnt/data/blud/CHATGPT_PREFLIGHT.sh
 
 Proceed only if the script exits successfully and prints:
 
