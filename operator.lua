@@ -431,7 +431,7 @@ do
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
 
-    local function test_word(suite_name, word)
+    local function relativize_test_path(suite_name, word)
         -- Relative test names are interpreted inside the suite directory.
         if word:match("^/") or word:match("^[A-Za-z]:[/\\]") then
             return word
@@ -442,7 +442,7 @@ do
     local function expand_test_words(suite_name, prereq_words)
         local patterns = {}
         for _, word in ipairs(prereq_words) do
-            table.insert(patterns, test_word(suite_name, word))
+            table.insert(patterns, relativize_test_path(suite_name, word))
         end
         return glob_words(patterns)
     end
