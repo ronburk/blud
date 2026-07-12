@@ -3,7 +3,7 @@
 Given:
 
 test :TEST: test[0-9][0-9][0-9][0-9]
-    : $(OWD)/blud -f $<
+    $(OWD)/blud -f $<
 
 means the following when 'test' is built:
     - the action will be associated per-prerequisite, $< will be the prerequisite name
