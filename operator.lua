@@ -431,10 +431,80 @@ do
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
 
+    local function test_word(suite_name, word)
+        if word:match("^/") or word:match("^[A-Za-z]:[/\\]") then
+            return word
+        end
+        return suite_name .. "/" .. word
+    end
+
+    local function expand_test_words(suite_name, prereq_words)
+        local patterns = {}
+        for _, word in ipairs(prereq_words) do
+            table.insert(patterns, test_word(suite_name, word))
+        end
+        return glob_words(patterns)
+    end
+
     -- a :TEST: name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atom)
-        -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
+    end
+
+    function op:ADD_RULE(target, prereq_words, action)
+        if not action or action == blud.default_action then
+            blud.error("#1: :TEST: requires an action.", target.NAME)
+        end
+
+        if not target.RULE then
+            M.ADD_RULE(self, target, {}, nil)
+        elseif target.RULE.operator ~= self then
+            blud.error("#1: target used with more than one operator.", target.NAME)
+        end
+
+        target.TESTS = target.TESTS or {}
+        target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
+
+        local test_names = expand_test_words(target.NAME, prereq_words)
+        for _, test_name in ipairs(test_names) do
+            local test_atom = blud.get_or_create_target(test_name)
+
+            if not target.TESTS_BY_NAME[test_name] then
+                target.TESTS_BY_NAME[test_name] = test_atom
+                table.insert(target.TESTS, test_atom)
+            end
+
+            test_atom.TEST_ACTIONS = test_atom.TEST_ACTIONS or {}
+            test_atom.TEST_ACTIONS[target] = action
+        end
+    end
+
+    function op:BUILD(target)
+        local tests = target.TESTS or {}
+        if #tests == 0 then
+            blud.error("#1: :TEST: matched no tests.", target.NAME)
+        end
+
+        for _, test_atom in ipairs(tests) do
+            local action = test_atom.TEST_ACTIONS[target]
+            assert(action)
+
+            test_atom.SCOPE.parent = target.SCOPE
+            test_atom:BIND()
+
+            local action_target = blud.new_atom(test_atom.NAME)
+            action_target.PREREQUISITES = { test_atom }
+            action_target.BOUND_NAME = test_atom.BOUND_NAME
+            action_target.SCOPE = blud.Scope:new_target_scope(action_target)
+            action_target.SCOPE.parent = target.SCOPE
+
+            local status = action(action_target.SCOPE)
+            if status and status ~= 0 then
+                error("command failed[" .. status .. "]: " .. test_atom.NAME)
+            end
+        end
+
+        return blud.current_time
     end
 end
 
