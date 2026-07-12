@@ -293,6 +293,7 @@ end
 blud.dir_cache       = {}
 blud.operators       = {}
 blud.build_name      = nil
+blud.default_target  = nil
 blud.primary_targets = nil
 blud.array_append    = function(array, more)
     if not (type(array) == "table" and type(more) == "table") then
@@ -1440,8 +1441,8 @@ blud.add_rules = function(colon_operator, targets, prerequisites, action)
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
         if not target.IMPLICIT and colon_operator ~= ':BUILD:' then
-            if blud.primary_targets == nil then
-                blud.primary_targets = { target }
+            if blud.default_target == nil then
+                blud.default_target = target
             end
         end
         local operator = blud.operators[colon_operator]

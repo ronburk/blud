@@ -555,6 +555,8 @@ if blud.command_line_options.target_names then
     for _, name in ipairs(blud.command_line_options.target_names) do
         table.insert(blud.primary_targets, blud.get_or_create_target(name))
     end
+elseif blud.default_target then
+    blud.primary_targets = { blud.default_target }
 end
 -- util.print("----------\n%d rules", #blud.rules)
 for i=1,#blud.rules do

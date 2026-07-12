@@ -131,10 +131,10 @@ function M:ADD_RULES(target_words, prereq_words, action)
     
     for i=1, #targets do
         local target_atom = targets[i]
-        if not blud.primary_targets then
-            local primary =  self:SET_PRIMARY_TARGETS(target_atom)
-            if primary then
-                blud.primary_targets = {primary}
+        if not blud.default_target then
+            local default_target = self:SET_PRIMARY_TARGETS(target_atom)
+            if default_target then
+                blud.default_target = default_target
             end
         end
         if not group then -- multiple targets synonym for multiple rules
@@ -239,9 +239,9 @@ end
 do  -- : operator
     local op = M.operator_new({})
     blud.operators[":"] = op
-    function op:SET_PRIMARY_TARGETS(target_atoms)
-        -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
-        return target_atoms[1]
+    function op:SET_PRIMARY_TARGETS(target_atom)
+        -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atom))
+        return target_atom
     end
 
     function op:BUILD(target_atom)
@@ -297,7 +297,7 @@ end
 do  -- %: operator
     local op = M.operator_new({})
     blud.operators["%:"] = op
-    function op:SET_PRIMARY_TARGETS(target_atoms)
+    function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[%%:]:SET_PRIMARY_TARGETS()")
         -- implicit rules are not candidates for primary targets
         return nil
@@ -455,7 +455,7 @@ do
     blud.operators[":TEST:"] = op
 
     -- a :TEST: name cannot be a primary target
-    function op:SET_PRIMARY_TARGETS(target_atoms)
+    function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
@@ -468,7 +468,7 @@ do
     blud.operators[":BUILD:"] = op
 
     -- a build name cannot be a primary target
-    function op:SET_PRIMARY_TARGETS(target_atoms)
+    function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
