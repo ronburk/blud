@@ -427,29 +427,6 @@ do  -- :: operator
     end
 end
 
---[[
-blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
-    return target:SOURCE_RULE(prereq_atoms, action)
-end
-]]
---[[
-blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)
-    print("Do :BUILD: for target " .. target.NAME .. " with " .. #prereq_atoms .. " args ")
-    -- determine value of OWD
-    local owd = target.NAME
-    if #prereq_atoms > 0 then
-        owd = prereq_atoms[1].NAME
-    end
-    -- is this the default build (first one mentioned?)
-    if blud.BUILD_DEFAULT == nil then
-        blud.BUILD_DEFAULT = target
-        print("default build is: ", blud.BUILD_DEFAULT.NAME)
-    end
-
-    -- need to give .GLOBAL_MACRO attribute to target
-end
---]]
-
 do
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
@@ -482,19 +459,11 @@ do
         end
         target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
         target.ACTION = action
-        -- is this the default build (first one mentioned?)
-        if blud.BUILD_DEFAULT == nil then
-            blud.BUILD_DEFAULT = target
-            -- print("default build is: ", blud.BUILD_DEFAULT.NAME)
-        end
-        local old_do_action = target.DO_ACTION
-        target.DO_ACTION = function (target)
-            local result = old_do_action(target)
-            if result == 0 then  -- if action didn't fail
-                assert(target.SCOPE)
-                blud.Scope.build.variables = target.SCOPE.variables
-            end
-            return result
+        if target.SCOPE.variables.OWD == nil then
+            target.SCOPE:set("OWD", {
+                [1] = target.NAME,
+                name = "OWD",
+            })
         end
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
@@ -504,6 +473,11 @@ do
     function op:BUILD(target)
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE)
+        local owd = target.SCOPE:get_text("OWD")
+        local mkdir_result = os_mkdir(owd)
+        if mkdir_result == 2 then
+            error("could not create build directory: " .. owd)
+        end
         blud.Scope.build.variables = target.SCOPE.variables
         return 0
     end
