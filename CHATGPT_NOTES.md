@@ -27,12 +27,22 @@ Current `CLOBBER.sh`:
 
 - Rejects multiple `/mnt/data/blud*.zip` archives, deletes them all, and requests `.FRESH` restart.
 - Only after that check passes, deletes top-level files matching `/mnt/data/*(*).*`.
-- Rejects a probably rematerialized stale `blud.zip` when its mtime is suspiciously close to the persistent LuaJIT archive.
 - Recreates `/mnt/data/blud` from `/mnt/data/blud.zip`.
-- Creates and builds `/mnt/data/blud/luajit` from `/mnt/data/LuaJIT-2.1.zip` when needed.
+- Requires the bundled LuaJIT static archive and four headers under `/mnt/data/blud/luajit/src`.
 - Initializes a clean git `main` baseline commit and runs `bash build.sh`.
 
 Do not rely on `/mnt/data/CLOBBER.sh` or `/mnt/data/blud` persisting between turns.
+
+### Preflight
+
+Before reading or modifying blud source, extract and run:
+
+```sh
+unzip -p /mnt/data/blud.zip CHATGPT_PREFLIGHT.sh > /mnt/data/CHATGPT_PREFLIGHT.sh
+bash /mnt/data/CHATGPT_PREFLIGHT.sh
+```
+
+Proceed only when it prints `CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do not attempt manual recovery.
 
 ### `.PATCH`
 

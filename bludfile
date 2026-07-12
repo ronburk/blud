@@ -3,7 +3,7 @@ CC  = gcc
 CXX = g++
 CFLAGS = -g
 CPPFLAGS += -I./luajit/src
-LUAJIT_LDFLAGS ?= -L./luajit/src -lluajit
+LUAJIT_LDFLAGS ?= ./luajit/src/libluajit.a -lm -ldl
 LDFLAGS = $(LUAJIT_LDFLAGS)
 CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -DBUILD_ID=666
 

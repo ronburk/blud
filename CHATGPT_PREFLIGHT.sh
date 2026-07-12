@@ -18,6 +18,9 @@ worktree=/mnt/data/blud
 # deliberately created immediately after blud.zip is uploaded.
 archive_mtime=$(stat -c %Y -- "${archive}") || run_fresh
 
+other_file_count=0
+different_timestamp_found=0
+
 while IFS= read -r -d '' file; do
     name=${file##*/}
 
@@ -27,20 +30,34 @@ while IFS= read -r -d '' file; do
             ;;
     esac
 
+    other_file_count=$((other_file_count + 1))
     file_mtime=$(stat -c %Y -- "${file}") || run_fresh
     difference=$((archive_mtime - file_mtime))
     if ((difference < 0)); then
         difference=$((-difference))
     fi
 
-    if ((difference <= 5)); then
-        run_fresh
+    if ((difference > 5)); then
+        different_timestamp_found=1
     fi
 done < <(find /mnt/data -maxdepth 1 -type f -print0)
 
-# The reconstructed worktree and its LuaJIT executable must still exist.
+if ((other_file_count > 0 && different_timestamp_found == 0)); then
+    run_fresh
+fi
+
+# The reconstructed worktree and bundled LuaJIT inputs must still exist.
 [[ -d "${worktree}" ]] || run_fresh
-[[ -x "${worktree}/luajit/src/luajit" ]] || run_fresh
+
+for file in \
+    "${worktree}/luajit/src/libluajit.a" \
+    "${worktree}/luajit/src/lua.h" \
+    "${worktree}/luajit/src/luaconf.h" \
+    "${worktree}/luajit/src/lauxlib.h" \
+    "${worktree}/luajit/src/lualib.h"
+do
+    [[ -f "${file}" ]] || run_fresh
+done
 
 # Git must recognize the worktree, and no tracked file may be deleted.
 status=$(git -C "${worktree}" status --short --untracked-files=no 2>/dev/null) ||
