@@ -18,6 +18,9 @@ means the following when 'test' is built:
 
 ** ChatGPT Project Instructions
 
+Unless otherwise requested, show details of what you're thinking/doing
+when forming responses. Especially show the Linux commands you run.
+
 In this project, it's important that you recognize the following user commands:
 
 .FRESH
