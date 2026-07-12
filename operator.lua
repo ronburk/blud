@@ -432,6 +432,7 @@ do
     blud.operators[":TEST:"] = op
 
     local function test_word(suite_name, word)
+        -- Relative test names are interpreted inside the suite directory.
         if word:match("^/") or word:match("^[A-Za-z]:[/\\]") then
             return word
         end
@@ -457,6 +458,8 @@ do
         end
 
         if not target.RULE then
+            -- Record the suite as a :TEST: target, but keep its individual
+            -- test cases and actions outside the ordinary one-rule model.
             M.ADD_RULE(self, target, {}, nil)
         elseif target.RULE.operator ~= self then
             blud.error("#1: target used with more than one operator.", target.NAME)
@@ -470,10 +473,13 @@ do
             local test_atom = blud.get_or_create_target(test_name)
 
             if not target.TESTS_BY_NAME[test_name] then
+                -- Preserve the order in which tests first enter the suite.
                 target.TESTS_BY_NAME[test_name] = test_atom
                 table.insert(target.TESTS, test_atom)
             end
 
+            -- Actions are associated with test atoms, not with the suite rule.
+            -- A later assertion deliberately replaces an earlier default.
             test_atom.TEST_ACTIONS = test_atom.TEST_ACTIONS or {}
             test_atom.TEST_ACTIONS[target] = action
         end
@@ -492,6 +498,8 @@ do
             test_atom.SCOPE.parent = target.SCOPE
             test_atom:BIND()
 
+            -- Run the action as though it belonged to a target whose first
+            -- prerequisite is this test, so that $< expands to the test name.
             local action_target = blud.new_atom(test_atom.NAME)
             action_target.PREREQUISITES = { test_atom }
             action_target.BOUND_NAME = test_atom.BOUND_NAME
