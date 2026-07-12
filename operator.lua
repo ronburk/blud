@@ -540,6 +540,9 @@ do
         if target.USED_AS_PREREQUISITE then
             blud.error("%s: build name was previously used as prerequisite.", target.NAME)
         end
+        if not blud.default_build then
+            blud.default_build = target
+        end
         target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
         target.ACTION = action
         if target.SCOPE.variables.OWD == nil then
