@@ -293,6 +293,7 @@ end
 blud.dir_cache       = {}
 blud.operators       = {}
 blud.build_name      = nil
+blud.default_build   = nil
 blud.default_target  = nil
 blud.primary_targets = nil
 blud.array_append    = function(array, more)
@@ -836,6 +837,11 @@ blud.build_init = function()
 end
 
 blud.build_targets = function(targets)
+    local function is_build_target(target)
+        return target.RULE and
+               target.RULE.operator == blud.operators[":BUILD:"]
+    end
+
     local function build_default_target()
         if not blud.default_target then
             error("no default target to build")
@@ -843,10 +849,13 @@ blud.build_targets = function(targets)
         blud.default_target:BUILD()
     end
 
+    if targets[1] and not is_build_target(targets[1]) and blud.default_build then
+        blud.default_build:BUILD()
+    end
+
     local previous_was_build = false
     for _, target in ipairs(targets) do
-        local is_build = target.RULE and
-                         target.RULE.operator == blud.operators[":BUILD:"]
+        local is_build = is_build_target(target)
         if previous_was_build and is_build then
             build_default_target()
         end
