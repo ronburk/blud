@@ -830,16 +830,9 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
-    local OWD = {[1] = ".", ["name"] = "OWD"}
-    blud.Scope.base:set("OWD", OWD)
-    if blud.BUILD_DEFAULT then
-        local mkdir_result = os_mkdir(blud.BUILD_DEFAULT.NAME)
-        if mkdir_result == 2 then
-            error("could not create build directory: " .. blud.BUILD_DEFAULT.NAME)
-        end
-        OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
-        blud.Scope.bludfile:set("OWD", OWD)
-    end
+    blud.Scope.build.variables = {
+        OWD = { [1] = ".", name = "OWD" },
+    }
 end
 
 blud.build_targets = function(targets)
