@@ -486,6 +486,11 @@ do
     end
 
     function op:BUILD(target)
+        local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
+        if os_mkdir(test_dir) == 2 then
+            error("could not create test directory: " .. test_dir)
+        end
+
         local tests = target.TESTS or {}
         if #tests == 0 then
             blud.error("#1: :TEST: matched no tests.", target.NAME)
