@@ -447,6 +447,10 @@ do
         return glob_words(patterns)
     end
 
+    local function test_log_name(test_name)
+        return test_name .. ".log"
+    end
+
     -- a :TEST: name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atom)
         return nil
@@ -485,10 +489,12 @@ do
         end
     end
 
-    function op:BUILD(target)
-        local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
-        if os_mkdir(test_dir) == 2 then
-            error("could not create test directory: " .. test_dir)
+    function op:PREPARE_PREREQUISITES(target)
+        local rule = target.RULE
+        assert(rule)
+
+        if rule.test_rule_prepared then
+            return
         end
 
         local tests = target.TESTS or {}
@@ -496,28 +502,49 @@ do
             blud.error("#1: :TEST: matched no tests.", target.NAME)
         end
 
-        for _, test_atom in ipairs(tests) do
-            local action = test_atom.TEST_ACTIONS[target]
-            assert(action)
-
-            test_atom.SCOPE.parent = target.SCOPE
-            test_atom:BIND()
-
-            -- Run the action as though it belonged to a target whose first
-            -- prerequisite is this test, so that $< expands to the test name.
-            local action_target = blud.new_atom(test_atom.NAME)
-            action_target.PREREQUISITES = { test_atom }
-            action_target.BOUND_NAME = test_atom.BOUND_NAME
-            action_target.SCOPE = blud.Scope:new_target_scope(action_target)
-            action_target.SCOPE.parent = target.SCOPE
-
-            local status = action(action_target.SCOPE)
-            if status and status ~= 0 then
-                error("command failed[" .. status .. "]: " .. test_atom.NAME)
-            end
+        local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
+        if os_mkdir(test_dir) == 2 then
+            error("could not create test directory: " .. test_dir)
         end
 
-        return blud.current_time
+        local log_names = {}
+        for _, test_atom in ipairs(tests) do
+            local test_action = test_atom.TEST_ACTIONS[target]
+            assert(test_action)
+
+            local log_name = test_log_name(test_atom.NAME)
+            local log_atom = blud.get_or_create_target(log_name)
+            if log_atom.RULE then
+                blud.error("#1: test log target already has a rule.", log_name)
+            end
+
+            local function log_action(scope)
+                local log_path = scope:get_text("@")
+                os.remove(log_path)
+
+                local status = test_action(scope)
+                if status and status ~= 0 then
+                    return status
+                end
+
+                util.string_to_file(log_path, "success\n")
+                return 0
+            end
+
+            blud.operators[":"]:ADD_RULE(
+                log_atom,
+                { test_atom.NAME },
+                log_action
+            )
+            table.insert(log_names, log_name)
+        end
+
+        rule.prereq_words = log_names
+        rule.test_rule_prepared = true
+    end
+
+    function op:BUILD(target)
+        return M.BUILD(self, target)
     end
 end
 
