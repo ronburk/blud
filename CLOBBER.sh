@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-base_zip=/mnt/data/blud.zip
 work=/mnt/data/blud
 patch_file=/mnt/data/chatgpt.patch
 
@@ -14,45 +13,45 @@ die() {
     exit 1
 }
 
-need_upload() {
-    printf 'CLOBBER NEEDS UPLOAD: %s\n' "$1" >&2
-    printf 'Please upload %s, then rerun CLOBBER.sh.\n' "$(basename "$1")" >&2
-    exit 2
-}
-
-[ -e "$base_zip" ] || need_upload "$base_zip"
-[ -L "$base_zip" ] || die "$base_zip is not a symbolic link"
-
-link_target=$(readlink -- "$base_zip") ||
-    die "cannot read symbolic link $base_zip"
-
-if [[ ! "$link_target" =~ ^blud-upload-[0-9]{8}T[0-9]{6}\.[0-9]{9}Z\.zip$ ]]; then
-    die "$base_zip points to invalid archive name: $link_target"
-fi
-
-archive_target=/mnt/data/$link_target
-[ -f "$archive_target" ] || die "archive target does not exist: $archive_target"
-[ ! -L "$archive_target" ] || die "archive target is itself a symbolic link: $archive_target"
-[ -r "$archive_target" ] || die "archive target is not readable: $archive_target"
-
 shopt -s nullglob
-collision_archives=(/mnt/data/blud\([0-9]*\).zip)
+archives=(/mnt/data/blud-upload-*.zip)
 shopt -u nullglob
-if ((${#collision_archives[@]} > 0)); then
-    say "removing stale collision-renamed blud archives"
-    rm -f -- "${collision_archives[@]}"
+
+((${#archives[@]} > 0)) || die "no blud-upload-*.zip archive found"
+
+archive=$(
+    printf '%s\n' "${archives[@]}" |
+        LC_ALL=C sort -t- -k3 -n |
+        tail -n1
+)
+archive_name=${archive##*/}
+
+if [[ ! "$archive_name" =~ ^blud-upload-([0-9]+)\.zip$ ]]; then
+    die "invalid archive name: $archive_name"
 fi
+
+archive_timestamp=${BASH_REMATCH[1]}
+
+[ -f "$archive" ] || die "archive is not a regular file: $archive"
+[ ! -L "$archive" ] || die "archive is a symbolic link: $archive"
+[ -r "$archive" ] || die "archive is not readable: $archive"
+
+archive_mtime=$(stat -c %Y -- "$archive")
+[ "$archive_mtime" -le "$archive_timestamp" ] ||
+    die "archive mtime is newer than its embedded timestamp: $archive"
+
+unzip -tq "$archive" >/dev/null ||
+    die "archive integrity check failed: $archive"
 
 say "removing old scratch tree"
 rm -rf "$work"
 mkdir -p "$work"
 
-say "unpacking $base_zip"
-unzip -q "$base_zip" -d "$work"
+say "unpacking $archive"
+unzip -q "$archive" -d "$work"
 
 required_files=(
     build.sh
-    CHATGPT_PREFLIGHT.sh
     luajit/src/libluajit.a
     luajit/src/lua.h
     luajit/src/luaconf.h
@@ -61,7 +60,7 @@ required_files=(
 )
 
 for file in "${required_files[@]}"; do
-    [ -f "$work/$file" ] || die "missing $work/$file after unpacking $base_zip"
+    [ -f "$work/$file" ] || die "missing $work/$file after unpacking $archive"
 done
 
 cd "$work"
