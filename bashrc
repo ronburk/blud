@@ -4,23 +4,12 @@ upload()
     local slop="${1:-5 minutes}"
     local timestamp
     local destination
-    local absolute
-
-    [ -f ./blud.zip ] && [ -r ./blud.zip ] || {
-        printf 'upload: ./blud.zip is not a readable regular file\n' >&2
-        return 1
-    }
-
-    timestamp=$(date -u -d "now + $slop" +'%Y%m%dT%H%M%SZ') || return
+    rm -f -- blud-upload-*.zip || return
+    timestamp=$(date -u -d "now + $slop" +%s) || return
     destination="blud-upload-${timestamp}.zip"
-
-    rm -f -- blud-upload-20*.zip || return
     cp -- ./blud.zip "$destination" || return
-
-    absolute=$(realpath -- "$destination") || return
-    printf 'file://%s\n' "$absolute" |
-        xclip -selection clipboard -t text/uri-list || return
-
+    printf 'file://%s' "$(realpath -- "$destination")" |
+        xclip -selection clipboard -t text/uri-list
     printf '%s\n' "$destination"
 }
 
