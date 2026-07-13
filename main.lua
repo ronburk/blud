@@ -37,6 +37,7 @@ function blud.parse_command_line()
     local options = {
         bludfile_path = "bludfile",
         debug = false,
+        always_make = false,
     }
     local args = _G.COMMAND_LINE
     local i = 2     -- skip command-name
@@ -51,6 +52,8 @@ function blud.parse_command_line()
         elseif arg == "-d" then
             options.debug = true
             debugger.probe = debugger.real_probe
+        elseif arg == "-B" then
+            options.always_make = true
         elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
         else
