@@ -97,11 +97,6 @@ int os_setcwd(const char* path) {
     return chdir(path) == 0 ? 0 : -1;
 }
 
-char* get_cwd(void) {
-    return os_getcwd();
-}
-
-
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
     DIR*            dp;
     struct dirent*  entry;

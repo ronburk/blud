@@ -3,7 +3,7 @@
 #include <windows.h>  // For GetCurrentDirectory()
 #include <stdlib.h>    // For malloc(), realloc(), and free()
 
-char* get_cwd() {
+char* os_getcwd(void) {
     char *buffer = NULL;
     DWORD size = 256;
 
@@ -15,7 +15,7 @@ char* get_cwd() {
         }
 
         // Use GetCurrentDirectory for Windows
-        DWORD result = GetCurrentDirectory(size, buffer);
+        DWORD result = GetCurrentDirectoryA(size, buffer);
         if (result != 0 && result < size) {
             return buffer; // Successfully got the current directory
         } else if (result > size) {
@@ -25,4 +25,11 @@ char* get_cwd() {
             return NULL;
         }
     }
+}
+
+int os_setcwd(const char* path) {
+    if (path == NULL || path[0] == '\0')
+        return -1;
+
+    return SetCurrentDirectoryA(path) ? 0 : -1;
 }

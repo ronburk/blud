@@ -10,6 +10,4 @@ extern int os_mkdir(const char* path);
 extern char* os_getcwd(void);
 extern int os_setcwd(const char* path);
 
-extern char* get_cwd(void);
-
 #endif // OS_H_
