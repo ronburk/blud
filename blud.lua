@@ -374,12 +374,13 @@ if luac_needs_building then
     --rlb
     local compiler = require("compiler")
     local f = nil
+    local source_path = bludfile_path
 
-    f = io.open(bludfile_path)
+    f = io.open(source_path)
     if f == nil then
         if not bludfile_path:lower():match("%.blud$") then
-            path = bludfile_path .. ".blud"
-            f = io.open(path)
+            source_path = bludfile_path .. ".blud"
+            f = io.open(source_path)
         end
         if f == nil then
             error("Could not open: " .. bludfile_path)
@@ -401,7 +402,7 @@ if luac_needs_building then
 
     compile_io.push_input("builtin.blud", CSTRGet("builtin.blud"))
     compiler.compile(compile_io)
-    compile_io.push_input("bludfile", f:read("*a"))
+    compile_io.push_input(source_path, f:read("*a"))
     compile_io.emit_line("blud.bludfile_code = function()")
     compile_io.emit_sourcemap()
     compiler.compile(compile_io)
@@ -432,7 +433,7 @@ if luac_needs_building then
     end
     
 --    print(code_to_compile)
-    local compiled_function, err = loadstring(code_to_compile, "bludfile")
+    local compiled_function, err = loadstring(code_to_compile, source_path)
     
     if not compiled_function then
         phase1_report_compile_error(err, code_to_compile)

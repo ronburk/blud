@@ -444,7 +444,17 @@ int execute_lua_code(lua_State* L, const char* code, const char* name) {
     if (status != LUA_OK) {
         // If execution failed, error message is on top of the stack
         const char* error_msg = lua_tostring(L, -1);
-        fprintf(stderr, "Failed to execute Lua code: %s\n", error_msg);
+        const char* compile_error_prefix = "BLUD_COMPILE_ERROR:";
+        size_t compile_error_prefix_len = strlen(compile_error_prefix);
+        if (strncmp(
+                error_msg,
+                compile_error_prefix,
+                compile_error_prefix_len
+            ) == 0) {
+            fprintf(stderr, "%s\n", error_msg + compile_error_prefix_len);
+        } else {
+            fprintf(stderr, "Failed to execute Lua code: %s\n", error_msg);
+        }
         lua_pop(L, 1);  // Remove error message from stack
     }
     
@@ -482,18 +492,21 @@ int main(int argc, char** argv) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
     // fprintf(stderr, "before initialize_lua\n");
-    initialize_lua(L, CSTRGet("init.lua"));
+    if (initialize_lua(L, CSTRGet("init.lua")) != 0) {
+        lua_close(L);
+        return 1;
+    }
     luaopen_mylib(L);
 
     set_command_line(L, argc, argv);
 
     // fprintf(stderr, "before execute_lua_code\n");
 //    execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
-    execute_lua_code(L, CSTRGet("main.lua"), "[main.lua]");
+    int status = execute_lua_code(L, CSTRGet("main.lua"), "[main.lua]");
 
     // Optional: Print the Lua table for verification
 //    luaL_dostring(L, "for i, v in ipairs(COMMAND_LINE) do print(i, v) end");
 
     lua_close(L);
-    return 0;
+    return status == LUA_OK ? 0 : 1;
 }
