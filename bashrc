@@ -6,6 +6,7 @@ upload()
     local destination
     rm -f -- blud-upload-*.zip || return
     timestamp=$(date -u -d "now + $slop" +%s) || return
+    printf -v timestamp '%012d' "$timestamp"
     destination="blud-upload-${timestamp}.zip"
     cp -- ./blud.zip "$destination" || return
     printf 'file://%s' "$(realpath -- "$destination")" |

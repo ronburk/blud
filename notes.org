@@ -23,7 +23,7 @@ fabricate, reconstruct, or alter command output.
 
 Before any response that accesses the filesystem, run exactly:
 
-    bash -lc 'cd /mnt/data || exit 255; shopt -s nullglob; f=$(printf "%s\n" blud-upload-20*.zip | LC_ALL=C sort | tail -n1); [ -n "$f" ] || exit 255; ts=$(grep -oE "[0-9]{8}T[0-9]{6}Z" <<<"$f") || exit 255; [ "$(stat -c %Y -- "$f")" -le "$(date -u -d "$ts" +%s)" ] || exit 255'
+bash -c 'f=$(printf "%s\n" blud-upload-*.zip | LC_ALL=C sort | tail -n1); [ -n "$f" ] || exit 255; ts=${f#blud-upload-}; ts=${ts%.zip}; [ "$(stat -c %Y -- "$f")" -le "$((10#$ts))" ] || exit 255'
 
 If this command fails, stop the current task and perform `.FRESH`.
 
