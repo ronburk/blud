@@ -6,43 +6,78 @@ These are continuity notes for ChatGPT sessions on Ron Burk's `blud` project. Cu
 
 ### `.FRESH`
 
-On `.FRESH`, execute exactly:
+Ron now creates the unique archive name before uploading. A valid upload is
+named:
 
-```sh
-rm -f /mnt/data/CLOBBER*.sh /mnt/data/blud*.zip
+```text
+blud-upload-YYYYMMDDTHHMMSS.NNNNNNNNNZ.zip
 ```
 
-Then ask Ron to upload a fresh `blud.zip` and stop.
+Do not rename or copy that upload. Use the exact filesystem path assigned to
+it.
 
-When the upload arrives, it may be named `blud(nnn).zip` even though all visible `blud*.zip` files were removed. The uploader apparently uses hidden collision history, not just visible files. Find the newly uploaded archive and rename it to `/mnt/data/blud.zip`, then run:
+If `.FRESH` is requested without a new archive attached, execute exactly:
+
+```sh
+rm -f /mnt/data/CLOBBER*.sh
+rm -f /mnt/data/blud.zip
+rm -f /mnt/data/blud\([0-9]*\).zip
+```
+
+Then ask Ron to upload a fresh uniquely named archive and stop.
+
+When the unique upload arrives:
+
+1. Verify its basename matches the exact format above.
+2. Remove any existing `/mnt/data/blud.zip`.
+3. Create a relative symlink:
+
+```text
+/mnt/data/blud.zip -> <basename of the newly uploaded archive>
+```
+
+4. Verify the symlink target is the exact new upload, is a regular readable
+   file, and contains `CLOBBER.sh`.
+5. Run the bootstrap exactly once:
 
 ```sh
 unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
 bash /mnt/data/CLOBBER.sh
 ```
 
-Inspect stdout, stderr, and exit status. Never claim success without actual command output. If `CLOBBER.sh` prints `CHATGPT_ACTION=RESTART_DOT_FRESH`, report that and restart `.FRESH`; do not improvise around it.
+6. Run the normal preflight described below.
+
+Do not repeat a successful bootstrap. A previous response repeated it because
+the instructions appeared duplicated; one successful run is sufficient.
+
+An uploaded `blud*.zip` without an explicit `.FRESH` is itself an implicit
+`.FRESH`.
 
 Current `CLOBBER.sh`:
 
-- Rejects multiple `/mnt/data/blud*.zip` archives, deletes them all, and requests `.FRESH` restart.
-- Only after that check passes, deletes top-level files matching `/mnt/data/*(*).*`.
-- Recreates `/mnt/data/blud` from `/mnt/data/blud.zip`.
-- Requires the bundled LuaJIT static archive and four headers under `/mnt/data/blud/luajit/src`.
+- Requires `/mnt/data/blud.zip` to be a relative symlink to a uniquely named
+  `blud-upload-*.zip` regular file.
+- Removes stale collision-renamed `blud(n).zip` archives.
+- Recreates `/mnt/data/blud` from the symlinked archive.
+- Requires the bundled LuaJIT static archive and four headers under
+  `/mnt/data/blud/luajit/src`.
 - Initializes a clean git `main` baseline commit and runs `bash build.sh`.
 
 Do not rely on `/mnt/data/CLOBBER.sh` or `/mnt/data/blud` persisting between turns.
 
 ### Preflight
 
-Before reading or modifying blud source, extract and run:
+Before reading or modifying blud source, run:
 
 ```sh
-unzip -p /mnt/data/blud.zip CHATGPT_PREFLIGHT.sh > /mnt/data/CHATGPT_PREFLIGHT.sh
-bash /mnt/data/CHATGPT_PREFLIGHT.sh
+bash /mnt/data/blud/CHATGPT_PREFLIGHT.sh
 ```
 
-Proceed only when it prints `CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do not attempt manual recovery. When asking for a fresh archive, include the specific failed command or preflight test and its diagnostic output; never merely say "Please upload a fresh `blud.zip`."
+Proceed only when it exits successfully and prints
+`CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do
+not attempt manual recovery, reconstruction, archive selection, or git repair.
+When asking for a fresh archive, include the specific failed command or
+preflight diagnostic.
 
 ### `.PATCH`
 
@@ -84,9 +119,21 @@ Do not reconstruct, summarize, reformat, or manufacture the output. A failed `ls
 
 - `/mnt/data` is ephemeral. Generated files and directories, especially `/mnt/data/blud` and helper scripts, may disappear between turns.
 - Uploaded files often persist longer, but deleted files may later rematerialize with new-looking timestamps. Filesystem history and mtimes are not fully trustworthy.
-- Upload collision renaming uses state outside the visible filesystem. A new `blud.zip` may arrive as `blud(12).zip` after all visible copies were deleted.
+- Upload identity appears to be tracked outside the visible filesystem. Renaming
+  an uploaded `blud.zip` to a unique pathname inside `/mnt/data` did not make
+  it safe: that pathname later contained bytes from an older archive. The
+  direct comparison showed two debug `print()` calls enabled in the restored
+  archive but commented out in the worktree's baseline `compiler.lua`.
+- Therefore Ron must create the unique filename before upload, and ChatGPT must
+  preserve that exact uploaded file without renaming or copying it. Only the
+  `/mnt/data/blud.zip` symlink is created locally.
+- Upload collision renaming uses state outside the visible filesystem. A new
+  non-unique `blud.zip` may arrive as `blud(12).zip` after all visible copies
+  were deleted; this is another reason not to use non-unique uploads.
 - Reusing a downloadable sandbox pathname can return an older immutable snapshot. Always use a new unique artifact filename.
 - Actual command execution and exit status are the only trustworthy evidence. Never infer that a command ran from remembered state or expected output.
+- Never fabricate, reconstruct, or silently reformat shell output. This has
+  caused repeated trust failures, especially for `ls`.
 - Long commands may time out near completion. After a timeout, inspect the actual state before deciding whether to resume or rerun.
 - Scripts should be noninteractive, validate their assumptions, fail loudly, and print distinctive machine-readable action lines when ChatGPT must react.
 - Instruction files inside `/mnt/data/blud` do not protect the directory from platform cleanup.
@@ -139,6 +186,18 @@ Known behavior needing later attention: `./blud` selected the `debug/` output di
 - Generated/build files are covered by `.gitignore`; only intended non-ignored source changes belong in patches.
 - Typical checks from `/mnt/data/blud` are `bash build.sh`, `./blud`, and task-specific invocations such as `./blud release`.
 - `build.sh` regenerates ignored files such as `bludlua.c`.
+- `compile_action()` currently supports one action line only. A second
+  indented line produces the clean compiler diagnostic:
+
+```text
+Multiple action lines are not supported yet
+note: combine commands with && or invoke a script
+```
+
+- The latest patch, `de7f52a Comment action compilation`, adds explanatory
+  comments to `compile_action()` covering deferred macro expansion, generated
+  closure execution, status propagation, the one-line limitation, and the
+  `nil` no-action representation.
 - Current architecture favors getting built-in operators correct before designing broad extension points, and favors direct readable operator-specific code over deep generalized dispatch.
 - `CPPFLAGS` is for preprocessor flags, `CFLAGS` for C compilation flags, `CXXFLAGS` for C++, and `LDFLAGS` for linker options/search paths.
 
