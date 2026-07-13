@@ -1,3 +1,18 @@
+alias gs='git status'
+upload()
+{
+    local timestamp
+    local destination
+
+    rm -f -- blud-upload-20*.zip || return
+
+    timestamp=$(date -u +'%Y%m%dT%H%M%S.%NZ') || return
+    destination="blud-upload-${timestamp}.zip"
+
+    cp -- ./blud.zip "$destination" || return
+    printf '%s\n' "$destination"
+}
+
 # ==========================================
 # PORTABLE GIT & PROMPT CONFIG (Cloud Synced)
 # ==========================================
