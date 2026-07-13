@@ -18,7 +18,7 @@ blud
 chatgpt.patch
 Figure1.svg
 blud.test
-blud.zip
+blud*.zip
 luajit.zip
 bludlua.cpp
 cstr.h

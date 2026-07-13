@@ -10,6 +10,7 @@ upload()
     destination="blud-upload-${timestamp}.zip"
 
     cp -- ./blud.zip "$destination" || return
+    echo -n "file://$(realpath $destination)" | xclip -selection clipboard -t text/uri-list
     printf '%s\n' "$destination"
 }
 
