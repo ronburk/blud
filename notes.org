@@ -57,6 +57,7 @@ In this project, it's important that you recognize the following user commands:
     and not just manufacture it yourself, otherwise the user has no
     way of determining the state of your working environment.  DO NOT
     ALTER the output of the 'ls' command before giving it to the user!
+    DO present the output in a fixed font, so the columns line up.
 
 
 ** ChatGPT conversation head
