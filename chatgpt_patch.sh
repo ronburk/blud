@@ -23,17 +23,23 @@ say_state() {
     echo "$1"
 }
 
-add_local_ignores() {
-    mkdir -p .git/info
-    touch .git/info/exclude
-    grep -qxF '/luajit' .git/info/exclude || printf '/luajit\n' >> .git/info/exclude
-}
+luajit_files=(
+    luajit/src/libluajit.a
+    luajit/src/lua.h
+    luajit/src/luaconf.h
+    luajit/src/lauxlib.h
+    luajit/src/lualib.h
+)
 
-ensure_luajit_link() {
-    add_local_ignores
-    if [ ! -e luajit ] && [ -d /mnt/data/LuaJIT-2.1 ]; then
-        ln -s /mnt/data/LuaJIT-2.1 luajit
-    fi
+verify_luajit_payload() {
+    local file
+
+    for file in "${luajit_files[@]}"; do
+        [ -f "$file" ] || {
+            echo "error: missing bundled LuaJIT file: $file" >&2
+            exit 1
+        }
+    done
 }
 
 status() {
@@ -73,8 +79,7 @@ init_work_from_zip() {
     git init -q -b main
     git config user.name ChatGPT
     git config user.email chatgpt@example.invalid
-    add_local_ignores
-    ensure_luajit_link
+    verify_luajit_payload
     git add .
     git commit -q -m "Initial commit"
 }
@@ -151,7 +156,7 @@ propose() {
     cd "$work"
     git config user.name ChatGPT
     git config user.email chatgpt@example.invalid
-    ensure_luajit_link
+    verify_luajit_payload
 
     baseline=$(cat "$state_dir/baseline")
     current=$(git rev-parse HEAD)
@@ -230,6 +235,7 @@ propose() {
 
     # The accepted baseline zip must not be overwritten until Ron accepts the patch.
     zip -qr "$candidate_tmp" . -x '.git/*' 'luajit' 'luajit/*'
+    zip -q "$candidate_tmp" "${luajit_files[@]}"
 
     mv "$patch_tmp" "$patch"
     mv "$candidate_tmp" "$candidate"

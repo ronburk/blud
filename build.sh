@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 set -e
 
-# ChatGPT sandbox convenience: create the LuaJIT symlink only in /mnt/data/blud.
-if [ "$PWD" = "/mnt/data/blud" ] && [ -d /mnt/data/LuaJIT-2.1 ]; then
-    if [ ! -e luajit ] && [ ! -L luajit ]; then
-        ln -s /mnt/data/LuaJIT-2.1 luajit
-    fi
-fi
-
 LUAJIT_DIR="./luajit"
 LUAJIT_SRC="$LUAJIT_DIR/src"
 LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
+LUAJIT_FILES=(
+    "$LUAJIT_LIB"
+    "$LUAJIT_SRC/lua.h"
+    "$LUAJIT_SRC/luaconf.h"
+    "$LUAJIT_SRC/lauxlib.h"
+    "$LUAJIT_SRC/lualib.h"
+)
 
-if [ ! -f "$LUAJIT_LIB" ]; then
-    echo "error: expected static LuaJIT library at $LUAJIT_LIB" >&2
-    echo "build LuaJIT in $LUAJIT_DIR before running this script" >&2
-    exit 1
-fi
+for file in "${LUAJIT_FILES[@]}"; do
+    if [ ! -f "$file" ]; then
+        echo "error: missing bundled LuaJIT file: $file" >&2
+        exit 1
+    fi
+done
 
 LUAJIT_FLAGS="-I$LUAJIT_SRC $LUAJIT_LIB -lm -ldl"
 BUILD_ID=$(($(cat .build_id 2>/dev/null || echo 0) + 1))
@@ -28,7 +29,8 @@ g++ -o cstr cstr.cpp $CFLAGS
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
-zip -u blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore
+rm -f blud.zip
+zip blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CHATGPT_PREFLIGHT.sh CLOBBER.sh test.blud test/* bludfile .gitignore "${LUAJIT_FILES[@]}"
 if command -v xclip >/dev/null; then
     echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 else

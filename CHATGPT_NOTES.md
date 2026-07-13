@@ -1,211 +1,152 @@
 # ChatGPT Notes for blud
 
-These are working notes for ChatGPT sessions on Ron Burk's `blud` project. Source code and Ron's current instructions override these notes if they disagree.
+These are continuity notes for ChatGPT sessions on Ron Burk's `blud` project. Current project instructions and Ron's explicit requests override this file.
 
-## Current ChatGPT patch workflow
+## Mandatory command workflows
 
-Ron controls synchronization explicitly.
+### `.FRESH`
 
-### Source authority
-
-For normal work, `/mnt/data/blud` is the only source tree.
-
-Do not inspect, unpack, or compare against `/mnt/data/blud.zip` unless Ron explicitly says:
-
-```text
-CLOBBER
-```
-
-`/mnt/data/blud.zip` is only an input to `CLOBBER`.
-
-### CLOBBER
-
-When Ron says `CLOBBER`, run:
+On `.FRESH`, execute exactly:
 
 ```sh
+rm -f /mnt/data/CLOBBER*.sh /mnt/data/blud*.zip
+```
+
+Then ask Ron to upload a fresh `blud.zip` and stop.
+
+When the upload arrives, it may be named `blud(nnn).zip` even though all visible `blud*.zip` files were removed. The uploader apparently uses hidden collision history, not just visible files. Find the newly uploaded archive and rename it to `/mnt/data/blud.zip`, then run:
+
+```sh
+unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
 bash /mnt/data/CLOBBER.sh
 ```
 
-Then report:
+Inspect stdout, stderr, and exit status. Never claim success without actual command output. If `CLOBBER.sh` prints `CHATGPT_ACTION=RESTART_DOT_FRESH`, report that and restart `.FRESH`; do not improvise around it.
 
-```text
-WORKTREE: /mnt/data/blud
-HEAD: <short sha>
-STATUS: clean
-```
+Current `CLOBBER.sh`:
 
-Do not make source edits in the same response unless Ron explicitly asks.
+- Rejects multiple `/mnt/data/blud*.zip` archives, deletes them all, and requests `.FRESH` restart.
+- Only after that check passes, deletes top-level files matching `/mnt/data/*(*).*`.
+- Recreates `/mnt/data/blud` from `/mnt/data/blud.zip`.
+- Requires the bundled LuaJIT static archive and four headers under `/mnt/data/blud/luajit/src`.
+- Initializes a clean git `main` baseline commit and runs `bash build.sh`.
 
-`CLOBBER.sh` deletes `/mnt/data/blud`, recreates it from `/mnt/data/blud.zip`, creates the LuaJIT symlink if available, initializes git, commits a baseline, removes stale `/mnt/data/chatgpt.patch`, runs `bash build.sh`, and requires clean git status afterward.
+Do not rely on `/mnt/data/CLOBBER.sh` or `/mnt/data/blud` persisting between turns.
 
-### Normal patch work
+### Preflight
 
-Before editing, run:
-
-```sh
-cd /mnt/data/blud
-test -d .git
-git status --porcelain
-```
-
-If `/mnt/data/blud/.git` is missing, stop and ask Ron to use `CLOBBER` with a fresh `blud.zip`.
-
-If `git status --porcelain` prints anything, stop and report the exact output. Do not guess whether the dirty files are harmless.
-
-If clean, edit only the requested files.
-
-After editing, test as requested, usually:
+Before reading or modifying blud source, extract and run:
 
 ```sh
-bash build.sh
+unzip -p /mnt/data/blud.zip CHATGPT_PREFLIGHT.sh > /mnt/data/CHATGPT_PREFLIGHT.sh
+bash /mnt/data/CHATGPT_PREFLIGHT.sh
 ```
 
-Then verify patch contents:
+Proceed only when it prints `CHATGPT_PREFLIGHT: OK`. Any other result means stop and execute `.FRESH`; do not attempt manual recovery. When asking for a fresh archive, include the specific failed command or preflight test and its diagnostic output; never merely say "Please upload a fresh `blud.zip`."
+
+### `.PATCH`
+
+Complete the requested change first. In `/mnt/data/blud`:
+
+1. Run relevant build/tests.
+2. Ensure only intended non-ignored source changes remain.
+3. Stage those changes and commit them as one commit.
+4. Run:
 
 ```sh
-git status --porcelain
-git diff --name-only
+bash chatgpt_patch_finish.sh
 ```
 
-Only intended source files may be changed. Generated/build files should normally be ignored by `.gitignore`; do not add them.
+5. If the script exits nonzero, report the failure and do not supply a patch.
+6. Link only the exact uniquely named path printed as `PATCH:` by the script.
 
-Create the patch with:
+Never link `/mnt/data/chatgpt.patch`; the artifact layer may serve stale bytes when a pathname is reused. The user downloads the uniquely named sandbox artifact locally under the fixed name `chatgpt.patch`.
+
+`chatgpt_patch_finish.sh` removes old sandbox `chatgpt*.patch` files, generates `/mnt/data/chatgpt-<full-HEAD>.patch`, verifies its header names `HEAD`, applies that exact file with `git am --no-3way` in a temporary clone, verifies the resulting tree, and prints its path, subject, and SHA-256.
+
+Do not provide a bare diff. The patch must be a complete `git format-patch` commit usable with `git am --no-3way`.
+
+### `.REVERT`
+
+Use git to return `/mnt/data/blud` to its state at the previous `.PATCH`, undoing the current patch commit. If there has been no previous `.PATCH`, return to the baseline commit. Verify and report the resulting status.
+
+### `.LS`
+
+Actually execute and show the output unaltered:
 
 ```sh
-git add <intended files>
-git commit -m "<subject>"
-git format-patch -1 --stdout > /mnt/data/chatgpt.patch
+TZ=America/Los_Angeles ls -al /mnt/data /mnt/data/blud
 ```
 
-Then verify:
+Do not reconstruct, summarize, reformat, or manufacture the output. A failed `ls` is itself part of the raw result.
+
+## Working-environment hazards
+
+- `/mnt/data` is ephemeral. Generated files and directories, especially `/mnt/data/blud` and helper scripts, may disappear between turns.
+- Uploaded files often persist longer, but deleted files may later rematerialize with new-looking timestamps. Filesystem history and mtimes are not fully trustworthy.
+- Upload collision renaming uses state outside the visible filesystem. A new `blud.zip` may arrive as `blud(12).zip` after all visible copies were deleted.
+- Reusing a downloadable sandbox pathname can return an older immutable snapshot. Always use a new unique artifact filename.
+- Actual command execution and exit status are the only trustworthy evidence. Never infer that a command ran from remembered state or expected output.
+- Long commands may time out near completion. After a timeout, inspect the actual state before deciding whether to resume or rerun.
+- Scripts should be noninteractive, validate their assumptions, fail loudly, and print distinctive machine-readable action lines when ChatGPT must react.
+- Instruction files inside `/mnt/data/blud` do not protect the directory from platform cleanup.
+
+## Ron's local patch workflow
+
+Ron saves the uniquely named download locally as `chatgpt.patch` and runs:
 
 ```sh
-grep '^Subject:' /mnt/data/chatgpt.patch
-grep '^diff --git' /mnt/data/chatgpt.patch
+bash gpatch.sh
 ```
 
-Offer the patch link only after this verification.
+Current `gpatch.sh`:
 
-### Patch acceptance/rejection
+- Fetches and requires the current branch to equal its upstream before applying.
+- Offers either applying to the current branch or creating/pushing a new branch and GitHub PR.
+- Uses `git am --no-3way --keep-cr chatgpt.patch`.
+- Removes local `chatgpt.patch` only after successful application, or after successful push and PR creation.
+- On a later run, checks upstream divergence before checking whether the patch file exists, so it can still offer `git reset --hard @{u}` after the patch file was removed.
+- Keeps the patch on failure for diagnosis/retry.
 
-If Ron accepts the patch, do nothing special. `/mnt/data/blud` already contains the patch commit.
+`--no-3way` is intentional because sandbox and real-repository blob IDs may differ. `--keep-cr` avoids CRLF damage.
 
-If Ron rejects the most recent ChatGPT patch, he may say:
+## Current open design work
 
-```text
-REVERT
+The next likely design task concerns default-target selection and `:BUILD:` behavior.
+
+Two concepts are currently conflated in `blud.primary_targets`:
+
+1. The singular first real buildable target encountered while executing the translated bludfile. This is an intrinsic fact about the bludfile and must remain available even when command-line targets are supplied.
+2. The list of targets selected for the current invocation, possibly supplied on the command line.
+
+These should be represented separately, with names along the lines of:
+
+```lua
+blud.default_target       -- first real buildable target in the bludfile
+blud.requested_targets    -- explicit command-line selections
+blud.build_targets        -- resolved targets for this invocation, if separately useful
 ```
 
-Then run:
+`%:`, `:TEST:`, and `:BUILD:` are not ordinary default-target candidates. Running `./blud release` should not erase knowledge of the bludfile's ordinary default target; the `release` build configuration may need that target.
 
-```sh
-cd /mnt/data/blud
-git reset --hard HEAD~1
-rm -f /mnt/data/chatgpt.patch
-git status --porcelain
-```
+Also inspect the current `SET_PRIMARY_TARGETS` interface before changing it: earlier review found a singular atom being passed while one override treated it as an array. Prefer a singular interface/name if that is still true.
 
-Report the resulting HEAD and clean/dirty status.
+Known behavior needing later attention: `./blud` selected the `debug/` output directory but compile commands omitted `-g`, and the resulting binary had no `.debug_*` sections. Thus the build was named debug without actually being a debug build.
 
-### Hard rules
+## Source and build notes
 
-- Normal work uses `/mnt/data/blud`, not `/mnt/data/blud.zip`.
-- `blud.zip` is read only by `CLOBBER.sh`.
-- No candidate zip workflow.
-- No accept/reject state files.
-- No fresh/continue mode.
-- No source patch link unless `/mnt/data/chatgpt.patch` was just generated and verified.
+- Normal work happens only in `/mnt/data/blud`; `/mnt/data/blud.zip` is authoritative only for `.FRESH` reconstruction.
+- Generated/build files are covered by `.gitignore`; only intended non-ignored source changes belong in patches.
+- Typical checks from `/mnt/data/blud` are `bash build.sh`, `./blud`, and task-specific invocations such as `./blud release`.
+- `build.sh` regenerates ignored files such as `bludlua.c`.
+- Current architecture favors getting built-in operators correct before designing broad extension points, and favors direct readable operator-specific code over deep generalized dispatch.
+- `CPPFLAGS` is for preprocessor flags, `CFLAGS` for C compilation flags, `CXXFLAGS` for C++, and `LDFLAGS` for linker options/search paths.
 
-## Ron's local apply workflow
-
-Ron downloads the sandbox patch as `chatgpt.patch` and applies it with `gpatch.sh`. Current `gpatch.sh` runs:
-
-```sh
-git am --no-3way --keep-cr chatgpt.patch
-```
-
-`--no-3way` is intentional: ChatGPT patches are generated from a sandbox repo, and Ron's real repo may not have the same blob IDs. Failing on textual context mismatch is preferable to confusing three-way fallback behavior.
-
-`--keep-cr` was added after CRLF in `cstr.cpp` caused patch application failures. `cstr.cpp` has since been normalized to LF, but keeping this option is still useful for bootstrapping and for any future CRLF files.
-
-If `git am` fails, Ron runs:
-
-```sh
-git am --abort
-```
-
-## Generated files and patch exclusions
-
-- `build.sh` regenerates `bludlua.c`.
-- `bludlua.c` is generated and must not be included in source patches.
-- Generated/build files should be ignored by the repo `.gitignore` rather than special patch-script cleanup.
-- If `git status --porcelain` shows generated/build files before patch creation, stop and report the exact output instead of guessing.
-
-## Build/test workflow
-
-Typical checks from `/mnt/data/blud`:
-
-```sh
-bash build.sh
-./blud
-./blud -d
-```
-
-LuaJIT may need to exist or be symlinked as:
-
-```text
-/mnt/data/blud/luajit -> /mnt/data/LuaJIT-2.1
-```
-
-`CLOBBER.sh` creates this symlink when `/mnt/data/LuaJIT-2.1` exists. Normal patch work should not recreate the worktree or read `blud.zip` to fix this.
-
-## Current source state and design direction
-
-Current architecture direction is deliberately simpler and more hard-coded:
-
-- Get built-in operators correct before designing broad extension points.
-- Keep common behavior only where it is already proven useful.
-- Prefer direct, readable operator-specific code over a deep atom/operator/super dispatch maze.
-
-Recent source state:
-
-- `atom.lua` exists and owns the atom defaults.
-- `atom.lua` returns the super-atom table; `runtime.lua` assigns it with `blud.super_atom = require("atom")`.
-- `target:BUILD()` dispatches to `target.RULE.operator:BUILD(target)` after rule discovery/fallback.
-- The `:` operator owns the normal build behavior.
-- The `::` operator has its own `BUILD()` and local prerequisite preparation logic rather than delegating blindly to `:`.
-- The `::` operator now lowers sources to object prerequisites and links objects, e.g. `blud :: blud.c bludlua.c oslinux.c` builds `blud.o`, `bludlua.o`, `oslinux.o`, then links `blud`.
-- Build actions echo the command line before executing it, as normal build tools do.
-
-## Variables and builtins
-
-The project is moving toward GNU-make-like variable naming:
-
-- `CPPFLAGS` contains preprocessor flags such as `-I...` and `-D...`.
-- `CFLAGS` contains C compiler flags.
-- `CXXFLAGS` contains C++ compiler flags.
-- `LDFLAGS` contains linker options/search paths.
-
-`builtin.blud` compile rules should use `$(CPPFLAGS)` together with `$(CFLAGS)`/`$(CXXFLAGS)`, not separate `CINCLUDES` or `CXXINCLUDES` variables.
-
-## Debugger notes
-
-- `debug.lua` was renamed to `debugger.lua` to avoid collision with Lua's standard `debug` module.
-- Runtime should load it with `require("debugger")`.
-- `-d` should set `debugger.probe = debugger.real_probe`.
-- Interactive commands include `q`, `c`, `s`, `n`, `bt`/`where`, `e <lua>`, and `?`.
-
-## Debug print cleanup
-
-Most ad hoc debugging prints should stay commented out. Normal build command echoing should remain active in `blud.execute()`.
-
-When searching for remaining debug prints, distinguish real executable prints from lines already inside comments or dead commented-out blocks.
-
-## Style preferences
+## Style
 
 - Be concise.
 - Inspect current files before proposing changes.
 - Prefer one minimal change at a time.
 - Use 4-space indentation and snake_case.
-- Avoid generic advice in code reviews; focus on likely practical problems.
-- Ask clarifying questions when the prompt is underspecified or would require guessing important design decisions.
+- Focus reviews on likely practical problems, not generic advice.
+- Ask a clarifying question when an important design decision is genuinely underspecified.

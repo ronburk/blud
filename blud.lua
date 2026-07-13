@@ -333,9 +333,7 @@ if blud.primary_targets == nil then
     error("No targets to build!")
 else
     blud.build_init()
-    for _, target in ipairs(blud.primary_targets) do
-        target:BUILD()
-    end
+    blud.build_targets(blud.primary_targets)
 end
 ]]
 
@@ -555,6 +553,8 @@ if blud.command_line_options.target_names then
     for _, name in ipairs(blud.command_line_options.target_names) do
         table.insert(blud.primary_targets, blud.get_or_create_target(name))
     end
+elseif blud.default_target then
+    blud.primary_targets = { blud.default_target }
 end
 -- util.print("----------\n%d rules", #blud.rules)
 for i=1,#blud.rules do
@@ -569,11 +569,7 @@ end
 blud.build_init()
 -- util.print("%d targets %s", #blud.primary_targets, util.dump(blud.primary_targets))
 -- util.print("%d targets", #blud.primary_targets)
-for _,target in ipairs(blud.primary_targets) do
---    util.print("build target '%s'", util.dump(target))
-    -- util.print("build target '%s'", target.NAME)
-    target:BUILD()
-end
+blud.build_targets(blud.primary_targets)
 
 
 --[[

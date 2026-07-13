@@ -293,6 +293,8 @@ end
 blud.dir_cache       = {}
 blud.operators       = {}
 blud.build_name      = nil
+blud.default_build   = nil
+blud.default_target  = nil
 blud.primary_targets = nil
 blud.array_append    = function(array, more)
     if not (type(array) == "table" and type(more) == "table") then
@@ -829,15 +831,40 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
-    local OWD = {[1] = ".", ["name"] = "OWD"}
-    blud.Scope.base:set("OWD", OWD)
-    if blud.BUILD_DEFAULT then
-        local mkdir_result = os_mkdir(blud.BUILD_DEFAULT.NAME)
-        if mkdir_result == 2 then
-            error("could not create build directory: " .. blud.BUILD_DEFAULT.NAME)
+    blud.Scope.build.variables = {
+        OWD = { [1] = ".", name = "OWD" },
+    }
+end
+
+blud.build_targets = function(targets)
+    local function is_build_target(target)
+        return target.RULE and
+               target.RULE.operator == blud.operators[":BUILD:"]
+    end
+
+    local function build_default_target()
+        if not blud.default_target then
+            error("no default target to build")
         end
-        OWD = { [1] = blud.BUILD_DEFAULT.NAME, ["name"] = "OWD" }
-        blud.Scope.bludfile:set("OWD", OWD)
+        blud.default_target:BUILD()
+    end
+
+    if targets[1] and not is_build_target(targets[1]) and blud.default_build then
+        blud.default_build:BUILD()
+    end
+
+    local previous_was_build = false
+    for _, target in ipairs(targets) do
+        local is_build = is_build_target(target)
+        if previous_was_build and is_build then
+            build_default_target()
+        end
+        target:BUILD()
+        previous_was_build = is_build
+    end
+
+    if previous_was_build then
+        build_default_target()
     end
 end
 
@@ -1440,8 +1467,8 @@ blud.add_rules = function(colon_operator, targets, prerequisites, action)
     for _, target_name in ipairs(targets) do
         local target = blud.get_or_create_target(target_name)
         if not target.IMPLICIT and colon_operator ~= ':BUILD:' then
-            if blud.primary_targets == nil then
-                blud.primary_targets = { target }
+            if blud.default_target == nil then
+                blud.default_target = target
             end
         end
         local operator = blud.operators[colon_operator]

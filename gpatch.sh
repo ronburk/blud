@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Safely apply chatgpt.patch to a clean branch synchronized with its upstream.
 set -euo pipefail
 
 patch=chatgpt.patch
@@ -9,12 +10,8 @@ die() {
 }
 
 offer_abort_am() {
-    echo
     echo "A git am operation appears to be in progress."
-    echo
-    echo "To recover manually:"
-    echo "    git am --abort"
-    echo
+    echo "Manual recovery: git am --abort"
     read -r -p "Abort it now? Type ABORT to confirm: " answer
 
     if [ "$answer" = "ABORT" ]; then
@@ -28,17 +25,9 @@ offer_abort_am() {
 }
 
 offer_reset_to_upstream() {
-    echo
     echo "Your local repo is not synced with GitHub upstream."
-    echo
     git status --short --branch
-    echo
-    echo "To discard local commits and return to GitHub state:"
-    echo "    git reset --hard @{u}"
-    echo
-    echo "This is intended for recovering after applying a bad ChatGPT patch."
-    echo "It will discard local commits on this branch."
-    echo
+    echo "RESET discards local commits with: git reset --hard @{u}"
     read -r -p "Reset to upstream now? Type RESET to confirm: " answer
 
     if [ "$answer" = "RESET" ]; then
@@ -70,10 +59,8 @@ echo "Fetching upstream..."
 git fetch --prune
 
 if [ -n "$(git status --porcelain)" ]; then
-    echo
     echo "Working tree is not clean:"
     git status --short
-    echo
     die "commit/stash/revert local changes first"
 fi
 
@@ -88,18 +75,12 @@ fi
     die "$patch is empty"
 
 if ! head -n 1 "$patch" | grep -q '^From '; then
-    echo
     echo "$patch does not look like a git format-patch."
-    echo
-    echo "Expected first line to start with:"
-    echo "    From "
-    echo
+    echo "Expected first line: From "
     echo "Actual file type:"
     file "$patch" || true
-    echo
     echo "First few bytes:"
     LC_ALL=C od -An -tx1 -N32 "$patch" || true
-    echo
     die "not applying anything"
 fi
 
@@ -109,41 +90,95 @@ grep -a -q '^Subject: ' "$patch" ||
 grep -a -q '^diff --git ' "$patch" ||
     die "patch is missing a git diff"
 
-echo
-echo "Patch subject:"
-grep -a -m1 '^Subject:' "$patch" || true
+subject=$(grep -a -m1 '^Subject:' "$patch")
+echo "$subject"
+echo "Choose what to do:"
+echo "    a  Apply the patch to the current branch"
+echo "    p  Apply it on a new branch and create a GitHub PR"
+echo "    q  Quit"
+read -r -p "Choice [a/p/q]: " answer
 
-echo
-echo "About to run:"
-echo "    git am --no-3way --keep-cr $patch"
-echo
-echo "If git am fails, recover with:"
-echo "    git am --abort"
-echo
-echo "If it succeeds but you dislike the result, run this script again."
-echo "It will notice that your repo is no longer synced with upstream and offer:"
-echo "    git reset --hard @{u}"
-echo
-read -r -p "Continue? [y/N] " answer
 case "$answer" in
-    y|Y|yes|YES) ;;
-    *) echo "aborted"; exit 0 ;;
+    a|A)
+        echo "About to run: git am --no-3way --keep-cr $patch"
+        echo "If it fails: git am --abort"
+        echo "If you dislike it afterward, rerun this script to reset to @{u}."
+        read -r -p "Continue? [Y/n] " answer
+        case "$answer" in
+            ""|y|Y|yes|YES) ;;
+            *) echo "aborted"; exit 0 ;;
+        esac
+
+        if ! git am --no-3way --keep-cr "$patch"; then
+            echo "git am failed; recover with: git am --abort"
+            exit 1
+        fi
+
+        rm -f "$patch"
+        echo "Applied: $(git log -1 --oneline)"
+        echo "Suggested checks: git show --stat; bash build.sh"
+        ;;
+
+    p|P)
+        command -v gh >/dev/null 2>&1 ||
+            die "gh is required to create a pull request"
+
+        gh auth status >/dev/null 2>&1 ||
+            die "gh is not authenticated"
+
+        current_branch=$(git branch --show-current)
+        [ -n "$current_branch" ] ||
+            die "cannot create a PR from a detached HEAD"
+
+        upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}')
+        remote=${upstream%%/*}
+        base_branch=${upstream#*/}
+        [ "$remote" != "$upstream" ] ||
+            die "could not determine the upstream remote"
+
+        subject_text=${subject#Subject: }
+        subject_text=$(printf '%s' "$subject_text" | sed 's/^\[PATCH[^]]*\][[:space:]]*//')
+        slug=$(printf '%s' "$subject_text" |
+            tr '[:upper:]' '[:lower:]' |
+            sed 's/[^a-z0-9][^a-z0-9]*/-/g; s/^-//; s/-$//; s/^\(.\{1,40\}\).*$/\1/; s/-$//')
+        [ -n "$slug" ] || slug=patch
+        pr_branch="chatgpt/$slug-$(date +%Y%m%d-%H%M%S)"
+
+        echo "About to create and push branch: $pr_branch"
+        echo "PR target: $base_branch"
+        read -r -p "Continue? [Y/n] " answer
+        case "$answer" in
+            ""|y|Y|yes|YES) ;;
+            *) echo "aborted"; exit 0 ;;
+        esac
+
+        git switch -c "$pr_branch"
+
+        if ! git am --no-3way --keep-cr "$patch"; then
+            echo "git am failed on branch $pr_branch."
+            echo "Recover: git am --abort; git switch $current_branch; git branch -D $pr_branch"
+            exit 1
+        fi
+
+        git push -u "$remote" "$pr_branch"
+
+        if ! pr_url=$(gh pr create --fill --base "$base_branch" --head "$pr_branch"); then
+            echo "The branch was pushed, but PR creation failed."
+            echo "Retry: gh pr create --fill --base $base_branch --head $pr_branch"
+            exit 1
+        fi
+
+        git switch "$current_branch"
+        rm -f "$patch"
+        echo "Created PR: $pr_url"
+        echo "The current branch remains unchanged."
+        ;;
+
+    q|Q|"")
+        echo "aborted"
+        ;;
+
+    *)
+        die "invalid choice"
+        ;;
 esac
-
-if ! git am --no-3way --keep-cr "$patch"; then
-    echo
-    echo "git am failed."
-    echo
-    echo "To recover:"
-    echo "    git am --abort"
-    echo
-    exit 1
-fi
-
-echo
-echo "Applied:"
-git log -1 --oneline
-echo
-echo "Suggested next checks:"
-echo "    git show --stat"
-echo "    bash build.sh"

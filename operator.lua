@@ -131,10 +131,10 @@ function M:ADD_RULES(target_words, prereq_words, action)
     
     for i=1, #targets do
         local target_atom = targets[i]
-        if not blud.primary_targets then
-            local primary =  self:SET_PRIMARY_TARGETS(target_atom)
-            if primary then
-                blud.primary_targets = {primary}
+        if not blud.default_target then
+            local default_target = self:SET_PRIMARY_TARGETS(target_atom)
+            if default_target then
+                blud.default_target = default_target
             end
         end
         if not group then -- multiple targets synonym for multiple rules
@@ -239,9 +239,9 @@ end
 do  -- : operator
     local op = M.operator_new({})
     blud.operators[":"] = op
-    function op:SET_PRIMARY_TARGETS(target_atoms)
-        -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atoms[1]))
-        return target_atoms[1]
+    function op:SET_PRIMARY_TARGETS(target_atom)
+        -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atom))
+        return target_atom
     end
 
     function op:BUILD(target_atom)
@@ -297,7 +297,7 @@ end
 do  -- %: operator
     local op = M.operator_new({})
     blud.operators["%:"] = op
-    function op:SET_PRIMARY_TARGETS(target_atoms)
+    function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[%%:]:SET_PRIMARY_TARGETS()")
         -- implicit rules are not candidates for primary targets
         return nil
@@ -427,37 +427,124 @@ do  -- :: operator
     end
 end
 
---[[
-blud.operators["::"] = function(colon_operator, target, prereq_atoms, action)
-    return target:SOURCE_RULE(prereq_atoms, action)
-end
-]]
---[[
-blud.operators[":BUILD:"] = function(colon_operator, target, prereq_atoms, action)
-    print("Do :BUILD: for target " .. target.NAME .. " with " .. #prereq_atoms .. " args ")
-    -- determine value of OWD
-    local owd = target.NAME
-    if #prereq_atoms > 0 then
-        owd = prereq_atoms[1].NAME
-    end
-    -- is this the default build (first one mentioned?)
-    if blud.BUILD_DEFAULT == nil then
-        blud.BUILD_DEFAULT = target
-        print("default build is: ", blud.BUILD_DEFAULT.NAME)
-    end
-
-    -- need to give .GLOBAL_MACRO attribute to target
-end
---]]
-
 do
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
 
+    local function relativize_test_path(suite_name, word)
+        -- Relative test names are interpreted inside the suite directory.
+        if word:match("^/") or word:match("^[A-Za-z]:[/\\]") then
+            return word
+        end
+        return suite_name .. "/" .. word
+    end
+
+    local function expand_test_words(suite_name, prereq_words)
+        local patterns = {}
+        for _, word in ipairs(prereq_words) do
+            table.insert(patterns, relativize_test_path(suite_name, word))
+        end
+        return glob_words(patterns)
+    end
+
+    local function test_log_name(test_name)
+        return test_name .. ".log"
+    end
+
     -- a :TEST: name cannot be a primary target
-    function op:SET_PRIMARY_TARGETS(target_atoms)
-        -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
+    function op:SET_PRIMARY_TARGETS(target_atom)
         return nil
+    end
+
+    function op:ADD_RULE(target, prereq_words, action)
+        if not action or action == blud.default_action then
+            blud.error("#1: :TEST: requires an action.", target.NAME)
+        end
+
+        if not target.RULE then
+            -- Record the suite as a :TEST: target, but keep its individual
+            -- test cases and actions outside the ordinary one-rule model.
+            M.ADD_RULE(self, target, {}, nil)
+        elseif target.RULE.operator ~= self then
+            blud.error("#1: target used with more than one operator.", target.NAME)
+        end
+
+        target.TESTS = target.TESTS or {}
+        target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
+
+        local test_names = expand_test_words(target.NAME, prereq_words)
+        for _, test_name in ipairs(test_names) do
+            local test_atom = blud.get_or_create_target(test_name)
+
+            if not target.TESTS_BY_NAME[test_name] then
+                -- Preserve the order in which tests first enter the suite.
+                target.TESTS_BY_NAME[test_name] = test_atom
+                table.insert(target.TESTS, test_atom)
+            end
+
+            -- Actions are associated with test atoms, not with the suite rule.
+            -- A later assertion deliberately replaces an earlier default.
+            test_atom.TEST_ACTIONS = test_atom.TEST_ACTIONS or {}
+            test_atom.TEST_ACTIONS[target] = action
+        end
+    end
+
+    function op:PREPARE_PREREQUISITES(target)
+        local rule = target.RULE
+        assert(rule)
+
+        if rule.test_rule_prepared then
+            return
+        end
+
+        local tests = target.TESTS or {}
+        if #tests == 0 then
+            blud.error("#1: :TEST: matched no tests.", target.NAME)
+        end
+
+        local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
+        if os_mkdir(test_dir) == 2 then
+            error("could not create test directory: " .. test_dir)
+        end
+
+        local log_names = {}
+        for _, test_atom in ipairs(tests) do
+            local test_action = test_atom.TEST_ACTIONS[target]
+            assert(test_action)
+
+            local log_name = test_log_name(test_atom.NAME)
+            local log_atom = blud.get_or_create_target(log_name)
+            if log_atom.RULE then
+                blud.error("#1: test log target already has a rule.", log_name)
+            end
+
+            local function log_action(scope)
+                local log_path = scope:get_text("@")
+                os.remove(log_path)
+
+                local status = test_action(scope)
+                if status and status ~= 0 then
+                    return status
+                end
+
+                util.string_to_file(log_path, "success\n")
+                return 0
+            end
+
+            blud.operators[":"]:ADD_RULE(
+                log_atom,
+                { test_atom.NAME },
+                log_action
+            )
+            table.insert(log_names, log_name)
+        end
+
+        rule.prereq_words = log_names
+        rule.test_rule_prepared = true
+    end
+
+    function op:BUILD(target)
+        return M.BUILD(self, target)
     end
 end
 
@@ -468,7 +555,7 @@ do
     blud.operators[":BUILD:"] = op
 
     -- a build name cannot be a primary target
-    function op:SET_PRIMARY_TARGETS(target_atoms)
+    function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
@@ -480,21 +567,16 @@ do
         if target.USED_AS_PREREQUISITE then
             blud.error("%s: build name was previously used as prerequisite.", target.NAME)
         end
+        if not blud.default_build then
+            blud.default_build = target
+        end
         target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
         target.ACTION = action
-        -- is this the default build (first one mentioned?)
-        if blud.BUILD_DEFAULT == nil then
-            blud.BUILD_DEFAULT = target
-            -- print("default build is: ", blud.BUILD_DEFAULT.NAME)
-        end
-        local old_do_action = target.DO_ACTION
-        target.DO_ACTION = function (target)
-            local result = old_do_action(target)
-            if result == 0 then  -- if action didn't fail
-                assert(target.SCOPE)
-                blud.Scope.build.variables = target.SCOPE.variables
-            end
-            return result
+        if target.SCOPE.variables.OWD == nil then
+            target.SCOPE:set("OWD", {
+                [1] = target.NAME,
+                name = "OWD",
+            })
         end
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
@@ -504,6 +586,11 @@ do
     function op:BUILD(target)
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE)
+        local owd = target.SCOPE:get_text("OWD")
+        local mkdir_result = os_mkdir(owd)
+        if mkdir_result == 2 then
+            error("could not create build directory: " .. owd)
+        end
         blud.Scope.build.variables = target.SCOPE.variables
         return 0
     end
