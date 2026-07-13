@@ -90,6 +90,17 @@ files manually. The preflight result is binary: either proceed normally or run
 .FRESH. Expected tracked modifications from ongoing work are allowed by the
 preflight script.
 
+Treat /mnt/data/blud as disposable. During normal work, limit Git
+writes to staging explicit intended files and creating the requested
+commit or commits. Do not repair, rewrite, reconstruct, merge, rebase,
+cherry-pick, apply patches, or synthesize repository history. If the
+worktree, index, or commit ancestry is not exactly as expected, stop
+and run .FRESH. Git recovery operations are permitted only for an
+explicit .REVERT or inside the established bootstrap/finalization
+scripts.
+
+
+
 ** ChatGPT conversation head
 
 
