@@ -22,6 +22,12 @@ end
 
 -- Custom error handler for xpcall that iterates over the stack frames
 function blud.error_handler(err)
+    local compile_error_prefix = "BLUD_COMPILE_ERROR:"
+    if type(err) == "string" and
+       err:sub(1, #compile_error_prefix) == compile_error_prefix then
+        return err
+    end
+
     -- must never die, so wrap it
     local ok, result = pcall(function()
 

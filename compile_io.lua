@@ -338,11 +338,20 @@ end
 
 function M.error(fmt, ...)
     local text = string.format(fmt, ...)
-    local where = string.format("%s\nFile %s, line %d\n",
-                            error_get_line(current_input.text, current_input.source_ln),
-                            current_input.name,
-                            current_input.source_ln)
-    error(where .. text)
+    local source_line = error_get_line(
+        current_input.text,
+        current_input.source_ln
+    )
+    local headline, details = text:match("^([^\n]*)(.*)$")
+    local message = string.format(
+        "%s:%d: %s\n%s%s",
+        current_input.name,
+        current_input.source_ln,
+        headline,
+        source_line,
+        details
+    )
+    error("BLUD_COMPILE_ERROR:" .. message, 0)
 end
 
 -- close(): insert sourcemap in the gap, fix up the line numbers that follow, return text

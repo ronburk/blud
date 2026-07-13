@@ -402,9 +402,17 @@ end
 -- argument.
 function compile_action(compile_io)
     local action = ""
+    local action_line_count = 0
     -- the 'action' text is all the indented lines starting here
     if compile_io.is_indented_line() then
         while compile_io.is_indented_line() do
+            action_line_count = action_line_count + 1
+            if action_line_count > 1 then
+                compile_io.error(
+                    "Multiple action lines are not supported yet\n" ..
+                    "note: combine commands with && or invoke a script"
+                )
+            end
             compile_io.skip_white()
             local macro_text = compile_io.get_line_remainder()
             assert(compile_io.get_token() == "EOL")
