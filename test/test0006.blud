@@ -1,0 +1,6 @@
+test/test0006.target : test/test0006.prerequisite
+    echo ran >test/test0006.target.ran && touch $@
+
+test/test0006.prerequisite :
+    echo ran >test/test0006.prerequisite.ran && touch $@
+

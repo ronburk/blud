@@ -2,6 +2,11 @@ local debugger = require("debugger")
 
 local M= {} -- super class for all operators
 M.__index = M  -- search super class for missing fields
+
+local function target_needs_building(newest_prerequisite, timestamp)
+    return blud.command_line_options.always_make or
+           newest_prerequisite > timestamp
+end
 M.operator_new   = function(t)
     assert(type(t) == 'table')
     return setmetatable(t, M)
@@ -55,7 +60,7 @@ function M:BUILD(target_atom)
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
         -- print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
         -- print("    versus ", newest_prerequisite)
-        if newest_prerequisite > timestamp then
+        if target_needs_building(newest_prerequisite, timestamp) then
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
@@ -279,7 +284,7 @@ do  -- : operator
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
 --        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
 --        print("    versus ", newest_prerequisite)
-        if newest_prerequisite > timestamp then
+        if target_needs_building(newest_prerequisite, timestamp) then
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
@@ -411,7 +416,7 @@ do  -- :: operator
         target_atom.TIMESTAMP = timestamp
 
         local newest_prerequisite = build_prepared_prerequisites(target_atom)
-        if newest_prerequisite > timestamp then
+        if target_needs_building(newest_prerequisite, timestamp) then
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
