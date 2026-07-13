@@ -1,16 +1,18 @@
 alias gs='git status'
 upload()
 {
+    local slop="${1:-5 minutes}"
     local timestamp
     local destination
 
     rm -f -- blud-upload-20*.zip || return
 
-    timestamp=$(date -u +'%Y%m%dT%H%M%S.%NZ') || return
+    timestamp=$(date -u -d "now + $slop" +'%Y%m%dT%H%M%SZ') || return
     destination="blud-upload-${timestamp}.zip"
 
     cp -- ./blud.zip "$destination" || return
-    echo -n "file://$(realpath $destination)" | xclip -selection clipboard -t text/uri-list
+    printf 'file://%s' "$(realpath -- "$destination")" |
+        xclip -selection clipboard -t text/uri-list
     printf '%s\n' "$destination"
 }
 

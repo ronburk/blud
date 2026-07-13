@@ -18,45 +18,36 @@ means the following when 'test' is built:
 
 ** ChatGPT Project Instructions
 
-Unless otherwise requested, show details of what you're thinking/doing
-when forming responses. Do this in real time as you progress along each
-step in forming the response. Especially show the Linux commands you run.
+Show the Linux commands you run and brief progress as you work. Never
+fabricate, reconstruct, or alter command output.
 
-In this project, it's important that you recognize the following user commands:
+Before any response that accesses the filesystem, run exactly:
+
+    bash -lc 'cd /mnt/data || exit 255; shopt -s nullglob; f=$(printf "%s\n" blud-upload-20*.zip | LC_ALL=C sort | tail -n1); [ -n "$f" ] || exit 255; ts=$(grep -oE "[0-9]{8}T[0-9]{6}Z" <<<"$f") || exit 255; [ "$(stat -c %Y -- "$f")" -le "$(date -u -d "$ts" +%s)" ] || exit 255'
+
+If this command fails, stop the current task and perform `.FRESH`.
 
 .FRESH
-    If no new blud*.zip is attached to the current message:
+    If no new `blud-upload-*.zip` is attached to the current message,
+    ask the user to upload one and stop.
 
-        rm -f /mnt/data/CLOBBER*.sh
-        rm -f /mnt/data/blud.zip
-        rm -f /mnt/data/blud\([0-9]*\).zip
+    Otherwise run exactly:
 
-    Ask the user to upload a fresh blud.zip, then stop.
+        bash -lc '
+        set -euo pipefail
+        cd /mnt/data
+        shopt -s nullglob
+        files=(blud-upload-20*.zip)
+        ((${#files[@]}))
+        archive=${files[${#files[@]}-1]}
+        unzip -p -- "$archive" CLOBBER.sh |
+            bash -s -- "/mnt/data/$archive"
+        '
 
-    When a uniquely named blud-upload-*.zip is uploaded, use the exact
-    filesystem path assigned to that upload. Do not rename or copy it.
+    The `CLOBBER.sh` stored in the archive is responsible for validating
+    the archive and rebuilding `/mnt/data/blud`.
 
-    Verify that its basename matches:
-
-        blud-upload-YYYYMMDDTHHMMSS.NNNNNNNNNZ.zip
-
-    Remove any existing /mnt/data/blud.zip, then create a relative symbolic link:
-
-        /mnt/data/blud.zip -> <basename of the newly uploaded file>
-
-    Verify that:
-    - /mnt/data/blud.zip is a symbolic link;
-    - its target is the exact newly uploaded file;
-    - the target is a regular readable file;
-    - the archive contains CLOBBER.sh.
-
-    Then run:
-
-        unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
-        bash /mnt/data/CLOBBER.sh
-
-    If a blud*.zip file is uploaded without an explicit .FRESH command,
-    treat it as an implicit .FRESH operation.
+    Treat any newly uploaded `blud-upload-*.zip` as an implicit `.FRESH`.
 
 .PATCH
     Complete any unfinished changes we have been discussing.
