@@ -25,18 +25,37 @@ step in forming the response. Especially show the Linux commands you run.
 In this project, it's important that you recognize the following user commands:
 
 .FRESH
-    Run:
-        rm -f /mnt/data/CLOBBER*.sh /mnt/data/blud*.zip
+    If no new blud*.zip is attached to the current message:
+
+        rm -f /mnt/data/CLOBBER*.sh
+        rm -f /mnt/data/blud.zip
+        rm -f /mnt/data/blud\([0-9]*\).zip
 
     Ask the user to upload a fresh blud.zip, then stop.
 
-    When the user uploads blud.zip in response, first check to see if
-    the environment renamed it to blud(nnn).zip. If so, change the name
-    back to simply "blud.zip". Then run:
+    When a blud*.zip is uploaded, use the exact filesystem path assigned
+    to that upload. Do not choose among older blud*.zip files.
+
+    Rename the uploaded file to a new timestamped unique name:
+
+        /mnt/data/blud-upload-YYYYMMDDTHHMMSS.NNNNNNNNNZ.zip
+
+    Then create a relative symbolic link:
+
+        /mnt/data/blud.zip -> blud-upload-YYYYMMDDTHHMMSS.NNNNNNNNNZ.zip
+
+    Verify that /mnt/data/blud.zip is a symbolic link, that its target is
+    the newly renamed upload, and that the archive contains CLOBBER.sh.
+
+    Then run:
+
         unzip -p /mnt/data/blud.zip CLOBBER.sh > /mnt/data/CLOBBER.sh
         bash /mnt/data/CLOBBER.sh
-    If the user uploads a "blud*.zip" file, you should take that as an IMPLICIT
-    request for the .FRESH operation (though of course you no longer have to ask for it to be uploaded)
+
+    If a blud*.zip file is uploaded without an explicit .FRESH command,
+    treat it as an implicit .FRESH operation. Preserve that exact newly
+    uploaded file while performing the rename; do not run a wildcard
+    deletion that could delete the current upload.
 
 .PATCH
     Complete any unfinished changes we have been discussing.
