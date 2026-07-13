@@ -11,15 +11,32 @@ run_fresh()
 archive=/mnt/data/blud.zip
 worktree=/mnt/data/blud
 
-# The authoritative archive must exist.
-[[ -f "${archive}" ]] || run_fresh "${archive} does not exist"
-[[ -r "${archive}" ]] || run_fresh "${archive} is not readable"
+# The authoritative archive path must remain a relative symbolic link to
+# the uniquely named file created from the current upload.
+[[ -L "${archive}" ]] || run_fresh "${archive} is not a symbolic link"
+
+link_target=$(readlink -- "${archive}") ||
+    run_fresh "readlink failed for ${archive}"
+
+if [[ ! "${link_target}" =~ ^blud-upload-[0-9]{8}T[0-9]{6}\.[0-9]{9}Z\.zip$ ]]; then
+    run_fresh "${archive} points to invalid archive name ${link_target}"
+fi
+
+archive_target=/mnt/data/${link_target}
+[[ -f "${archive_target}" ]] || run_fresh "${archive_target} does not exist"
+[[ ! -L "${archive_target}" ]] || run_fresh "${archive_target} is itself a symbolic link"
+[[ -r "${archive_target}" ]] || run_fresh "${archive_target} is not readable"
+
+resolved_archive=$(readlink -f -- "${archive}") ||
+    run_fresh "cannot resolve ${archive}"
+[[ "${resolved_archive}" == "${archive_target}" ]] ||
+    run_fresh "${archive} resolves outside its expected target"
 
 # A rematerialized environment has previously given unrelated top-level
-# files nearly identical timestamps. Ignore helper scripts that are
-# deliberately created immediately after blud.zip is uploaded.
-archive_mtime=$(stat -c %Y -- "${archive}") ||
-    run_fresh "stat failed for ${archive}"
+# files nearly identical timestamps. Ignore workflow files and all blud
+# archive names while checking for that signature.
+archive_mtime=$(stat -c %Y -- "${archive_target}") ||
+    run_fresh "stat failed for ${archive_target}"
 
 other_file_count=0
 different_timestamp_found=0
@@ -28,7 +45,7 @@ while IFS= read -r -d '' file; do
     name=${file##*/}
 
     case "${name}" in
-        blud.zip|CHATGPT_PREFLIGHT.sh|CLOBBER*.sh)
+        blud.zip|blud-upload-*.zip|blud\([0-9]*\).zip|CHATGPT_PREFLIGHT.sh|CLOBBER*.sh)
             continue
             ;;
     esac

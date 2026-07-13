@@ -20,21 +20,28 @@ need_upload() {
     exit 2
 }
 
-shopt -s nullglob
-blud_archives=(/mnt/data/blud*.zip)
-shopt -u nullglob
-if ((${#blud_archives[@]} > 1)); then
-    printf 'CLOBBER ERROR: duplicate blud archives found:\n' >&2
-    printf '  %s\n' "${blud_archives[@]}" >&2
-    rm -f -- "${blud_archives[@]}"
-    printf 'CHATGPT_ACTION=RESTART_DOT_FRESH\n' >&2
-    printf 'All duplicate blud archives were removed. Start the .FRESH operation over from the beginning.\n' >&2
-    exit 3
+[ -e "$base_zip" ] || need_upload "$base_zip"
+[ -L "$base_zip" ] || die "$base_zip is not a symbolic link"
+
+link_target=$(readlink -- "$base_zip") ||
+    die "cannot read symbolic link $base_zip"
+
+if [[ ! "$link_target" =~ ^blud-upload-[0-9]{8}T[0-9]{6}\.[0-9]{9}Z\.zip$ ]]; then
+    die "$base_zip points to invalid archive name: $link_target"
 fi
 
-find /mnt/data -maxdepth 1 -type f -name '*(*).*' -delete
+archive_target=/mnt/data/$link_target
+[ -f "$archive_target" ] || die "archive target does not exist: $archive_target"
+[ ! -L "$archive_target" ] || die "archive target is itself a symbolic link: $archive_target"
+[ -r "$archive_target" ] || die "archive target is not readable: $archive_target"
 
-[ -f "$base_zip" ] || need_upload "$base_zip"
+shopt -s nullglob
+collision_archives=(/mnt/data/blud\([0-9]*\).zip)
+shopt -u nullglob
+if ((${#collision_archives[@]} > 0)); then
+    say "removing stale collision-renamed blud archives"
+    rm -f -- "${collision_archives[@]}"
+fi
 
 say "removing old scratch tree"
 rm -rf "$work"
