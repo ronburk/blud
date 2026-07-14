@@ -56,7 +56,8 @@ If this command fails, stop current task, show the user the output of EXACTLY
     In /mnt/data/blud:
     1. Run the relevant build/tests.
     2. Ensure only the intended non-ignored source changes remain.
-    3. Stage those changes and commit them as one commit; MAKE SURE THAT COMMIT HAS CONCISE BUT DETAILED COMMENTS
+    3. Stage those changes and commit them as one well-described commit,
+       following the commit message requirements below.       
     4. Run:
            bash chatgpt_patch_finish.sh
     5. If the script exits nonzero, report the failure and do not supply a patch.
@@ -67,6 +68,20 @@ If this command fails, stop current task, show the user the output of EXACTLY
     The user may download it locally under the fixed name chatgpt.patch.
 
     Do not provide a bare git diff.
+
+    Commit message requirements:
+    - Use a concise imperative subject.
+    - Include a non-empty body describing:
+        1. what behavior changed;
+        2. where the change was implemented;
+        3. why this design was chosen and which important semantics or
+           constraints it preserves;
+        4. what validation was run.
+    - Describe the conceptual change, not merely a list of modified files.
+    - The message should let a reader understand the purpose and design
+      without first reading the diff.
+    - Omit the body only for genuinely trivial changes whose purpose is fully
+      explained by the subject.
 
 .REVERT
     Use git commands to revert the project in /mnt/data/blud. In this context,
