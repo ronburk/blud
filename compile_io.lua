@@ -140,7 +140,8 @@ M.get_line_remainder = function()
     return result
 end
 
-M.skip_white = function()
+
+M.skip_white = function()  -- skip over spaces and tabs
     local pos   = current_input.pos
     local white = current_input.text:match("^[ \t]*", pos)
     pos = pos + #white
