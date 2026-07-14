@@ -3,7 +3,9 @@ set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
 head=$(git -C "$repo" rev-parse HEAD)
-patch=/mnt/data/chatgpt-$head.patch
+patch_dir=/mnt/data/tmp
+patch=$patch_dir/chatgpt-$head.patch
+mkdir -p "$patch_dir"
 
 [ -z "$(git -C "$repo" status --porcelain --untracked-files=all)" ] || {
     echo "error: worktree is not clean" >&2
@@ -16,7 +18,7 @@ git -C "$repo" rev-parse HEAD^ >/dev/null 2>&1 || {
     exit 1
 }
 
-rm -f /mnt/data/chatgpt*.patch
+rm -f "$patch_dir"/chatgpt*.patch
 
 tmp=$(mktemp /mnt/data/.chatgpt-patch.XXXXXX)
 verify=$(mktemp -d /mnt/data/chatgpt-verify.XXXXXX)
