@@ -146,11 +146,7 @@ local super_atom = {
     get_timestamp = function(atom)
         assert(atom.BOUND_NAME)
 
-        local assume_new = atom.SCOPE:get_text(".ASSUME_NEW")
-
-        if assume_new ~= nil
-                and assume_new ~= ""
-                and assume_new ~= "false" then
+        if atom.SCOPE:get_boolean(".ASSUME_NEW") then
             atom.TIMESTAMP = blud.current_time
         elseif atom.TIMESTAMP == nil then
             atom.TIMESTAMP = blud.get_fs_timestamp(atom.BOUND_NAME)

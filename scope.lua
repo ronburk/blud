@@ -26,6 +26,21 @@ M.get_text = function(self, name)
 end
 
 
+-- Boolean variables use the existing textual convention:
+-- empty or "false" is false; every other expanded value is true.
+M.get_boolean = function(self, name)
+    local value = self:get_text(name)
+    return value ~= "" and value ~= "false"
+end
+
+
+-- Store a canonical textual value so normal scope inheritance and expansion apply.
+M.set_boolean = function(self, name, value)
+    assert(type(value) == "boolean")
+    self:set(name, value and "true" or "false")
+end
+
+
 -- generic set() function to set value of variable
 M.set = function(self, name, value)
     self.variables[name] = value
