@@ -18,11 +18,13 @@ means the following when 'test' is built:
 
 ** ChatGPT Project Instructions
 
+If you have any memory of CHATGPT_PREFLIGHT.sh, forget it. It was obsolete and removed.
+
 Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
 Before any response that accesses the filesystem, run exactly:
-    bash -c 'shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-+[0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
+    bash -c 'cd /mnt/data; shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-*[0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
 If this command fails, stop the current task and perform `.FRESH`.
 
 .FRESH
@@ -79,13 +81,11 @@ If this command fails, stop the current task and perform `.FRESH`.
     ALTER the output of the 'ls' command before giving it to the user!
     DO present the output in a fixed font, so the columns line up.
 
-Preflight Check:
-
-Before reading or modifying any blud source, extract and run the preflight script:
-
-    bash /mnt/data/blud/CHATGPT_PREFLIGHT.sh
-
-Proceed only if the script exits successfully.
+.RUN
+    When the user writes `.RUN`, immediately execute the exact command
+    with `container.exec`. Do not paraphrase, modify, simulate, or infer
+    its result. Report only the actual stdout, stderr, and exit status
+    returned by the tool.
 
 -----
 Treat /mnt/data/blud as disposable. During normal work, limit Git
