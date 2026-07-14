@@ -1,4 +1,45 @@
  * blud
+** compile_action
+
+Let's look at some bludfile code that should be legal:
+
+prog0: prog1
+    echo "action for prog0"
+    touch prog0
+
+do
+    : prog1: prog1.o
+    :    echo "building prog1"
+    :    if true then
+    :         : prog2: prog2.o
+    :         :     echo "building prog2"
+    :    end
+end
+
+We are largely a line-oriented preprocessor. compile_action gets called
+in two different contexts.
+
+Consider:
+CFLAGS += -g
+    echo "I'm an error"
+
+compile_io doesn't know enough to know the echo is an error. It doesn't (and shouldn't)
+know that the CFLAGS line is not a dependency specification.
+
+
+do
+    : prog1: prog1.o
+    :     echo "building prog1"
+    :     : prog2: prog2.o
+    :     :     echo "building prog2"
+end
+
+Here, we pop out of Action mode, and pop out of Directive mode and pop
+out of another Directive mode, all in one statement (the "end").
+
+
+
+
 ** :TEST: operator
 Given:
 
