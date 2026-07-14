@@ -54,6 +54,14 @@ function blud.parse_command_line()
             debugger.probe = debugger.real_probe
         elseif arg == "-B" then
             options.always_make = true
+        elseif arg == "-W" then
+            i = i + 1
+            if i > #args then
+                error("-W requires an atom name")
+            end
+
+            options.assume_new_names = options.assume_new_names or {}
+            table.insert(options.assume_new_names, args[i])
         elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
         else
