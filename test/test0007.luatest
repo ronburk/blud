@@ -1,0 +1,117 @@
+util = {
+    dump = function(value)
+        return tostring(value)
+    end,
+}
+
+blud = {
+    Scope = {
+        new_target_scope = function()
+            return {}
+        end,
+    },
+}
+
+local function fs_timestamp(path)
+    local pipe = assert(io.popen("stat -c %Y '" .. path .. "' 2>/dev/null", "r"))
+    local timestamp = tonumber(pipe:read("*a")) or 0
+    pipe:close()
+    return timestamp
+end
+
+blud.get_fs_timestamp = fs_timestamp
+local super_atom = assert(loadfile("atom.lua"))()
+
+local function new_bound_atom(bound_name)
+    return setmetatable({ BOUND_NAME = bound_name }, super_atom)
+end
+
+local existing = new_bound_atom("test/test0007.source")
+assert(existing:get_timestamp() == fs_timestamp(existing.BOUND_NAME))
+assert(existing.TIMESTAMP > 0)
+
+local missing = new_bound_atom("test/test0007.missing")
+assert(missing:get_timestamp() == 0)
+
+local calls = 0
+blud.get_fs_timestamp = function(path)
+    calls = calls + 1
+    return fs_timestamp(path)
+end
+
+local cached = new_bound_atom("test/test0007.source")
+local timestamp = cached:get_timestamp()
+assert(cached:get_timestamp() == timestamp)
+assert(calls == 1)
+
+package.loaded.debugger = {
+    probe = function()
+    end,
+}
+
+blud.operators = {}
+blud.command_line_options = {
+    always_make = false,
+}
+blud.current_time = 777
+blud.implicit = {
+    find_forward = function()
+        return nil
+    end,
+}
+
+require("operator")
+local operator_super = getmetatable(blud.operators[":"])
+
+local function new_build_target(fail_action)
+    local target = {
+        NAME = fail_action and "failed" or "successful",
+        RULE = {
+            action = true,
+        },
+        action_count = 0,
+    }
+
+    function target:BIND()
+        self.BOUND_NAME = self.NAME
+        return self
+    end
+
+    function target:get_timestamp()
+        if self.TIMESTAMP == nil then
+            self.TIMESTAMP = 0
+        end
+        return self.TIMESTAMP
+    end
+
+    function target:PREPARE_PREREQUISITES()
+    end
+
+    function target:BUILD_PREREQUISITES()
+        return 1
+    end
+
+    function target:DO_ACTION()
+        self.action_count = self.action_count + 1
+        if fail_action then
+            error("action failed")
+        end
+    end
+
+    return target
+end
+
+local successful = new_build_target(false)
+assert(operator_super.BUILD(operator_super, successful) == blud.current_time)
+assert(successful.TIMESTAMP == blud.current_time)
+assert(successful.action_count == 1)
+
+assert(operator_super.BUILD(operator_super, successful) == blud.current_time)
+assert(successful.action_count == 1)
+
+local failed = new_build_target(true)
+local ok = pcall(function()
+    operator_super.BUILD(operator_super, failed)
+end)
+assert(not ok)
+assert(failed.TIMESTAMP == 0)

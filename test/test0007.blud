@@ -1,0 +1,10 @@
+all: test/test0007.first test/test0007.second
+
+test/test0007.virtual : test/test0007.source
+    printf x >> test/test0007.actions
+
+test/test0007.first : test/test0007.virtual
+    touch $@
+
+test/test0007.second : test/test0007.virtual
+    touch $@

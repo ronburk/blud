@@ -143,6 +143,15 @@ local super_atom = {
             return atom.BIND_SWD(atom)
         end
     end,
+    get_timestamp = function(atom)
+        assert(atom.BOUND_NAME)
+
+        if atom.TIMESTAMP == nil then
+            atom.TIMESTAMP = blud.get_fs_timestamp(atom.BOUND_NAME)
+        end
+
+        return atom.TIMESTAMP
+    end,
 -- prepare prerequisites for this atom to be built
 -- default is to let operator do the work
     PREPARE_PREREQUISITES = function(atom)
@@ -173,8 +182,7 @@ local super_atom = {
         end
 
         target_atom:BIND()
-        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
-        target_atom.TIMESTAMP = timestamp
+        local timestamp = target_atom:get_timestamp()
         if timestamp == 0 then
             error("Don't know how to build: " .. target_atom.NAME)
         end
