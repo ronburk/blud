@@ -66,9 +66,22 @@ local function scan_dependency_word(text, pos)
     return text:sub(start, pos - 1)
 end
 
-local strip_prefix = function()
-end
+local strip_stack = {}
 
+local strip_prefix = function()
+    local pos = current_input.pos
+
+    for i = 1, #strip_stack do
+        local prefix = strip_stack[i]
+        if current_input.text:sub(pos, pos + #prefix - 1) ~= prefix then
+            table.remove(strip_stack)
+            return "STRIP_END", ""
+        end
+        pos = pos + #prefix
+    end
+
+    current_input.pos = pos
+end
 
 M.get_token = function()
     local token_type, token_text
