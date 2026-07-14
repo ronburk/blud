@@ -508,7 +508,7 @@ do
         end
 
         local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
-        if os_mkdir(test_dir) == 2 then
+        if not blud.just_print(target.SCOPE) and os_mkdir(test_dir) == 2 then
             error("could not create test directory: " .. test_dir)
         end
 
@@ -525,14 +525,19 @@ do
 
             local function log_action(scope)
                 local log_path = scope:get_text("@")
-                os.remove(log_path)
+                local just_print = blud.just_print(scope)
+                if not just_print then
+                    os.remove(log_path)
+                end
 
                 local status = test_action(scope)
                 if status and status ~= 0 then
                     return status
                 end
 
-                util.string_to_file(log_path, "success\n")
+                if not just_print then
+                    util.string_to_file(log_path, "success\n")
+                end
                 return 0
             end
 
@@ -592,9 +597,11 @@ do
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE)
         local owd = target.SCOPE:get_text("OWD")
-        local mkdir_result = os_mkdir(owd)
-        if mkdir_result == 2 then
-            error("could not create build directory: " .. owd)
+        if not blud.just_print(target.SCOPE) then
+            local mkdir_result = os_mkdir(owd)
+            if mkdir_result == 2 then
+                error("could not create build directory: " .. owd)
+            end
         end
         blud.Scope.build.variables = target.SCOPE.variables
         return 0

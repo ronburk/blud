@@ -285,7 +285,10 @@ blud.TARGETS = {
         ATTRIBUTE = true,
         DO_ACTION = function(target, prerequisites, action)
             local after = function()
-                status, exit_code = os.execute(target.ATTRIBUTE_TARGET.ACTION)
+                status = blud.execute(
+                    target.ATTRIBUTE_TARGET.SCOPE,
+                    target.ATTRIBUTE_TARGET.ACTION
+                )
             end
             blud.set_callback(target.PARENT, "DO_ACTION", after)
             return true

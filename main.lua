@@ -38,6 +38,7 @@ function blud.parse_command_line()
         bludfile_path = "bludfile",
         debug = false,
         always_make = false,
+        commandline_booleans = {},
     }
     local args = _G.COMMAND_LINE
     local i = 2     -- skip command-name
@@ -54,6 +55,8 @@ function blud.parse_command_line()
             debugger.probe = debugger.real_probe
         elseif arg == "-B" then
             options.always_make = true
+        elseif arg == "-n" then
+            options.commandline_booleans[".JUST_PRINT"] = true
         elseif arg == "-W" then
             i = i + 1
             if i > #args then
