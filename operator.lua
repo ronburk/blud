@@ -436,20 +436,42 @@ do
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
 
-    local function relativize_test_path(suite_name, word)
-        -- Relative test names are interpreted inside the suite directory.
-        if word:match("^/") or word:match("^[A-Za-z]:[/\\]") then
-            return word
+    local function is_absolute_path(path)
+        return path:match("^/") or path:match("^[A-Za-z]:[/\\]")
+    end
+
+    local function suite_source_directory(suite_name)
+        if is_absolute_path(suite_name) or suite_name:match("^%./") then
+            return suite_name
         end
-        return suite_name .. "/" .. word
+        return "./" .. suite_name
     end
 
     local function expand_test_words(suite_name, prereq_words)
-        local patterns = {}
+        local tests = {}
+        local suite_prefix = suite_name .. "/"
+        local source_directory = suite_source_directory(suite_name)
+
         for _, word in ipairs(prereq_words) do
-            table.insert(patterns, relativize_test_path(suite_name, word))
+            local absolute = is_absolute_path(word)
+            local pattern = absolute and word or suite_prefix .. word
+
+            for _, matched_path in ipairs(glob_words({ pattern })) do
+                if absolute then
+                    table.insert(tests, {
+                        name = matched_path,
+                    })
+                else
+                    assert(matched_path:sub(1, #suite_prefix) == suite_prefix)
+                    table.insert(tests, {
+                        name = matched_path:sub(#suite_prefix + 1),
+                        source_directory = source_directory,
+                    })
+                end
+            end
         end
-        return glob_words(patterns)
+
+        return tests
     end
 
     local function test_log_name(test_name)
@@ -477,9 +499,22 @@ do
         target.TESTS = target.TESTS or {}
         target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
 
-        local test_names = expand_test_words(target.NAME, prereq_words)
-        for _, test_name in ipairs(test_names) do
+        local tests = expand_test_words(target.NAME, prereq_words)
+        for _, test in ipairs(tests) do
+            local test_name = test.name
             local test_atom = blud.get_or_create_target(test_name)
+
+            if test.source_directory then
+                local existing = test_atom.SCOPE.variables.SWD
+                if existing and
+                        test_atom.SCOPE:get_text("SWD") ~= test.source_directory then
+                    blud.error(
+                        "#1: test atom has conflicting source directories.",
+                        test_name
+                    )
+                end
+                test_atom.SCOPE:set("SWD", test.source_directory)
+            end
 
             if not target.TESTS_BY_NAME[test_name] then
                 -- Preserve the order in which tests first enter the suite.
@@ -522,6 +557,7 @@ do
             if log_atom.RULE then
                 blud.error("#1: test log target already has a rule.", log_name)
             end
+            log_atom.SCOPE:set("OWD", test_dir)
 
             local function log_action(scope)
                 local log_path = scope:get_text("@")
