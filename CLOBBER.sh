@@ -2,7 +2,6 @@
 set -euo pipefail
 
 work=/mnt/data/blud
-patch_file=/mnt/data/chatgpt.patch
 
 say() {
     printf 'CLOBBER: %s\n' "$*"
@@ -13,31 +12,28 @@ die() {
     exit 1
 }
 
-shopt -s nullglob
-archives=(/mnt/data/blud-upload-*.zip)
-shopt -u nullglob
+(( $# == 1 )) ||
+    die "usage: CLOBBER.sh /mnt/data/blud-upload-<epoch>.zip"
 
-((${#archives[@]} > 0)) || die "no blud-upload-*.zip archive found"
-
-archive=$(
-    printf '%s\n' "${archives[@]}" |
-        LC_ALL=C sort -t- -k3 -n |
-        tail -n1
-)
+archive=$1
 archive_name=${archive##*/}
+
+[[ "$archive" == "/mnt/data/$archive_name" ]] ||
+    die "archive must be directly under /mnt/data: $archive"
 
 if [[ ! "$archive_name" =~ ^blud-upload-([0-9]+)\.zip$ ]]; then
     die "invalid archive name: $archive_name"
 fi
 
 archive_timestamp=${BASH_REMATCH[1]}
+archive_deadline=$((10#$archive_timestamp))
 
 [ -f "$archive" ] || die "archive is not a regular file: $archive"
 [ ! -L "$archive" ] || die "archive is a symbolic link: $archive"
 [ -r "$archive" ] || die "archive is not readable: $archive"
 
 archive_mtime=$(stat -c %Y -- "$archive")
-[ "$archive_mtime" -le "$archive_timestamp" ] ||
+[ "$archive_mtime" -le "$archive_deadline" ] ||
     die "archive mtime is newer than its embedded timestamp: $archive"
 
 unzip -tq "$archive" >/dev/null ||
@@ -73,7 +69,7 @@ git init -b main >/dev/null 2>&1 || {
 git config user.name "ChatGPT"
 git config user.email "chatgpt@example.invalid"
 
-rm -f "$patch_file"
+rm -f /mnt/data/chatgpt*.patch
 
 git add .
 git commit -m "baseline" >/dev/null
