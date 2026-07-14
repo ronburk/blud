@@ -1,4 +1,4 @@
--- compile_io.lua: I/O object for compiler
+-- Compiler I/O: reads stacked source inputs, emits generated Lua, and tracks source mappings.
 
 local M = {}
 
