@@ -56,7 +56,7 @@ If this command fails, stop current task, show the user the output of EXACTLY
     In /mnt/data/blud:
     1. Run the relevant build/tests.
     2. Ensure only the intended non-ignored source changes remain.
-    3. Stage those changes and commit them as one commit.
+    3. Stage those changes and commit them as one commit; MAKE SURE THAT COMMIT HAS CONCISE BUT DETAILED COMMENTS
     4. Run:
            bash chatgpt_patch_finish.sh
     5. If the script exits nonzero, report the failure and do not supply a patch.
