@@ -24,7 +24,7 @@ Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
 Before any response that accesses the filesystem, run exactly:
-    bash -c 'cd /mnt/data; shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-*[0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
+    bash -c 'cd /mnt/data; shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
 If this command fails, stop the current task and perform `.FRESH`.
 
 .FRESH
@@ -36,8 +36,9 @@ If this command fails, stop the current task and perform `.FRESH`.
         bash -lc '
         set -euo pipefail
         cd /mnt/data
+        rm -f /mnt/data/blud*.zip
         shopt -s nullglob
-        files=(blud-upload-[0-9]*.zip)
+        files=(blud-upload-0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip)
         ((${#files[@]}))
         archive=${files[${#files[@]}-1]}
         unzip -p -- "$archive" CLOBBER.sh |
