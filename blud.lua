@@ -552,7 +552,7 @@ blud.bludfile_code()
 if blud.command_line_options.assume_new_names then
     for _, name in ipairs(blud.command_line_options.assume_new_names) do
         local atom = blud.get_or_create_target(name)
-        atom.SCOPE:set(".ASSUME_NEW", "true")
+        atom.SCOPE:set_boolean(".ASSUME_NEW", true)
     end
 end
 if blud.command_line_options.target_names then
