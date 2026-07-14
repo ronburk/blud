@@ -33,9 +33,11 @@ archive_deadline=$((10#$archive_timestamp))
 [ -r "$archive" ] || die "archive is not readable: $archive"
 
 archive_mtime=$(stat -c %Y -- "$archive")
+# The embedded timestamp bounds mtime and detects rematerialized archives.
 [ "$archive_mtime" -le "$archive_deadline" ] ||
     die "archive mtime is newer than its embedded timestamp: $archive"
 
+# Validate the archive before destroying the current scratch tree.
 unzip -tq "$archive" >/dev/null ||
     die "archive integrity check failed: $archive"
 
@@ -71,6 +73,7 @@ git config user.email "chatgpt@example.invalid"
 
 rm -f /mnt/data/chatgpt*.patch
 
+# Commit the unpacked source as the patch baseline.
 git add .
 git commit -m "baseline" >/dev/null
 
