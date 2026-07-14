@@ -8,8 +8,7 @@ local post_sourcemap = nil
 local sourcemap      = {}  -- [{filename, source_ln, dest_ln}]
 local next_output_ln = 1
 local input_stack    = {}
-local current_input  = nil   -- {name, text, source_ln, reader, previous_line}
-local reread         = false
+local current_input  = nil   -- {name, text, source_ln, pos, eol}
 
 local function count_nl(text)  -- return count of newlines in a string
     return select(2, text:gsub("\n", "\n"))
@@ -32,34 +31,11 @@ function M.emit_file(name, text)
     append_output_text(text)
 end
 
--- lines: return an iterator that returns one line of the string at a time
-local function lines(str)
-    local pos = 1
-    return function()
-        if pos > #str then return nil end
-        local nl = str:find("\n", pos, true)
-        local line
-        if nl then
-            line = str:sub(pos, nl - 1)
-            pos = nl + 1
-        else
-            line = str:sub(pos)
-            pos = #str + 1
-        end
-        if line:sub(-1) == "\r" then
-            line = line:sub(1, -2)
-        end
-        return line
-    end
-end
-
--- push an input "file" that will be read by get_line()
 M.push_input = function(name, text)
-    local reader= lines(text)
     if current_input then   -- stack current input if any
         table.insert(input_stack, current_input)
     end
-    current_input = { name=name, text=text, source_ln=1, reader=reader, pos=1, eol=true }
+    current_input = { name=name, text=text, source_ln=1, pos=1, eol=true }
 end
 
 local function match_colon_operator(text, pos)
@@ -167,35 +143,6 @@ M.get_assign_op = function()
     return result
 end
 
-
-function M.reread()
-    assert(current_input)
-    assert(current_input.previous_line)
-    reread = true
-end
-
--- get the next line of input, popping the input stack if necessary
-function M.get_line()
-    local result
-    while current_input do
-        if reread == true then
-            result = current_input.previous_line
-            reread = false
-            return result
-        else
-            current_input.previous_line = current_input.reader()
-            result = current_input.previous_line
-            if result ~= nil then
-                current_input.source_ln = current_input.source_ln + 1
-                return result
-            else
-                input_stack[#input_stack] = nil -- pop exhausted input
-                current_input = input_stack[#input_stack]
-            end
-        end
-    end
-    return nil
-end
 
 -- don't really emit sourcemap, just start accumulating in a new place
 function M.emit_sourcemap()
