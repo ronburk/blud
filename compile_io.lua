@@ -66,8 +66,19 @@ local function scan_dependency_word(text, pos)
     return text:sub(start, pos - 1)
 end
 
+local strip_prefix = function()
+end
+
+
 M.get_token = function()
     local token_type, token_text
+    if current_input.eol then
+        token_type, token_text = strip_prefix()
+        if token_type then
+            return token_type, token_text
+        end
+    end
+
     local text = current_input.text
     local pos  = current_input.pos
     local char = text:sub(pos, pos)
