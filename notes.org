@@ -57,7 +57,7 @@ If this command fails, stop the current task and perform `.FRESH`.
     4. Run:
            bash chatgpt_patch_finish.sh
     5. If the script exits nonzero, report the failure and do not supply a patch.
-    6. Supply the exact uniquely named patch path printed by that script.
+    6. Supply the exact uniquely named patch path (inside /mnt/data/tmp) printed by that script.
 
     Never supply or link /mnt/data/chatgpt.patch.
     Link only the exact uniquely named file printed by the script.
