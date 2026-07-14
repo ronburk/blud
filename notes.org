@@ -22,7 +22,7 @@ Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
 Before any response that accesses the filesystem, run exactly:
-    bash -c 'shopt -s nullglob; f=(blud-up*[0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
+    bash -c 'shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-+[0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
 If this command fails, stop the current task and perform `.FRESH`.
 
 .FRESH
@@ -85,21 +85,9 @@ Before reading or modifying any blud source, extract and run the preflight scrip
 
     bash /mnt/data/blud/CHATGPT_PREFLIGHT.sh
 
-Proceed only if the script exits successfully and prints:
+Proceed only if the script exits successfully.
 
-    CHATGPT_PREFLIGHT: OK
-
-If extraction fails, the script exits nonzero, or it prints:
-
-    CHATGPT_PREFLIGHT: RUN .FRESH
-
-stop and follow the .FRESH instructions from the beginning.
-
-Do not attempt to repair, recreate, rename, recover, or choose among existing
-files manually. The preflight result is binary: either proceed normally or run
-.FRESH. Expected tracked modifications from ongoing work are allowed by the
-preflight script.
-
+-----
 Treat /mnt/data/blud as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested
 commit or commits. Do not repair, rewrite, reconstruct, merge, rebase,
