@@ -1,0 +1,5 @@
+-- expect: test0007.out
+-- Atom timestamps are cached logical values after a successful build.
+
+all:
+    bash test/test0007.sh

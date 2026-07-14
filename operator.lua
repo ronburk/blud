@@ -50,8 +50,7 @@ function M:BUILD(target_atom)
             end
         end
         target_atom:BIND()
-        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
-        target_atom.TIMESTAMP = timestamp
+        local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
                 error("Don't know how to build: " .. target_atom.NAME)            
         end
@@ -64,7 +63,8 @@ function M:BUILD(target_atom)
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
-                timestamp = blud.current_time
+                target_atom.TIMESTAMP = blud.current_time
+                timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
                 error("Don't know how to build: " .. target_atom.NAME);
             end
@@ -275,8 +275,7 @@ do  -- : operator
         end
         target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
-        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
-        target_atom.TIMESTAMP = timestamp
+        local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
                 error("Don't know how to build: " .. target_atom.NAME)
         end
@@ -288,7 +287,8 @@ do  -- : operator
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
-                timestamp = blud.current_time
+                target_atom.TIMESTAMP = blud.current_time
+                timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
                 error("Don't know how to build: " .. target_atom.NAME);
             end
@@ -412,15 +412,15 @@ do  -- :: operator
         prepare_prerequisites(target_atom)
         target_atom:BIND()
 
-        local timestamp = blud.get_fs_timestamp(target_atom.BOUND_NAME)
-        target_atom.TIMESTAMP = timestamp
+        local timestamp = target_atom:get_timestamp()
 
         local newest_prerequisite = build_prepared_prerequisites(target_atom)
         if target_needs_building(newest_prerequisite, timestamp) then
             local rule = target_atom.RULE
             if rule and rule.action then
                 target_atom:DO_ACTION()
-                timestamp = blud.current_time
+                target_atom.TIMESTAMP = blud.current_time
+                timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 then
                 error("Don't know how to build: " .. target_atom.NAME)
             end
