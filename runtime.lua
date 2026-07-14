@@ -194,18 +194,27 @@ blud.default_action = function (scope)
 end
 
 
+blud.just_print = function(scope)
+    return scope:get_boolean(".JUST_PRINT")
+end
+
+
 blud.execute = function(scope, text)
     -- util.print("blud.execute(text=%s)", util.dump(text))
     assert(type(text) == "string")
     local status
     if text then
         print(text)
-        status = os.execute(text)
+        if blud.just_print(scope) then
+            status = 0
+        else
+            status = os.execute(text)
+        end
         -- print("    status = ", status)
     else
         -- print("<no action>")
     end
-    
+
     return status
 end
 
@@ -511,6 +520,10 @@ end
 --blud.macros          = {}
 -- macro scopes
 blud.Scope = require("scope")
+
+for name, value in pairs(blud.command_line_options.commandline_booleans) do
+    blud.Scope.commandline:set_boolean(name, value)
+end
 
 
 --[[

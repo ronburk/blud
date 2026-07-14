@@ -3,7 +3,7 @@ local M = {}
 local util = require("util")
 
 
-local macro_name_pattern = "([%a_][%w_%.]*)"
+local macro_name_pattern = "([%.]?[%a_][%w_%.]*)"
 
 -- parse a line that looks like macro assign, or return nil
 do
