@@ -38,6 +38,42 @@ Here, we pop out of Action mode, and pop out of Directive mode and pop
 out of another Directive mode, all in one statement (the "end").
 
 
+** Source Names on Command-Line
+
+We really would like the user to be able to say:
+    ./blud test0002
+to mean "run test0002".
+
+
+OK, so given the current "bludfile", the user types "./blud
+test0002". We don't know that name directly from the bludfile (that's
+why it currently says "Don't know how to build: test0002"). So,
+instead of saying that, we scan the bludfile directives for wildcards.
+
+There's a *.lua, but that does not match test0002
+
+There's a test[0-9][0-9][0-9][0-9], and that DOES match test0002.
+
+But that doesn't mean it exists. But we have narrowed down the rule
+that must be involved IF 'test0002' can ever be an atom in our build
+graph.
+
+So now, we could make some funky changes. We can give operators a
+special "EXPAND_WILDCARDS" function (default does nothing).
+
+I guess this basically means "we prefer lazy expansion, but something
+has come up, so DO IT NOW".
+
+
+
+OK, so the :TEST: operator (in this particular example) does a function. Wait, maybe it
+
+can just be the already-extant PREPARE_PREREQUISITES. Then we check again,
+
+and if 'test0002' is STILL not an atom, then we're back to our original don't know how to build.
+
+But if 'test0002' now IS an atom, then we have our atom and we have a rule that it is a prerequisite in.
+
 
 
 ** :TEST: operator
