@@ -1,12 +1,12 @@
 CC         = gcc
 CXX        = gcc
-LINK.o     = $(CC) -o $@ $^ $(LDFLAGS)
-LINK.cxx.o = $(CXX) -o $@ $^ $(LDFLAGS)
+LINK.o     = shell $(CC) -o $@ $^ $(LDFLAGS)
+LINK.cxx.o = shell $(CXX) -o $@ $^ $(LDFLAGS)
 
 
 %.o : %.c
-    $(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+    shell $(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 %.o : %.cpp
-    $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+    shell $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 

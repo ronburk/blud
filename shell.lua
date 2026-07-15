@@ -1,6 +1,5 @@
--- Execute a deliberately small, portable subset of shell syntax in Lua.
--- Anything this module cannot parse or implement is passed unchanged to the
--- platform shell, so recognizing a construct must never change its meaning.
+-- Parse and execute one command line using blud's portable command grammar.
+-- The operating-system shell is invoked only by the explicit `shell` command.
 local M = {}
 
 -- Print a command-style diagnostic and return the conventional failure status.
@@ -17,26 +16,24 @@ local function invalidate_directory_cache()
     end
 end
 
--- Split one simple command into words while preserving whether an unquoted
--- glob metacharacter occurred. Return nil whenever real shell interpretation
--- is required; M.execute() then delegates the original text to os.execute().
+-- Split one command line into words. Spaces and tabs delimit words; single and
+-- double quotes group text; backslash quotes the following character. Unquoted
+-- shell operators and substitutions are rejected because blud does not define
+-- them. Each word records whether it contains an unquoted glob metacharacter.
 local function parse(command)
     local words = {}
     local bytes = {}
     local word_started = false
     local has_glob = false
-    local state = "plain"
+    local quote
     local pos = 1
 
-    -- Append one literal byte to the current word and remember whether it may
-    -- participate in pathname expansion. Quoted metacharacters pass glob=false.
     local function append(c, glob)
         bytes[#bytes + 1] = c
         word_started = true
         has_glob = has_glob or glob
     end
 
-    -- Commit the current word, including an explicitly quoted empty word.
     local function finish_word()
         if word_started then
             words[#words + 1] = {
@@ -52,18 +49,17 @@ local function parse(command)
     while pos <= #command do
         local c = command:sub(pos, pos)
 
-        if state == "single" then
+        if quote == "'" then
             if c == "'" then
-                state = "plain"
+                quote = nil
             else
                 append(c, false)
             end
-        elseif state == "double" then
+        elseif quote == '"' then
             if c == '"' then
-                state = "plain"
+                quote = nil
             elseif c == "$" or c == "`" then
-                -- Parameter and command substitution belong to the real shell.
-                return nil
+                return nil, "unsupported syntax '" .. c .. "'"
             elseif c == "\\" then
                 local next_c = command:sub(pos + 1, pos + 1)
                 if next_c == "" then
@@ -71,8 +67,6 @@ local function parse(command)
                 elseif next_c == '"' or next_c == "\\" or
                        next_c == "$" or next_c == "`" then
                     append(next_c, false)
-                    pos = pos + 1
-                elseif next_c == "\n" then
                     pos = pos + 1
                 else
                     append("\\", false)
@@ -82,35 +76,24 @@ local function parse(command)
             end
         elseif c == " " or c == "\t" then
             finish_word()
-        elseif c == "\n" or c == "\r" then
-            -- An action containing multiple command lines must remain one shell script.
-            return nil
-        elseif c == "'" then
-            state = "single"
-            word_started = true
-        elseif c == '"' then
-            state = "double"
+        elseif c == "'" or c == '"' then
+            quote = c
             word_started = true
         elseif c == "\\" then
             local next_c = command:sub(pos + 1, pos + 1)
             if next_c == "" then
                 append("\\", false)
-            elseif next_c == "\n" then
-                pos = pos + 1
             else
                 append(next_c, false)
                 pos = pos + 1
             end
         elseif c == "#" and not word_started then
             break
-        -- Operators, substitutions, grouping, and redirection are intentionally
-        -- outside the internal grammar and therefore force shell fallback.
         elseif c == "$" or c == "`" or c == "|" or c == "&" or
                c == ";" or c == "<" or c == ">" or c == "(" or
-               c == ")" or c == "{" or c == "}" then
-            return nil
-        elseif c == "~" and not word_started then
-            return nil
+               c == ")" or c == "{" or c == "}" or
+               (c == "~" and not word_started) then
+            return nil, "unsupported syntax '" .. c .. "'"
         else
             append(c, c == "*" or c == "?" or c == "[")
         end
@@ -118,16 +101,16 @@ local function parse(command)
         pos = pos + 1
     end
 
-    if state ~= "plain" then
-        return nil
+    if quote then
+        return nil, "unterminated quote"
     end
 
     finish_word()
     return words
 end
 
--- Convert parsed words to argv and perform Bash-like pathname expansion only
--- for unquoted metacharacters. An unmatched pattern remains a literal word.
+-- Convert parsed words to argv and expand only unquoted glob metacharacters.
+-- As in default Bash behavior, an unmatched pattern remains a literal operand.
 local function expand_words(words)
     local argv = {}
     local has_glob = false
@@ -151,6 +134,37 @@ local function expand_words(words)
     end
 
     return argv
+end
+
+-- Recognize a literal first word `shell` and return everything after its first
+-- separating space or tab unchanged. Quoting, substitutions, operators, and
+-- additional whitespace in that remainder therefore reach the OS shell verbatim.
+local function extract_shell_text(command)
+    local first = command:find("[^ \t]")
+    if not first or command:sub(first, first + 4) ~= "shell" then
+        return nil
+    end
+
+    local after = first + 5
+    if after > #command then
+        return ""
+    end
+
+    local separator = command:sub(after, after)
+    if separator ~= " " and separator ~= "\t" then
+        return nil
+    end
+
+    return command:sub(after + 1)
+end
+
+-- Implement `shell text...`. Lua calls this as `shell(text)`, where text is the
+-- exact remainder of the original line rather than a parsed argv array.
+local function shell(text)
+    if text == "" then
+        return 0
+    end
+    return os.execute(text)
 end
 
 -- Implement `touch [-c|--no-create] [--] path...`. argv[1] is "touch";
@@ -485,25 +499,33 @@ local function cd(argv)
     return 0
 end
 
--- Public registry so additional internal commands can be installed without
--- modifying M.execute(). Each command receives argv and returns a numeric status.
+-- Public registry of commands understood by blud. Ordinary handlers receive
+-- argv; `shell` is selected before parsing and receives the verbatim remainder.
 M.commands = {
     cd = cd,
     echo = echo,
     mkdir = mkdir,
     rm = rm,
+    shell = shell,
     touch = touch,
 }
 
 -- Called from Lua as `status = require("shell").execute(command)` (normally
--- through blud.shell.execute()). Execute recognized simple commands internally;
--- otherwise pass the exact input to os.execute(). Return its numeric shell status.
+-- through blud.shell.execute()). `command` must be one line. A literal leading
+-- `shell` delegates its remainder to the OS shell; every other command must use
+-- blud's parser and one of the handlers above.
 function M.execute(command)
     assert(type(command) == "string")
+    assert(not command:find("[\r\n]"))
 
-    local words = parse(command)
+    local shell_text = extract_shell_text(command)
+    if shell_text ~= nil then
+        return shell(shell_text)
+    end
+
+    local words, parse_error = parse(command)
     if not words then
-        return os.execute(command)
+        return diagnostic("blud", parse_error)
     end
     if #words == 0 then
         return 0
@@ -511,8 +533,8 @@ function M.execute(command)
 
     local argv = expand_words(words)
     local command_function = M.commands[argv[1]]
-    if not command_function then
-        return os.execute(command)
+    if not command_function or command_function == shell then
+        return diagnostic(argv[1], "command not implemented")
     end
 
     return command_function(argv)

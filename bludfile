@@ -10,7 +10,7 @@ CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -DBUILD_ID=666
 all : blud test
 
 test :TEST: test[0-9][0-9][0-9][0-9]
-    ./blud -f $<
+    shell ./blud -f $<
 
 debug release :BUILD:
 debug: CFLAGS += -g
@@ -22,7 +22,7 @@ blud :: $(SRCS)
 -- use cstr to convert Lua source into a C string, they all will reside in bludlua.c
 STRFILES = *.lua builtin.blud
 bludlua.c :  cstr $(STRFILES)
-    $(OWD)/cstr $(STRFILES) >$@
+    shell $(OWD)/cstr $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)
 cstr :: cstr.cpp

@@ -2,4 +2,4 @@
 -- Atom timestamps are cached logical values after a successful build.
 
 all:
-    bash test/test0007.sh
+    shell bash test/test0007.sh

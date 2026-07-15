@@ -20,7 +20,8 @@ mkdir -p "$tmp"
 # blud's own already-running process remain available.
 run_internal()
 {
-    PATH=/nonexistent ./blud -B -f "$bludfile" all
+    BLUD_SHELL_TEST='verbatim  value' PATH=/nonexistent \
+        ./blud -B -f "$bludfile" all
 }
 
 # Exercise mkdir -p, touch, relative glob expansion, and rm.
@@ -82,13 +83,34 @@ EOF_BLUD
 run_internal
 [[ -f "$tmp/cd-result" ]]
 
-# Redirection is unsupported internally and must reach the platform shell.
+# Unsupported syntax is an error; it must not trigger an implicit shell.
 cat >"$bludfile" <<EOF_BLUD
 all:
-    printf fallback >$tmp/fallback
+    echo blocked >$tmp/implicit
 EOF_BLUD
-./blud -B -f "$bludfile" all
-[[ $(<"$tmp/fallback") == fallback ]]
+if run_internal >/dev/null 2>&1; then
+    echo "unsupported syntax unexpectedly succeeded" >&2
+    exit 1
+fi
+[[ ! -e "$tmp/implicit" ]]
+
+# An unknown command is also an error unless explicitly prefixed by `shell`.
+cat >"$bludfile" <<'EOF_BLUD'
+all:
+    printf blocked
+EOF_BLUD
+if run_internal >/dev/null 2>&1; then
+    echo "unknown command unexpectedly succeeded" >&2
+    exit 1
+fi
+
+# `shell` passes its remainder unchanged, including substitution and redirection.
+cat >"$bludfile" <<'EOF_BLUD'
+all:
+    shell printf '%s' "$BLUD_SHELL_TEST" >test/test0008.tmp/explicit
+EOF_BLUD
+run_internal
+[[ $(<"$tmp/explicit") == 'verbatim  value' ]]
 
 # Recursive rm removes the remaining directory tree.
 cat >"$bludfile" <<EOF_BLUD

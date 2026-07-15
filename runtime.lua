@@ -186,7 +186,7 @@ if blud.command_line_options.debug == true then
     blud.debugger.probe = blud.debugger.real_probe
 end
 blud.Macro = require("macro")
--- shell.execute() handles portable simple commands and delegates all others.
+-- shell.execute() runs blud commands; only an explicit `shell` delegates.
 blud.shell = require("shell")
 
 blud.rules          = {}
@@ -210,8 +210,8 @@ blud.execute = function(scope, text)
         if blud.just_print(scope) then
             status = 0
         else
-            -- Preserve the existing action text/status contract while allowing
-            -- shell.lua to bypass the platform shell for supported commands.
+            -- Preserve the action text/status contract while shell.lua
+            -- enforces explicit selection of the platform shell.
             status = blud.shell.execute(text)
         end
         -- print("    status = ", status)

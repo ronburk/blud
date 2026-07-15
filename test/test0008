@@ -1,7 +1,7 @@
 -- expect: test0008.out
--- Verify portable internal commands and fallback to the platform shell.
+-- Verify portable internal commands and explicit platform-shell use.
 -- The action invokes the detailed shell test as one command because this test
 -- format currently accepts a single action line.
 
 all:
-    bash test/test0008.sh
+    shell bash test/test0008.sh

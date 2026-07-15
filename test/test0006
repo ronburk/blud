@@ -2,5 +2,5 @@
 -- -B rebuilds every considered target regardless of timestamps
 
 all:
-    bash test/test0006.sh
+    shell bash test/test0006.sh
 
