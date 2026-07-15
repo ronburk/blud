@@ -165,7 +165,7 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
         }
 
         name = entry->d_name;
-        if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
+        if(strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
             continue;
 
         if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
