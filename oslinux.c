@@ -149,12 +149,9 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
     struct dirent*  entry;
     struct stat     statbuf;
     const  char*    name;
-    char*           path = (char*)malloc(PATH_MAX+1);
     int             result = -1;
 
-    if(path == NULL)
-        perror("os_get_dir: malloc");
-    else if ((dp = opendir(dir)) == NULL) {
+    if ((dp = opendir(dir)) == NULL) {
         fprintf(stderr, "os_get_dir: opendir failed\n");
         fprintf(stderr, "    dir: %s\n", dir);
         perror("    opendir");
@@ -164,16 +161,11 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
             name = entry->d_name;
             if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
                 continue;
-            if(snprintf(path, PATH_MAX, "%s/%s", dir, name) >= PATH_MAX){
-                perror("snprintf");
-                break;
-            }
-            if (stat(path, &statbuf) == -1) {
-                fprintf(stderr, "os_get_dir: stat failed\n");
+            if (fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
+                fprintf(stderr, "os_get_dir: fstatat failed\n");
                 fprintf(stderr, "    dir:  %s\n", dir);
                 fprintf(stderr, "    name: %s\n", name);
-                fprintf(stderr, "    path: %s\n", path);
-                perror("    stat");
+                perror("    fstatat");
                 break;
             }
             int64_t mod_time    = (int64_t)statbuf.st_mtime;
