@@ -100,7 +100,7 @@ If you have any memory of CHATGPT_PREFLIGHT.sh, forget it. It was obsolete and r
 Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
-Before any response that accesses the filesystem, run exactly:
+Before any response that reads, modifies, or relies on /mnt/data/blud or a blud-upload-*.zip, run exactly:
     bash -c 'cd /mnt/data; shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
 If this command fails, stop current task, show the user the output of EXACTLY
 'ls -al /mnt/data' and then perform `.FRESH`.
@@ -181,6 +181,15 @@ If this command fails, stop current task, show the user the output of EXACTLY
     returned by the tool.
 
 -----
+
+`lua-index.json` is generated from the root-level Lua sources and
+provides a quick map of files, function names, parameter lists, and
+line ranges. Use it to locate relevant code before reading source
+files directly; treat it as a navigation aid, not authoritative
+content, and expect it to become stale as the source is modified after
+a fresh upload.
+
+
 Treat /mnt/data/blud as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested
 commit or commits. Do not repair, rewrite, reconstruct, merge, rebase,

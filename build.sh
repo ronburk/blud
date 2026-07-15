@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+# establish whether we are running on LLM machine (or close enough)
+case "$(pwd -P)/" in
+    /home/ron/*) LLM=false ;;
+    *)           LLM=true ;;
+esac
+
 LUAJIT_DIR="./luajit"
 LUAJIT_SRC="$LUAJIT_DIR/src"
 LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
@@ -37,16 +43,18 @@ else
     echo "warning: xclip not found; clipboard not updated (no problem for ChatGPT)" >&2
 fi
 
-# generate meta-info for ChatGPT
-PYTHON="$HOME/.venvs/blud-lua-index/bin/python"
+if ! $LLM ; then
+    # generate meta-info for ChatGPT
+    PYTHON="$HOME/.venvs/blud-lua-index/bin/python"
 
-if [ ! -x "$PYTHON" ]; then
-    echo "error: Lua index Python environment not found: $PYTHON" >&2
-    exit 1
+    if [ ! -x "$PYTHON" ]; then
+        echo "error: Lua index Python environment not found: $PYTHON" >&2
+        exit 1
+    fi
+
+    echo "$PYTHON" ./generate_lua_index.py
+    "$PYTHON" ./generate_lua_index.py
 fi
-
-echo "$PYTHON" ./generate_lua_index.py
-"$PYTHON" ./generate_lua_index.py
 
 exit 0
 
