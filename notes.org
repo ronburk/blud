@@ -182,13 +182,14 @@ If this command fails, stop current task, show the user the output of EXACTLY
 
 -----
 
-`lua-index.json` is generated from the root-level Lua sources and
-provides a quick map of files, function names, parameter lists, and
-line ranges. Use it to locate relevant code before reading source
-files directly; treat it as a navigation aid, not authoritative
-content, and expect it to become stale as the source is modified after
-a fresh upload.
 
+lua-index.json is generated from the root-level Lua sources. Its files
+field is an array of file records, each containing a path and that
+file’s function names, parameter lists, and line ranges. Use it first
+to locate relevant code, discover actual function names, or rule out
+guessed names before reading source files directly; treat it as a
+navigation aid, not authoritative content, and expect it to become
+stale as the source is modified after a fresh upload.
 
 Treat /mnt/data/blud as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested
