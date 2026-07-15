@@ -186,6 +186,7 @@ if blud.command_line_options.debug == true then
     blud.debugger.probe = blud.debugger.real_probe
 end
 blud.Macro = require("macro")
+blud.shell = require("shell")
 
 blud.rules          = {}
 
@@ -208,7 +209,7 @@ blud.execute = function(scope, text)
         if blud.just_print(scope) then
             status = 0
         else
-            status = os.execute(text)
+            status = blud.shell.execute(text)
         end
         -- print("    status = ", status)
     else
@@ -355,7 +356,14 @@ function blud.glob.expand_pattern(words, pattern)
 
     -- Call the recursive helper function to match the pattern, starting with an empty path
     local initial_cache = blud.glob.get_cached_dir(dir)  -- Cache for the root directory
-    local match_count   = blud.glob.recursive_glob_match(new_words, path_components, 2, "", initial_cache)  -- Empty path
+    local initial_path = dir == "." and "" or dir
+    local match_count = blud.glob.recursive_glob_match(
+        new_words,
+        path_components,
+        2,
+        initial_path,
+        initial_cache
+    )
 
     -- If no matches were found, treat the pattern as a literal and add it to 'new_words'
 --    if match_count == 0 then
@@ -396,7 +404,9 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
         for name, entry in pairs(dir_cache) do
             if entry.is_dir then
                 local subdir_cache = blud.glob.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
-                local subdir_path = current_path ~= "" and (current_path .. "/" .. name) or name  -- Concatenate the full path, avoiding "./"
+                local separator = current_path:sub(-1) == "/" and "" or "/"
+                local subdir_path = current_path ~= "" and
+                    (current_path .. separator .. name) or name
                 match_count = match_count + blud.glob.recursive_glob_match(words, pattern_components, index, subdir_path, subdir_cache)
             end
         end
@@ -410,7 +420,9 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
 
         -- For each matched entry, continue matching the remaining pattern components
         for _, matched_entry in ipairs(matched) do
-            local full_path = current_path ~= "" and (current_path .. "/" .. matched_entry) or matched_entry
+            local separator = current_path:sub(-1) == "/" and "" or "/"
+            local full_path = current_path ~= "" and
+                (current_path .. separator .. matched_entry) or matched_entry
 
             if index == #pattern_components then
                 table.insert(words, full_path)
@@ -449,8 +461,12 @@ function blud.glob.path_split(path)
     local components = {}
     local is_absolute = false
 
+    if path:sub(1, 1) == "/" then
+        table.insert(components, "/")
+        path = path:sub(2)
+        is_absolute = true
     -- Handle special paths: "\\.\", "\\?\"
-    if string.match(path, "^\\\\%.") or string.match(path, "^\\\\%?") then
+    elseif string.match(path, "^\\\\%.") or string.match(path, "^\\\\%?") then
         local first_component = string.match(path, "^(\\\\[^\\]+\\?.-\\?\\?.*)")
         if first_component then
             table.insert(components, first_component)
