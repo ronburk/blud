@@ -1,0 +1,5 @@
+-- expect: test0009.out
+-- Directory scans skip dangling entries but report real enumeration failures.
+
+all:
+    shell bash test/test0009.sh

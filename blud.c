@@ -2,6 +2,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 
 
@@ -16,7 +17,6 @@
 #else
     #include <sys/stat.h>
     #include <time.h>
-    #include <errno.h>
     #include <unistd.h>
 #endif
 
@@ -79,9 +79,21 @@ static int lua_get_dir_cache(lua_State *L) {
     info.table_index    = lua_gettop(L);
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
     {
+        int status;
+
         luaL_buffinit(L, &info.buffer);
         // printf("lua_get_dir_cache(%s)\n", dir);
-        os_get_dir(callback, (void*)&info, dir);
+        errno = 0;
+        status = os_get_dir(callback, (void*)&info, dir);
+        if(status != 0) {
+            int error_number = errno;
+
+            lua_settop(L, 1); // discard the partial table and buffer fragments
+            if(error_number != 0)
+                return luaL_error(L, "could not enumerate directory: %s: %s",
+                                  dir, strerror(error_number));
+            return luaL_error(L, "could not enumerate directory: %s", dir);
+        }
     }
     luaL_pushresult(&info.buffer);
     lua_rawset(L, -3); // table["."] = %z-separated buffer of all dir entry names

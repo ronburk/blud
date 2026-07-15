@@ -149,34 +149,47 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
     struct dirent*  entry;
     struct stat     statbuf;
     const  char*    name;
-    int             result = -1;
+    int             error_number = 0;
 
-    if ((dp = opendir(dir)) == NULL) {
-        fprintf(stderr, "os_get_dir: opendir failed\n");
-        fprintf(stderr, "    dir: %s\n", dir);
-        perror("    opendir");
-    }
-    else {
-        while ((entry = readdir(dp)) != NULL) { // for each directory entry
-            name = entry->d_name;
-            if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
+    dp = opendir(dir);
+    if(dp == NULL)
+        return -1;
+
+    for(;;) {
+        errno = 0;
+        entry = readdir(dp);
+        if(entry == NULL) {
+            if(errno != 0)
+                error_number = errno;
+            break;
+        }
+
+        name = entry->d_name;
+        if(name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')))
+            continue;
+
+        if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
+            if(errno == ENOENT)
                 continue;
-            if (fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
-                fprintf(stderr, "os_get_dir: fstatat failed\n");
-                fprintf(stderr, "    dir:  %s\n", dir);
-                fprintf(stderr, "    name: %s\n", name);
-                perror("    fstatat");
-                break;
-            }
-            int64_t mod_time    = (int64_t)statbuf.st_mtime;
-            int     is_dir      = S_ISDIR(statbuf.st_mode);
+            error_number = errno;
+            break;
+        }
+
+        {
+            int64_t mod_time = (int64_t)statbuf.st_mtime;
+            int is_dir = S_ISDIR(statbuf.st_mode);
+
             callback(data, name, mod_time, is_dir);
         }
-        closedir(dp);
-        if(entry == NULL)
-            result = 0;
     }
 
-    return result;
+    if(closedir(dp) == -1 && error_number == 0)
+        error_number = errno;
+
+    if(error_number != 0) {
+        errno = error_number;
+        return -1;
+    }
+    return 0;
 }
 
