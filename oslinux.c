@@ -11,12 +11,14 @@
 #include <unistd.h>  // For getcwd()
 
 
+// Test for an existing directory when distinguishing EEXIST from failure.
 static int dir_exists(const char* path) {
     struct stat statbuf;
 
     return stat(path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
 }
 
+// Normalize mkdir(2) to the shared 0-created, 1-existed, 2-error contract.
 static int make_one_dir(const char* path) {
     if (mkdir(path, 0777) == 0)
         return 0;
@@ -25,6 +27,7 @@ static int make_one_dir(const char* path) {
     return 2;
 }
 
+// Create only path; unlike os_mkdir(), do not synthesize parent directories.
 int os_mkdir_one(const char* path) {
     if (path == NULL || path[0] == '\0')
         return 2;
@@ -105,6 +108,7 @@ int os_setcwd(const char* path) {
     return chdir(path) == 0 ? 0 : -1;
 }
 
+// Classify without following a symlink, preventing recursive rm from crossing it.
 int os_path_type(const char* path) {
     struct stat statbuf;
 
@@ -113,14 +117,17 @@ int os_path_type(const char* path) {
     return S_ISDIR(statbuf.st_mode) ? 2 : 1;
 }
 
+// Remove one empty directory. Recursive traversal is implemented in shell.lua.
 int os_remove_dir(const char* path) {
     return rmdir(path) == 0 ? 0 : -1;
 }
 
+// Remove a file or symlink without treating its target as a directory.
 int os_remove_file(const char* path) {
     return unlink(path) == 0 ? 0 : -1;
 }
 
+// Set access/modification time to now, creating a regular file only when absent.
 int os_touch(const char* path) {
     int fd;
 

@@ -1,5 +1,7 @@
 -- expect: test0008.out
--- internal shell commands and fallback
+-- Verify portable internal commands and fallback to the platform shell.
+-- The action invokes the detailed shell test as one command because this test
+-- format currently accepts a single action line.
 
 all:
     bash test/test0008.sh

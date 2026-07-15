@@ -1,16 +1,25 @@
+-- Execute a deliberately small, portable subset of shell syntax in Lua.
+-- Anything this module cannot parse or implement is passed unchanged to the
+-- platform shell, so recognizing a construct must never change its meaning.
 local M = {}
 
+-- Print a command-style diagnostic and return the conventional failure status.
 local function diagnostic(command, message)
     io.stderr:write(command, ": ", message, "\n")
     return 1
 end
 
+-- Filesystem-changing commands invalidate the cache shared with blud.glob.
+-- The guard keeps this module usable during early initialization or in tests.
 local function invalidate_directory_cache()
     if blud then
         blud.dir_cache = {}
     end
 end
 
+-- Split one simple command into words while preserving whether an unquoted
+-- glob metacharacter occurred. Return nil whenever real shell interpretation
+-- is required; M.execute() then delegates the original text to os.execute().
 local function parse(command)
     local words = {}
     local bytes = {}
@@ -19,12 +28,15 @@ local function parse(command)
     local state = "plain"
     local pos = 1
 
+    -- Append one literal byte to the current word and remember whether it may
+    -- participate in pathname expansion. Quoted metacharacters pass glob=false.
     local function append(c, glob)
         bytes[#bytes + 1] = c
         word_started = true
         has_glob = has_glob or glob
     end
 
+    -- Commit the current word, including an explicitly quoted empty word.
     local function finish_word()
         if word_started then
             words[#words + 1] = {
@@ -50,6 +62,7 @@ local function parse(command)
             if c == '"' then
                 state = "plain"
             elseif c == "$" or c == "`" then
+                -- Parameter and command substitution belong to the real shell.
                 return nil
             elseif c == "\\" then
                 local next_c = command:sub(pos + 1, pos + 1)
@@ -70,6 +83,7 @@ local function parse(command)
         elseif c == " " or c == "\t" then
             finish_word()
         elseif c == "\n" or c == "\r" then
+            -- An action containing multiple command lines must remain one shell script.
             return nil
         elseif c == "'" then
             state = "single"
@@ -89,6 +103,8 @@ local function parse(command)
             end
         elseif c == "#" and not word_started then
             break
+        -- Operators, substitutions, grouping, and redirection are intentionally
+        -- outside the internal grammar and therefore force shell fallback.
         elseif c == "$" or c == "`" or c == "|" or c == "&" or
                c == ";" or c == "<" or c == ">" or c == "(" or
                c == ")" or c == "{" or c == "}" then
@@ -110,6 +126,8 @@ local function parse(command)
     return words
 end
 
+-- Convert parsed words to argv and perform Bash-like pathname expansion only
+-- for unquoted metacharacters. An unmatched pattern remains a literal word.
 local function expand_words(words)
     local argv = {}
     local has_glob = false
@@ -135,6 +153,8 @@ local function expand_words(words)
     return argv
 end
 
+-- Implement `touch [-c|--no-create] [--] path...`. argv[1] is "touch";
+-- return 0 on success and 1 after emitting the first diagnostic.
 local function touch(argv)
     local no_create = false
     local paths = {}
@@ -170,6 +190,8 @@ local function touch(argv)
     return 0
 end
 
+-- Escape sequences accepted by Bash echo when -e is active. Numeric escapes
+-- are handled separately because they consume a variable number of digits.
 local echo_escapes = {
     a = "\a",
     b = "\b",
@@ -183,6 +205,8 @@ local echo_escapes = {
     ["\\"] = "\\",
 }
 
+-- Expand one echo operand. The second result reports \c, which suppresses all
+-- remaining output as well as the trailing newline.
 local function expand_echo_escapes(text)
     local output = {}
     local pos = 1
@@ -228,6 +252,9 @@ local function expand_echo_escapes(text)
     return table.concat(output), false
 end
 
+-- Implement `echo [-n] [-e|-E]... [arg...]`. argv[1] is "echo" and
+-- the function returns a shell status. Adjacent recognized option groups follow
+-- Bash behavior, with the last -e or -E controlling escape interpretation.
 local function echo(argv)
     local newline = true
     local escapes = false
@@ -267,6 +294,8 @@ local function echo(argv)
     return 0
 end
 
+-- Join a directory and child name without duplicating an existing separator.
+-- Forward slash is accepted by both supported operating systems.
 local function join_path(parent, name)
     local last = parent:sub(-1)
     if last == "/" or last == "\\" then
@@ -275,6 +304,9 @@ local function join_path(parent, name)
     return parent .. "/" .. name
 end
 
+-- Remove one already-expanded operand. Directories recurse through the same
+-- directory cache used by globbing; symlinks/reparse points are treated as files
+-- by os_path_type() so recursion does not cross them.
 local function remove_path(path, recursive, force)
     local path_type = os_path_type(path)
     if path_type == 0 then
@@ -309,6 +341,8 @@ local function remove_path(path, recursive, force)
     return 0
 end
 
+-- Implement `rm [-f] [-r|-R] [--] path...`. argv[1] is "rm";
+-- stop at the first failure and return the corresponding shell status.
 local function rm(argv)
     local recursive = false
     local force = false
@@ -353,6 +387,9 @@ local function rm(argv)
     return 0
 end
 
+-- Implement `mkdir [-p] [--] path...`. argv[1] is "mkdir". Plain mkdir
+-- uses os_mkdir_one() so a missing parent or existing destination is an error;
+-- -p uses the older recursive os_mkdir() and accepts existing directories.
 local function mkdir(argv)
     local parents = false
     local paths = {}
@@ -401,6 +438,9 @@ local function mkdir(argv)
     return 0
 end
 
+-- Implement `cd [--] [directory|-]`. argv[1] is "cd". This changes the
+-- blud process directory, intentionally preserving the effect for later actions,
+-- and keeps private OLDPWD-like state for `cd -`.
 local function cd(argv)
     local first = 2
     if argv[first] == "--" then
@@ -445,6 +485,8 @@ local function cd(argv)
     return 0
 end
 
+-- Public registry so additional internal commands can be installed without
+-- modifying M.execute(). Each command receives argv and returns a numeric status.
 M.commands = {
     cd = cd,
     echo = echo,
@@ -453,6 +495,9 @@ M.commands = {
     touch = touch,
 }
 
+-- Called from Lua as `status = require("shell").execute(command)` (normally
+-- through blud.shell.execute()). Execute recognized simple commands internally;
+-- otherwise pass the exact input to os.execute(). Return its numeric shell status.
 function M.execute(command)
     assert(type(command) == "string")
 

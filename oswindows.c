@@ -4,10 +4,12 @@
 #include <stdlib.h>    // For malloc(), realloc(), and free()
 #include <string.h>
 
+// Windows APIs accept both separators; recognizing both preserves portable paths.
 static int is_separator(char c) {
     return c == '/' || c == '\\';
 }
 
+// Test for an existing directory when distinguishing collision from failure.
 static int dir_exists(const char* path) {
     DWORD attributes = GetFileAttributesA(path);
 
@@ -15,6 +17,7 @@ static int dir_exists(const char* path) {
            (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
+// Normalize CreateDirectoryA() to the shared 0-created, 1-existed, 2-error contract.
 static int make_one_dir(const char* path) {
     if (CreateDirectoryA(path, NULL))
         return 0;
@@ -23,12 +26,14 @@ static int make_one_dir(const char* path) {
     return 2;
 }
 
+// Create only path; unlike os_mkdir(), do not synthesize parent directories.
 int os_mkdir_one(const char* path) {
     if (path == NULL || path[0] == '\0')
         return 2;
     return make_one_dir(path);
 }
 
+// Create every missing component. Skip drive and UNC roots while splitting.
 int os_mkdir(const char* path) {
     size_t len;
     char* buffer;
@@ -116,6 +121,8 @@ int os_setcwd(const char* path) {
     return SetCurrentDirectoryA(path) ? 0 : -1;
 }
 
+// Return directory only for real directories. Reparse points remain leaf objects
+// so recursive rm does not traverse junctions or directory symlinks.
 int os_path_type(const char* path) {
     DWORD attributes;
 
@@ -130,10 +137,12 @@ int os_path_type(const char* path) {
     return 1;
 }
 
+// Remove one empty directory. Recursive traversal is implemented in shell.lua.
 int os_remove_dir(const char* path) {
     return RemoveDirectoryA(path) ? 0 : -1;
 }
 
+// Remove a leaf object. Directory reparse points require RemoveDirectoryA().
 int os_remove_file(const char* path) {
     DWORD attributes = GetFileAttributesA(path);
 
@@ -143,6 +152,8 @@ int os_remove_file(const char* path) {
     return DeleteFileA(path) ? 0 : -1;
 }
 
+// Update access/modification time and create a missing regular file. Directories
+// require FILE_FLAG_BACKUP_SEMANTICS to obtain an attribute-write handle.
 int os_touch(const char* path) {
     DWORD attributes;
     DWORD flags = 0;
@@ -180,6 +191,8 @@ int os_touch(const char* path) {
     return result ? 0 : -1;
 }
 
+// Enumerate a directory for the existing Lua directory-cache bridge. Convert
+// FILETIME to Unix seconds and report each child's directory attribute.
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir) {
     WIN32_FIND_DATAA entry;
     HANDLE find;

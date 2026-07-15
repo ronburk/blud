@@ -186,6 +186,7 @@ if blud.command_line_options.debug == true then
     blud.debugger.probe = blud.debugger.real_probe
 end
 blud.Macro = require("macro")
+-- shell.execute() handles portable simple commands and delegates all others.
 blud.shell = require("shell")
 
 blud.rules          = {}
@@ -209,6 +210,8 @@ blud.execute = function(scope, text)
         if blud.just_print(scope) then
             status = 0
         else
+            -- Preserve the existing action text/status contract while allowing
+            -- shell.lua to bypass the platform shell for supported commands.
             status = blud.shell.execute(text)
         end
         -- print("    status = ", status)
@@ -356,6 +359,8 @@ function blud.glob.expand_pattern(words, pattern)
 
     -- Call the recursive helper function to match the pattern, starting with an empty path
     local initial_cache = blud.glob.get_cached_dir(dir)  -- Cache for the root directory
+    -- Preserve an absolute or drive/UNC root in emitted matches; only the
+    -- synthetic current-directory root is omitted from relative results.
     local initial_path = dir == "." and "" or dir
     local match_count = blud.glob.recursive_glob_match(
         new_words,
@@ -404,6 +409,7 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
         for name, entry in pairs(dir_cache) do
             if entry.is_dir then
                 local subdir_cache = blud.glob.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
+                -- Root components already end in a separator; avoid producing //.
                 local separator = current_path:sub(-1) == "/" and "" or "/"
                 local subdir_path = current_path ~= "" and
                     (current_path .. separator .. name) or name
@@ -420,6 +426,7 @@ function blud.glob.recursive_glob_match(words, pattern_components, index, curren
 
         -- For each matched entry, continue matching the remaining pattern components
         for _, matched_entry in ipairs(matched) do
+            -- Root components already end in a separator; avoid producing //.
             local separator = current_path:sub(-1) == "/" and "" or "/"
             local full_path = current_path ~= "" and
                 (current_path .. separator .. matched_entry) or matched_entry
@@ -461,6 +468,7 @@ function blud.glob.path_split(path)
     local components = {}
     local is_absolute = false
 
+    -- Keep the Unix root as a component so absolute glob results stay absolute.
     if path:sub(1, 1) == "/" then
         table.insert(components, "/")
         path = path:sub(2)

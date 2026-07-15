@@ -334,6 +334,8 @@ static int lua_os_mkdir(lua_State *L) {
     return 1;
 }
 
+// Lua: result = os_mkdir_one(path)
+// result is 0 when created, 1 when a directory already exists, or 2 on error.
 static int lua_os_mkdir_one(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -341,6 +343,8 @@ static int lua_os_mkdir_one(lua_State *L) {
     return 1;
 }
 
+// Lua: type = os_path_type(path)
+// type is 0 for missing, 1 for a leaf object, or 2 for a real directory.
 static int lua_os_path_type(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -348,6 +352,8 @@ static int lua_os_path_type(lua_State *L) {
     return 1;
 }
 
+// Lua: status = os_remove_dir(path)
+// status is 0 on success or -1 when the empty directory cannot be removed.
 static int lua_os_remove_dir(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -355,6 +361,8 @@ static int lua_os_remove_dir(lua_State *L) {
     return 1;
 }
 
+// Lua: status = os_remove_file(path)
+// status is 0 on success or -1 when the file/link cannot be removed.
 static int lua_os_remove_file(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -362,6 +370,8 @@ static int lua_os_remove_file(lua_State *L) {
     return 1;
 }
 
+// Lua: status = os_touch(path)
+// status is 0 after updating/creating path, or -1 on failure.
 static int lua_os_touch(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -516,6 +526,8 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_setcwd", lua_os_setcwd);
     lua_register(L, "get_dir_cache", lua_get_dir_cache);
     lua_register(L, "os_mkdir", lua_os_mkdir);
+    // Filesystem primitives used by shell.lua; wrapper comments above document
+    // their exact global Lua signatures and return values.
     lua_register(L, "os_mkdir_one", lua_os_mkdir_one);
     lua_register(L, "os_path_type", lua_os_path_type);
     lua_register(L, "os_remove_dir", lua_os_remove_dir);
