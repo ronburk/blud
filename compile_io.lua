@@ -68,6 +68,11 @@ end
 
 local strip_stack = {}
 
+M.push_strip_prefix = function(prefix)
+    assert(type(prefix) == "string" and prefix ~= "")
+    table.insert(strip_stack, prefix)
+end
+
 local strip_prefix = function()
     local pos = current_input.pos
 
@@ -97,7 +102,7 @@ M.get_token = function()
     local char = text:sub(pos, pos)
 
     if pos > #text then return "EOF", "" end
-    if current_input.eol and char == " " then
+    if current_input.eol and (char == " " or char == "\t") then
         token_type = "LEADWHITE"
         token_text = text:match("^[ \t]+", pos)
     elseif text:sub(pos, pos+1) == "--" then

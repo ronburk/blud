@@ -273,50 +273,49 @@ end
 -- source for a function that will expand and execute the action later, when
 -- the target's scope and automatic variables are available.
 function compile_action(compile_io)
-    local action = ""
-    local action_line_count = 0
-
-    -- Consecutive indented lines belong to this rule's action block.
-    if compile_io.is_indented_line() then
-        while compile_io.is_indented_line() do
-            action_line_count = action_line_count + 1
-
-            -- The old multi-line code generated nested blud.execute() calls.
-            -- Reject additional lines until action blocks are compiled as one
-            -- shell script.
-            if action_line_count > 1 then
-                compile_io.error(
-                    "Multiple action lines are not supported yet\n" ..
-                    "note: combine commands with && or invoke a script"
-                )
-            end
-
-            compile_io.skip_white()
-            local macro_text = compile_io.get_line_remainder()
-            assert(compile_io.get_token() == "EOL")
-
-            -- Preserve literal text and macro references as Lua source.
-            -- Expansion happens when the generated action function runs.
-            local parts = m.parts_from_text(macro_text)
-            if #action > 0 then action = action .. ", " end
-            action =  action .. m.parts_to_lua_function(parts) 
---            action =  action .. util.dump(parts)
-
-            -- Propagate the command status so a failed action fails its rule.
-            action = "status =  blud.execute(scope, " .. action .. ")" ..
-                "; if status ~= 0 then return status end"
-        end
-
-        -- The rule stores this closure and invokes it with the target scope.
-        if action ~= "" then
-            action = "function(scope, status) " .. action .. " end "
-        end
+    if not compile_io.is_indented_line() then
+        return "nil"
     end
---    action = "function (scope)
 
-    -- nil tells blud.eval_rule() that the rule has no explicit action.
-    if action == "" then action = "nil" end
-    return action
+    local statements = {}
+
+    local function append_action_line(macro_text)
+        local parts = m.parts_from_text(macro_text)
+        local command = m.parts_to_lua_function(parts)
+
+        table.insert(
+            statements,
+            "status =  blud.execute(scope, " .. command .. ")" ..
+            "; if status ~= 0 then return status end"
+        )
+    end
+
+    -- The first action line establishes the prefix stripped from every
+    -- subsequent physical line in this action block.
+    local token_type, token_text = compile_io.get_token()
+    assert(token_type == "LEADWHITE")
+    compile_io.push_strip_prefix(token_text)
+
+    token_type, token_text = compile_io.get_token()
+    while token_type ~= "STRIP_END" do
+        if token_type == "EOF" then
+            error("Action strip prefix reached EOF without STRIP_END")
+        elseif token_type ~= "EOL" then
+            local macro_text = token_text .. compile_io.get_line_remainder()
+            append_action_line(macro_text)
+            assert(compile_io.get_token() == "EOL")
+        end
+
+        token_type, token_text = compile_io.get_token()
+    end
+
+    if #statements == 0 then
+        return "nil"
+    end
+
+    return "function(scope, status) " ..
+        table.concat(statements, "; ") ..
+        " end "
 end
 
 
@@ -362,7 +361,6 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
     if token_type ~= "EOF" then
         assert(token_type == "EOL")
         action = compile_action(compile_io)
-        token_type, token_text = compile_io.get_token()
     end
     compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
                          operator,
