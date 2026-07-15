@@ -36,7 +36,17 @@ if command -v xclip >/dev/null; then
 else
     echo "warning: xclip not found; clipboard not updated (no problem for ChatGPT)" >&2
 fi
+
+# generate meta-info for ChatGPT
+PYTHON="$HOME/.venvs/blud-lua-index/bin/python"
+
+if [ ! -x "$PYTHON" ]; then
+    echo "error: Lua index Python environment not found: $PYTHON" >&2
+    exit 1
+fi
+
+echo "$PYTHON" ./generate_lua_index.py
+"$PYTHON" ./generate_lua_index.py
+
 exit 0
 
-g++ -o blud blud.cpp luawrap.cpp $LUAJIT_FLAGS $CFLAGS
-rm ./*.luad

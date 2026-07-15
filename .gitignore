@@ -27,6 +27,8 @@ out.bin
 src/
 tic.lua
 codex_auth_token.txt
+# meta-source info for ChatGPT
+lua-index.json
 
 # Prerequisites
 *.d
