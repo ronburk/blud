@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <utime.h>
 #include "os.h"
 
 #include <unistd.h>  // For getcwd()
@@ -21,6 +23,12 @@ static int make_one_dir(const char* path) {
     if (errno == EEXIST && dir_exists(path))
         return 1;
     return 2;
+}
+
+int os_mkdir_one(const char* path) {
+    if (path == NULL || path[0] == '\0')
+        return 2;
+    return make_one_dir(path);
 }
 
 int os_mkdir(const char* path) {
@@ -95,6 +103,38 @@ int os_setcwd(const char* path) {
         return -1;
 
     return chdir(path) == 0 ? 0 : -1;
+}
+
+int os_path_type(const char* path) {
+    struct stat statbuf;
+
+    if (path == NULL || path[0] == '\0' || lstat(path, &statbuf) != 0)
+        return 0;
+    return S_ISDIR(statbuf.st_mode) ? 2 : 1;
+}
+
+int os_remove_dir(const char* path) {
+    return rmdir(path) == 0 ? 0 : -1;
+}
+
+int os_remove_file(const char* path) {
+    return unlink(path) == 0 ? 0 : -1;
+}
+
+int os_touch(const char* path) {
+    int fd;
+
+    if (path == NULL || path[0] == '\0')
+        return -1;
+    if (utime(path, NULL) == 0)
+        return 0;
+    if (errno != ENOENT)
+        return -1;
+
+    fd = open(path, O_WRONLY | O_CREAT, 0666);
+    if (fd < 0)
+        return -1;
+    return close(fd) == 0 ? 0 : -1;
 }
 
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){

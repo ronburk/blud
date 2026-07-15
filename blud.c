@@ -334,6 +334,41 @@ static int lua_os_mkdir(lua_State *L) {
     return 1;
 }
 
+static int lua_os_mkdir_one(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushinteger(L, os_mkdir_one(path));
+    return 1;
+}
+
+static int lua_os_path_type(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushinteger(L, os_path_type(path));
+    return 1;
+}
+
+static int lua_os_remove_dir(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushinteger(L, os_remove_dir(path));
+    return 1;
+}
+
+static int lua_os_remove_file(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushinteger(L, os_remove_file(path));
+    return 1;
+}
+
+static int lua_os_touch(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushinteger(L, os_touch(path));
+    return 1;
+}
+
 
 // Returns microseconds since Unix epoch, or -1 on error
 int64_t get_high_res_timestamp(const char* path) {
@@ -481,6 +516,11 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_setcwd", lua_os_setcwd);
     lua_register(L, "get_dir_cache", lua_get_dir_cache);
     lua_register(L, "os_mkdir", lua_os_mkdir);
+    lua_register(L, "os_mkdir_one", lua_os_mkdir_one);
+    lua_register(L, "os_path_type", lua_os_path_type);
+    lua_register(L, "os_remove_dir", lua_os_remove_dir);
+    lua_register(L, "os_remove_file", lua_os_remove_file);
+    lua_register(L, "os_touch", lua_os_touch);
     lua_register(L, "get_executable_path", lua_get_executable_path);
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "tokenize_dependency_line", lua_tokenize_dependency_line);

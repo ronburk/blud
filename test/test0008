@@ -1,0 +1,5 @@
+-- expect: test0008.out
+-- internal shell commands and fallback
+
+all:
+    bash test/test0008.sh
