@@ -1,6 +1,33 @@
 alias gs='git status'
+shopt -s nullglob
+
+GLOBIGNORE=bludlua.c
+ZIP_FILES=(
+*.{c,h,lua,cpp,org,sh,json}
+builtin.blud
+CHATGPT_NOTES.md
+test.blud
+test/*
+bludfile
+.gitignore
+./luajit/src/libluajit.a
+./luajit/src/lua*.h
+)
+unset GLOBIGNORE
 upload()
 {
+    # generate meta-info for ChatGPT
+    PYTHON="$HOME/.venvs/blud-lua-index/bin/python"
+
+    if [ ! -x "$PYTHON" ]; then
+        echo "error: Lua index Python environment not found: $PYTHON" >&2
+        exit 1
+    fi
+
+    echo "$PYTHON" ./generate_lua_index.py
+    "$PYTHON" ./generate_lua_index.py
+
+    zip -FS blud.zip "${ZIP_FILES[@]}"
     local slop="${1:-5 minutes}"
     local timestamp
     local destination
