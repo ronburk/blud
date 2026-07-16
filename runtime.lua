@@ -668,7 +668,7 @@ function blud.Macro.expand_call(scope, macro_call, stack)
         end
     end
     table.insert(stack, name_string)
-    local macro_body  = scope:get(name_string) or ""
+    local macro_body  = scope:get_parts(name_string) or ""
     if type(macro_body) == "string" then -- if macro is simple string
         result = { macro_body }
     elseif type(macro_body) == "table" then
@@ -931,7 +931,7 @@ blud.macro_expand = function(scope, macro_call)
     assert(macro_call ~= nil)
 
 local result = ""
-    local macro = scope:get(macro_call.name)
+    local macro = scope:get_parts(macro_call.name)
     if macro then
         assert(macro["name"] ~= nil)
         for _, element in ipairs(macro) do
@@ -1076,7 +1076,7 @@ do
         return result
     end
     blud.macro_assign_parts = function(scope, macro_name, operator, parts)
-        local existing_parts = scope:get(macro_name)
+        local existing_parts = scope:get_parts(macro_name)
         if parts then
             parts = util.deep_copy(parts)
         else

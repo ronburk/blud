@@ -6,18 +6,18 @@ local M = {}     -- this will be the metatable for scope objects
 M.__index = M
 
 
--- generic get() function to return value of variable
-M.get = function(self, name)
+-- generic get_parts() function to return value of variable
+M.get_parts = function(self, name)
     local result = self.variables[name]
     if result == nil and self.parent then
-        result = self.parent:get(name)
+        result = self.parent:get_parts(name)
     end
     return result
 end
 
--- generic get_text() function, wraps get() and handles expanding variable definition into text
+-- generic get_text() function, wraps get_parts() and handles expanding variable definition into text
 M.get_text = function(self, name)
-    local tokens = self:get(name)
+    local tokens = self:get_parts(name)
     local result = ""
     if tokens then
         result = blud.Macro.expand_tokens(self, tokens)
@@ -65,12 +65,12 @@ M.commandline = M:new(M.bludfile, "commandline")
 M.build       = M:new(M.commandline, "build")
 
 
-M.environment.get = function(self, name)
+M.environment.get_parts = function(self, name)
     local value = os.getenv(name)
     if value ~= nil then
         return { value }
     end
-    return self.parent:get(name)
+    return self.parent:get_parts(name)
 end
 
 
@@ -80,12 +80,12 @@ end
 M.new_param_scope = function(self, parent, macro_actual)
     local scope = M:new(parent)
     scope.macro_actual = macro_actual
-    function scope:get(name)
+    function scope:get_parts(name)
         blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
-            return self.parent:get(name)
+            return self.parent:get_parts(name)
         end
     end
     function scope:set(name, value)
@@ -94,7 +94,7 @@ M.new_param_scope = function(self, parent, macro_actual)
     return scope
 end
 
-local function target_get(self, name)
+local function target_get_parts(self, name)
     local result
     local bound_name = ""
     if name == "<" then
@@ -119,7 +119,7 @@ local function target_get(self, name)
     else
         result = self.variables[name]
         if result == nil and self.parent then
-            result = self.parent:get(name)
+            result = self.parent:get_parts(name)
         end
     end
     return result
@@ -134,7 +134,7 @@ M.new_target_scope   = function(self, target)
     local name = string.format("target(%s)", target.NAME)
     local new_scope  = M:new(M.build, name)
     new_scope.target = target
-    new_scope.get    = target_get
+    new_scope.get_parts = target_get_parts
     return new_scope
 end
 
