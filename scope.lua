@@ -43,6 +43,9 @@ end
 
 -- generic set() function to set value of variable
 M.set = function(self, name, value)
+    if type(value) == "string" then
+        value = { value }
+    end
     self.variables[name] = value
 end
 
