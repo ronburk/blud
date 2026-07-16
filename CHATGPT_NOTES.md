@@ -1,236 +1,417 @@
 # ChatGPT Notes for blud
 
-These are continuity notes for future ChatGPT sessions working on Ron Burk's
+These notes are a handoff for future ChatGPT sessions working on Ron Burk's
 `blud` project.
 
-## Authority and workflow safety
+## Start-of-chat checklist
 
-The current Project Instructions are authoritative. They override this file,
-all previous chats, memories, and historical workflow descriptions.
+1. Read the current Project Instructions first. They are authoritative and
+   override this file, old chats, and remembered workflow variants.
+2. Read this file for current technical context.
+3. Before reading Lua source, use root-level `lua-index.json` to locate actual
+   files, function names, parameters, and line ranges. It is a navigation aid,
+   not authoritative source.
+4. Follow the exact preflight/.FRESH/.PATCH procedures from the Project
+   Instructions. `CHATGPT_PREFLIGHT.sh` is obsolete and must not be recreated.
+5. Show Linux commands as they run and never fabricate, reconstruct, normalize,
+   or silently alter command output.
 
-`CHATGPT_PREFLIGHT.sh` is obsolete and removed. Never attempt to run it or
-reconstruct its behavior.
+## Preflight lease
 
-Before filesystem work, follow the exact archive check in the current Project
-Instructions. A newly uploaded `blud-upload-*.zip` is an implicit `.FRESH`.
-Use the exact `.FRESH`, `.PATCH`, `.REVERT`, `.LS`, and `.RUN` procedures from
-the current Project Instructions; do not substitute older variants remembered
-from chats or notes.
+After a successful preflight or successful `.FRESH`, obtain time with a
+non-shell time tool and record a lease that expires exactly 300 seconds later.
 
-Show commands as they are run and preserve command output exactly. Treat
-`/mnt/data/blud` as disposable. If repository state is unexpected, stop and use
-`.FRESH` rather than repairing history.
+Before later filesystem work:
 
-## Environment hazards
+- a newly attached `blud-upload-*.zip` invalidates the lease and implies
+  `.FRESH`;
+- observed filesystem trouble invalidates the lease;
+- otherwise check current time with a non-shell time tool;
+- skip preflight while the lease remains valid;
+- do not rerun preflight merely because a new user turn began.
 
-- Different chats may have different `/mnt/data` sandboxes even inside the same
-  project.
-- `/mnt/data/blud` and generated helper files may disappear between turns.
-- Uploaded archives can be rematerialized or collision-renamed.
-- A cleanup glob that removes names ending in `).zip` can delete a newly
-  collision-renamed upload before bootstrap. Report this explicitly if it
-  happens.
-- Actual command execution and exit status are the only trustworthy evidence.
-- Never fabricate, reconstruct, normalize, or silently reformat command output.
-- Use only the uniquely named patch path printed by
-  `chatgpt_patch_finish.sh`; never link `/mnt/data/chatgpt.patch`.
+If the lease is missing, expired, or cannot be checked reliably, run the exact
+preflight command.
 
-## Current source/build facts
+## Repository and patch workflow
 
 - Normal work happens in `/mnt/data/blud`.
-- `build.sh` regenerates ignored generated files.
-- Typical validation is intentionally small while designs are changing:
-  `bash build.sh` plus one or two focused behavioral checks.
-- Prefer minimal, readable changes over speculative generalization.
-- Use 4-space indentation and snake_case.
+- Treat that tree as disposable.
+- If worktree, index, or ancestry is unexpected, stop and use `.FRESH`; do not
+  repair Git history ad hoc.
+- Stage only intended files.
+- `.PATCH` requires one descriptive commit and then:
+  `bash chatgpt_patch_finish.sh`.
+- Link only the exact unique `/mnt/data/tmp/chatgpt-<commit>.patch` path printed
+  by that script. Never link `/mnt/data/chatgpt.patch`.
+- Do not provide a bare diff.
 
-## Timestamp design discussed
+`chatgpt_patch_finish.sh` now regenerates ignored `lua-index.json` after a
+committed root-level Lua change or a committed change to
+`generate_lua_index.py`. It provisions a cached `/tmp` virtual environment when
+needed with:
 
-`runtime.lua` establishes one invocation-wide logical timestamp:
+```text
+tree-sitter==0.25.2
+tree-sitter-lua==0.5.0
+```
+
+The index regeneration happens after the clean commit and before patch
+production, so the generated index describes committed `HEAD`.
+
+## Current primary work: private variables
+
+The current design task is to add a `private` attribute to variable definitions.
+
+The user prefers using the existing macro-parts table itself as the definition
+object, for example:
+
+```lua
+parts.private = true
+```
+
+No private-variable behavior has been implemented yet.
+
+### Scope-parts invariant already established
+
+Current active code now maintains this invariant:
+
+> Anything stored in `scope.variables` or returned by `scope:get_parts()` is
+> either `nil` or a macro-parts table.
+
+`scope:set()` remains the normalization boundary and intentionally accepts
+either a string or a parts table:
+
+```lua
+function M:set(name, value)
+    local parts
+
+    if type(value) == "string" then
+        parts = { value }
+    else
+        assert(type(value) == "table")
+        parts = value
+    end
+
+    self.variables[name] = parts
+end
+```
+
+Do not require callers to wrap every literal string manually.
+
+Current automatic variables `$<`, `$^`, and `$@` all return parts tables.
+Environment lookup also returns `{ value }`.
+Active `blud.Macro.expand_call()` treats `scope:get_parts()` as returning a
+table or nil and no longer has a raw-string variable-definition branch.
+
+`blud.Macro.expand_tokens()` still accepts a plain string as a general
+convenience API. Do not remove that merely because scope values are now parts.
+
+### Current scope chain
+
+Defined in `scope.lua`:
+
+```text
+base
+  -> environment
+    -> bludfile
+      -> commandline
+        -> build
+          -> target scope
+```
+
+Target scopes are initially parented to `M.build`.
+
+During build traversal, prerequisite target scopes are reparented through the
+target dependency relation. Important active locations include:
+
+```text
+atom.lua:170
+operator.lua:256
+operator.lua:400
+```
+
+Each sets a target scope's parent to `target_atom.PARENT.SCOPE`.
+
+That target-to-prerequisite scope inheritance is the boundary private variables
+must not cross.
+
+### Intended private semantics
+
+The design discussion used GNU make's target-specific `private` behavior as the
+model:
+
+- a private target-specific definition is visible while evaluating that target;
+- it is not inherited by prerequisites through the target-parent scope link;
+- after crossing such a parent-target boundary, lookup should skip private
+  definitions but continue searching outward, so a public definition in an
+  outer scope can still be found;
+- ordinary lexical/non-target parent traversal should not by itself suppress
+  private definitions.
+
+A private flag on parts is not sufficient by itself. Lookup also needs to know
+whether it has crossed a target-inheritance boundary. GNU make conceptually has
+both a per-variable private bit and a scope-chain parent-boundary marker.
+
+Do not blanket-treat names beginning with `.` as private. `.JUST_PRINT` is
+currently intended to inherit globally, while `.ASSUME_NEW` is the motivating
+example of a value that should not leak from a target to its prerequisites.
+
+### Assignment path to inspect next
+
+Active target-specific assignment flow:
+
+```text
+runtime.lua:225  blud.eval_target_assign_rule()
+atom.lua:7       target:set_variable()
+runtime.lua:1072 blud.macro_assign_parts()
+scope.lua:45     scope:set()
+```
+
+`blud.macro_assign_parts()` deep-copies parts, implements `?=`, `=`, `+=`,
+rewrites self-references, and finally calls `scope:set()`.
+
+Before implementing privacy, decide and test how the attribute behaves under:
+
+- replacement with `=`;
+- no-op `?=`;
+- concatenation with `+=`;
+- self-reference preservation;
+- copying through `util.deep_copy()`.
+
+The user previously observed that GNU make does not retain simultaneous public
+and private definitions of the same variable in the same target scope; the
+later definition's value/privacy wins. Do not assume more complex parallel
+bindings are required unless the design changes.
+
+### Direct scope-table operations
+
+Most variable writes go through `scope:set()`. Important whole-table operations
+that intentionally bypass it are:
+
+```text
+runtime.lua:865
+    resets blud.Scope.build.variables
+
+operator.lua:642
+    aliases blud.Scope.build.variables = target.SCOPE.variables
+```
+
+Embedding metadata in each parts table naturally survives these whole-table
+operations.
+
+There are direct reads in `operator.lua` for `SWD` and `OWD`; inspect them when
+changing representation or lookup behavior.
+
+## Current command-line variable flags
+
+Command-line flags are being unified through scope variables.
+
+### `-n`
+
+Parsed in `main.lua` by setting:
+
+```lua
+options.commandline_booleans[".JUST_PRINT"] = true
+```
+
+It is a textual boolean scope variable and is intentionally inherited by
+actions.
+
+### `-W atom`
+
+Parsed in:
+
+```text
+main.lua:60-67
+```
+
+Applied after bludfile execution in:
+
+```text
+blud.lua:552-556
+```
+
+by:
+
+```lua
+atom.SCOPE:set_boolean(".ASSUME_NEW", true)
+```
+
+Consumed in:
+
+```text
+atom.lua:146-155
+```
+
+where `atom:get_timestamp()` substitutes `blud.current_time`.
+
+The current problem is that a variable placed in a target scope can inherit into
+prerequisite target scopes. Private-variable support is intended to solve that
+kind of leakage cleanly.
+
+### `-B`
+
+`main.lua` currently parses `-B` into `options.always_make`. Verify its current
+downstream behavior before changing it.
+
+## Timestamp design
+
+`runtime.lua` captures one invocation-wide logical timestamp:
 
 ```lua
 blud.current_time = os.time()
 ```
 
-An approved design introduces `atom:get_timestamp()` in `atom.lua` as the
-single authoritative atom timestamp accessor. It should cache the filesystem
-timestamp in `atom.TIMESTAMP`, while a successfully built target receives
-`blud.current_time` even when no file was created.
+`atom:get_timestamp()` in `atom.lua` is the authoritative atom timestamp
+accessor. It caches the filesystem timestamp in `atom.TIMESTAMP`, except that
+`.ASSUME_NEW` makes it use `blud.current_time`.
 
-The proposed `-W name` implementation marks the canonical atom's target scope:
+Successful actions should leave the target with the invocation timestamp even
+when no file was created. Check current operator behavior before modifying this
+area.
 
-```lua
-atom.SCOPE:set(".ASSUME_NEW", "true")
-```
+## Action parsing: current state
 
-`atom:get_timestamp()` interprets that value and returns
-`blud.current_time`. Command-line parsing belongs in `main.lua`, marking the
-resolved atoms belongs in `blud.lua` after the bludfile executes, and
-`operator.lua` should contain no special `-W` logic.
+Multiline action blocks are implemented.
 
-## Action parsing: current implementation
+`compiler.lua:275` defines `compile_action()`.
 
-The next design work is to flesh out `compile_action()` in `compiler.lua`.
+Current behavior:
 
-Current code:
+- the first indented action line establishes a strip prefix;
+- `compile_io.push_strip_prefix()` makes subsequent physical lines relative to
+  that prefix;
+- lines are consumed until `STRIP_END`;
+- each nonblank physical action line becomes a separate guarded
+  `blud.execute(scope, ...)`;
+- execution stops on the first nonzero status;
+- no action is represented by `nil`.
 
-- `compile_action()` begins near line 404 of `compiler.lua`.
-- It recognizes consecutive indented physical lines using
-  `compile_io.is_indented_line()`.
-- It currently rejects a second action line with:
+This fixed the old single-action-line limitation and made tab indentation work.
 
-```text
-Multiple action lines are not supported yet
-note: combine commands with && or invoke a script
-```
+It does **not** yet implement the broader mixed Lua/shell/embedded-blud action
+language previously discussed. Do not restore the old notes claiming multiline
+actions are still unimplemented.
 
-- A single action line is:
-  1. stripped of leading whitespace;
-  2. read with `get_line_remainder()`;
-  3. divided into literal and macro parts;
-  4. converted into deferred Lua expansion code;
-  5. executed later through `blud.execute(scope, ...)`;
-  6. wrapped in `function(scope, status) ... end`.
-- No explicit action is represented by `nil`.
+## Paused test-target work
 
-Current `compile_io.is_indented_line()` is absolute:
-
-```lua
-return text:find("^[ \t]+[^ \t\n]", pos) ~= nil
-```
-
-It asks whether the physical source line starts with whitespace. That is correct
-only at the outermost parser level.
-
-## Intended action-language direction
-
-The action language under discussion is context-sensitive by explicit line
-prefix, not by globally fixed absolute columns.
-
-At top level, an indented action defaults to shell. Nested language markers can
-switch interpretation:
+A separate unfinished design concerns:
 
 ```text
-prog: prog.o
-    : test: test.o
-    :     echo "I'm an action because I'm indented"
+./blud test0002
 ```
 
-For the nested blud parser, removing the enclosing physical prefix `"    : "` should yield the logical input:
+Desired behavior was to run only that test, where `test0002` binds to
+`./test/test0002`.
 
-should yield the logical input:
+The broader idea was:
+
+- when a command-line operand names a source atom with no action;
+- and that atom was explicitly requested;
+- reverse-resolve concrete targets that depend on it;
+- build those dependents, treating the source as assumed-new for this
+  invocation.
+
+This was paused while fixing variable inheritance/private semantics. Resume it
+only after the private-variable work unless the user redirects priorities.
+
+## Useful current source locations
+
+### Environment variables
+
+Process environment variables are read lazily in:
 
 ```text
-test: test.o
-    echo "I'm an action because I'm indented"
+scope.lua:77-83
 ```
 
-Relative to that logical input:
+through `os.getenv(name)`. Blud does not copy all environment variables into a
+scope and does not currently call `setenv()`.
 
-- `test: test.o` is not indented;
-- `echo ...` is indented and is the action for `test`.
+### C `stat()` calls
 
-Therefore nested parsing must not compare only absolute columns. The enclosing
-action-language prefix belongs to the parent context and must be removed before
-the nested parser classifies indentation.
-
-The broader language direction previously discussed is:
-
-- Top-level action text defaults to shell.
-- Lua syntax enters a Lua context.
-- Inside Lua, `$ ` introduces shell and `: ` introduces blud.
-- Embedded blud should use the normal blud parser after its enclosing prefix is
-  stripped.
-- Parser syntax itself is not macro-expanded; macros provide values.
-- Each maximal contiguous shell region should ideally execute as one shell
-  script, preserving ordinary multi-line shell flow control.
-
-These are design goals, not all implemented behavior.
-
-## Likely compile_io change
-
-Do not merely add an indentation-count argument to every caller. Prefer giving
-`compile_io` a context-relative logical-line view.
-
-Conceptually:
+Only two literal source calls were found:
 
 ```text
-physical line
-    minus enclosing context prefix
-        equals logical line seen by the current parser
+blud.c:418
+    get_high_res_timestamp()
+
+oslinux.c:18
+    dir_exists()
 ```
 
-`is_indented_line()`, `skip_white()`, `get_line_remainder()`, and any other
-line-oriented parser operation must agree on the same logical beginning of line.
-Changing only `is_indented_line()` would recognize nested action lines but leave
-the cursor and text-reading functions consuming the wrong physical prefix.
+Generated `bludlua.c` was excluded from that search.
 
-A likely design is a parser-context stack or per-input context containing the
-current line prefix/logical line origin. Avoid passing raw numeric indentation
-columns, because tabs and language markers such as `: ` make physical-column
-counts fragile.
+### `blud.Macro.expand_tokens()` callers
 
-## Hidden state in compile_io.lua
-
-`compile_io.lua` currently owns substantial hidden mutable state:
-
-Output/source-map state:
+Active calls currently include:
 
 ```text
-pre_sourcemap
-post_sourcemap
-sourcemap_gap
-sourcemap
-next_output_ln
+scope.lua:23
+compiler.lua:344       commented-out target-assignment code; not active
+runtime.lua:229
+runtime.lua:271
+runtime.lua:272
+runtime.lua:660
+runtime.lua:674
+runtime.lua:706
 ```
 
-Input state:
+`atom.lua:110` is dead because the containing function is immediately
+overwritten.
+`runtime.lua:577` is inside obsolete commented-out scope code.
+
+The active definition is at `runtime.lua:679`.
+
+### LuaJIT headers actually used by the current C build
+
+The compiler dependency scan showed:
 
 ```text
-input_stack
-current_input
-reread
+luajit/src/lua.h
+luajit/src/luaconf.h
+luajit/src/lauxlib.h
+luajit/src/lualib.h
 ```
 
-Each `current_input` contains:
+`lua.hpp` appears in old C++ wrapper sources but is not part of either current
+build path.
 
-```text
-name
-text
-source_ln
-reader
-pos
-eol
-previous_line
+## Source archaeology cautions
+
+`runtime.lua` still contains substantial obsolete commented-out implementations,
+including an old scope implementation and old phase parser. Do not edit those
+merely because searches find similar function names.
+
+Use `lua-index.json`, then verify surrounding source and whether code is active.
+
+## Validation style
+
+Prefer focused validation while designs are changing:
+
+```sh
+bash build.sh
 ```
 
-There are two independent input cursors:
+plus targeted tests for the behavior changed.
 
-1. `current_input.pos` for token/character parsing.
-2. A private `pos` captured by the line-reader closure used by `get_line()`.
+Before committing:
 
-They are not synchronized. `source_ln` can also be advanced by both token and
-line interfaces. Any redesign of nested action parsing should avoid adding a
-third unrelated cursor or line-position model.
+```sh
+bash -n <changed-shell-script>       # when applicable
+git diff --check
+git status --short
+```
 
-There is no general reset function; the module appears intended for one
-compilation per fresh module load.
+For private-variable work, add focused tests that distinguish:
 
-## Recommended next discussion for compile_action
+1. visibility on the target itself;
+2. non-inheritance into prerequisites;
+3. fallback to an outer public definition after a private definition is skipped;
+4. ordinary public target-specific inheritance remaining unchanged;
+5. `.JUST_PRINT` continuing to inherit;
+6. `.ASSUME_NEW` no longer leaking when marked private.
 
-Before coding, settle these points:
-
-1. What precisely begins and ends shell, Lua, and embedded-blud regions?
-2. Does the marker prefix include the whitespace after `$` or `:`?
-3. How are blank lines and comments classified inside each region?
-4. How does dedentation terminate an ordinary shell action?
-5. How does a Lua region remain open across lines when its visible syntax is
-   incomplete?
-6. What exact logical text and source location should embedded blud receive?
-7. How are contiguous shell lines assembled into one invocation?
-8. How are status propagation and source mapping preserved across mixed regions?
-
-Implementation should proceed in small steps. First establish relative logical
-lines in `compile_io`; then extend `compile_action()` with one minimal mixed or
-multi-line case. Use only one or two focused tests while the design remains in
-motion.
+Keep changes small and behavior-preserving except for the explicitly introduced
+private semantics.
