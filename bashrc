@@ -12,6 +12,7 @@ bludfile
 .gitignore
 ./luajit/src/libluajit.a
 ./luajit/src/lua*.h
+./luajit/src/lauxlib.h
 )
 unset GLOBIGNORE
 upload()
