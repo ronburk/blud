@@ -13,6 +13,7 @@ bludfile
 ./luajit/src/libluajit.a
 ./luajit/src/lua*.h
 ./luajit/src/lauxlib.h
+*.py
 )
 unset GLOBIGNORE
 upload()
