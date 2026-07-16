@@ -189,7 +189,9 @@ file’s function names, parameter lists, and line ranges. Use it first
 to locate relevant code, discover actual function names, or rule out
 guessed names before reading source files directly; treat it as a
 navigation aid, not authoritative content, and expect it to become
-stale as the source is modified after a fresh upload.
+stale as the source is modified after a fresh upload. However, the
+chatgpt_finish_patch.sh script will update it, so it should be
+accurate again after you run that!
 
 Treat /mnt/data/blud as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested
