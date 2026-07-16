@@ -105,14 +105,24 @@ Before any response that reads, modifies, or relies on /mnt/data/blud or a blud-
 If this command fails, stop current task, show the user the output of EXACTLY
 'ls -al /mnt/data' and then perform `.FRESH`.
 
-After a successful preflight check, consider it valid for 300 seconds.
-Record its expiration time in conversation state. Before running another
-preflight, use a lightweight time tool rather than a shell command to
-determine whether the lease remains valid. Skip the preflight while the
-lease is valid unless a new blud-upload-*.zip was attached or filesystem
-trouble was observed. If the time cannot be determined reliably, run the
-normal preflight.
+After every successful preflight check or successful .FRESH rebuild:
 
+1. Use a non-shell time tool to obtain the current time.
+2. Record PRECHECK_VALID_UNTIL as exactly 300 seconds after that time.
+
+Before any later operation that would normally require preflight:
+
+1. If a new blud-upload-*.zip was attached, invalidate the lease and follow
+   the new-upload/.FRESH workflow.
+2. If filesystem trouble was observed, invalidate the lease and run the
+   normal preflight.
+3. Otherwise, use a non-shell time tool to obtain the current time.
+4. If the current time is earlier than PRECHECK_VALID_UNTIL, skip preflight.
+5. If the lease has expired, is missing, or the current time cannot be
+   determined reliably, run the normal preflight.
+
+Do not rerun preflight merely because a new user turn has begun.
+Do not use a shell command solely to determine whether the lease remains valid.
 
 .FRESH
     If no new `blud-upload-*.zip` is attached to the current message,
