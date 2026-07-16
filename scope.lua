@@ -43,10 +43,16 @@ end
 
 -- generic set() function to set value of variable
 M.set = function(self, name, value)
+    local parts
+
     if type(value) == "string" then
-        value = { value }
+        parts = { value }
+    else
+        assert(type(value) == "table")
+        parts = value
     end
-    self.variables[name] = value
+
+    self.variables[name] = parts
 end
 
 
@@ -103,7 +109,7 @@ local function target_get_parts(self, name)
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            result =  first_prereq.BOUND_NAME
+            result = { first_prereq.BOUND_NAME }
         end
     elseif name == "^" then
         result = {}
@@ -116,9 +122,9 @@ local function target_get_parts(self, name)
                 table.insert(result,  " " )
             end
         end
-        result = table.concat(result)
+        result = { table.concat(result) }
     elseif name == "@" then
-        result = self.target.BOUND_NAME
+        result = { self.target.BOUND_NAME }
     else
         result = self.variables[name]
         if result == nil and self.parent then

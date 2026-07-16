@@ -1,0 +1,5 @@
+-- expect: test0010.out
+-- Scope values are always macro-parts tables after storage or lookup.
+
+all:
+    shell bash test/test0010.sh

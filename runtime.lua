@@ -668,16 +668,10 @@ function blud.Macro.expand_call(scope, macro_call, stack)
         end
     end
     table.insert(stack, name_string)
-    local macro_body  = scope:get_parts(name_string) or ""
-    if type(macro_body) == "string" then -- if macro is simple string
-        result = { macro_body }
-    elseif type(macro_body) == "table" then
-        local param_scope = blud.Scope:new_param_scope(scope, new_actual)
-assert(type(macro_body) ~= "string")
-        result = { blud.Macro.expand_tokens(param_scope, macro_body, stack) }
-    else
-        blud.error("Can't happen.")
-    end
+    local macro_body = scope:get_parts(name_string) or {}
+    assert(type(macro_body) == "table")
+    local param_scope = blud.Scope:new_param_scope(scope, new_actual)
+    result = { blud.Macro.expand_tokens(param_scope, macro_body, stack) }
     table.remove(stack)
     return result
 end

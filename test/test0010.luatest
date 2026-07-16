@@ -1,0 +1,52 @@
+blud = {
+    Macro = {
+        expand_tokens = function(_, parts)
+            assert(type(parts) == "table")
+            return table.concat(parts)
+        end,
+    },
+    assert = assert,
+    error = error,
+}
+
+local Scope = assert(loadfile("scope.lua"))()
+
+local scope = Scope:new(nil, "test")
+scope:set("NAME", "literal")
+local parts = scope:get_parts("NAME")
+assert(type(parts) == "table")
+assert(#parts == 1 and parts[1] == "literal")
+assert(type(scope.variables.NAME) == "table")
+
+scope:set_boolean(".JUST_PRINT", true)
+assert(type(scope:get_parts(".JUST_PRINT")) == "table")
+assert(scope:get_boolean(".JUST_PRINT") == true)
+scope:set_boolean(".JUST_PRINT", false)
+assert(scope:get_boolean(".JUST_PRINT") == false)
+
+local environment_parts = Scope.environment:get_parts("BLUD_SCOPE_ENV")
+assert(type(environment_parts) == "table")
+assert(#environment_parts == 1 and environment_parts[1] == "environment")
+
+local target = {
+    BOUND_NAME = "target",
+    PREREQUISITES = {
+        { BOUND_NAME = "first" },
+        { BOUND_NAME = "second" },
+        { BOUND_NAME = "first" },
+    },
+}
+local target_scope = Scope:new_target_scope(target)
+
+local target_parts = target_scope:get_parts("@")
+assert(type(target_parts) == "table")
+assert(#target_parts == 1 and target_parts[1] == "target")
+
+local first_parts = target_scope:get_parts("<")
+assert(type(first_parts) == "table")
+assert(#first_parts == 1 and first_parts[1] == "first")
+
+local prerequisites_parts = target_scope:get_parts("^")
+assert(type(prerequisites_parts) == "table")
+assert(#prerequisites_parts == 1)
+assert(prerequisites_parts[1] == "first second ")

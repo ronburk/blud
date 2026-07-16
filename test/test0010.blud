@@ -1,0 +1,15 @@
+INNER = inner
+OUTER = $(INNER)tail
+
+all: first second first
+    echo $@
+    echo $<
+    echo $^
+    echo $(BLUD_SCOPE_ENV)
+    echo $(OUTER)
+
+first:
+    touch $@
+
+second:
+    touch $@
