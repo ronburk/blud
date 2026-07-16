@@ -159,7 +159,8 @@ Do not use a shell command solely to determine whether the lease remains valid.
     5. If the script exits nonzero, report the failure and do not supply a patch.
     6. Supply the exact uniquely named patch path (inside /mnt/data/tmp) printed by that script.
 
-    Never supply or link /mnt/data/chatgpt.patch.
+    Never supply or link /mnt/data/chatgpt.patch. Ensure the text of the link the user
+    clicks on to download the patch contains the "name" of the patch.
     Link only the exact uniquely named file printed by the script.
     The user may download it locally under the fixed name chatgpt.patch.
 
