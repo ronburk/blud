@@ -50,3 +50,28 @@ local prerequisites_parts = target_scope:get_parts("^")
 assert(type(prerequisites_parts) == "table")
 assert(#prerequisites_parts == 1)
 assert(prerequisites_parts[1] == "first second ")
+
+
+local outer_scope = Scope:new(nil, "outer")
+outer_scope:set("FALLBACK", "outer")
+outer_scope:set("PUBLIC", "outer")
+
+local parent_target = { BOUND_NAME = "parent", PREREQUISITES = {} }
+local parent_scope = Scope:new_target_scope(parent_target)
+parent_scope.parent = outer_scope
+parent_scope:set("PUBLIC", "parent")
+parent_scope:set("SECRET", { "parent", private = true })
+parent_scope:set("FALLBACK", { "parent", private = true })
+
+assert(parent_scope:get_text("SECRET") == "parent")
+assert(parent_scope:get_text("FALLBACK") == "parent")
+
+local child_target = { BOUND_NAME = "child", PREREQUISITES = {} }
+local child_scope = Scope:new_target_scope(child_target)
+child_scope:set_target_parent(parent_scope)
+assert(child_scope:get_text("PUBLIC") == "parent")
+assert(child_scope:get_parts("SECRET") == nil)
+assert(child_scope:get_text("FALLBACK") == "outer")
+
+child_scope:set_boolean("PRIVATE_BOOL", true, true)
+assert(child_scope.variables.PRIVATE_BOOL.private == true)

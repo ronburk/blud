@@ -7,10 +7,13 @@ M.__index = M
 
 
 -- generic get_parts() function to return value of variable
-M.get_parts = function(self, name)
+M.get_parts = function(self, name, skip_private)
     local result = self.variables[name]
+    if result and skip_private and result.private then
+        result = nil
+    end
     if result == nil and self.parent then
-        result = self.parent:get_parts(name)
+        result = self.parent:get_parts(name, skip_private)
     end
     return result
 end
@@ -35,9 +38,13 @@ end
 
 
 -- Store a canonical textual value so normal scope inheritance and expansion apply.
-M.set_boolean = function(self, name, value)
+M.set_boolean = function(self, name, value, private)
     assert(type(value) == "boolean")
-    self:set(name, value and "true" or "false")
+    assert(private == nil or type(private) == "boolean")
+
+    local parts = { value and "true" or "false" }
+    parts.private = private or nil
+    self:set(name, parts)
 end
 
 
@@ -74,12 +81,12 @@ M.commandline = M:new(M.bludfile, "commandline")
 M.build       = M:new(M.commandline, "build")
 
 
-M.environment.get_parts = function(self, name)
+M.environment.get_parts = function(self, name, skip_private)
     local value = os.getenv(name)
     if value ~= nil then
         return { value }
     end
-    return self.parent:get_parts(name)
+    return self.parent:get_parts(name, skip_private)
 end
 
 
@@ -89,12 +96,12 @@ end
 M.new_param_scope = function(self, parent, macro_actual)
     local scope = M:new(parent)
     scope.macro_actual = macro_actual
-    function scope:get_parts(name)
+    function scope:get_parts(name, skip_private)
         blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
-            return self.parent:get_parts(name)
+            return self.parent:get_parts(name, skip_private)
         end
     end
     function scope:set(name, value)
@@ -103,7 +110,13 @@ M.new_param_scope = function(self, parent, macro_actual)
     return scope
 end
 
-local function target_get_parts(self, name)
+function M:set_target_parent(parent)
+    assert(parent and parent.target)
+    self.parent = parent
+    self.parent_is_target = true
+end
+
+local function target_get_parts(self, name, skip_private)
     local result
     local bound_name = ""
     if name == "<" then
@@ -127,8 +140,14 @@ local function target_get_parts(self, name)
         result = { self.target.BOUND_NAME }
     else
         result = self.variables[name]
+        if result and skip_private and result.private then
+            result = nil
+        end
         if result == nil and self.parent then
-            result = self.parent:get_parts(name)
+            result = self.parent:get_parts(
+                name,
+                skip_private or self.parent_is_target
+            )
         end
     end
     return result

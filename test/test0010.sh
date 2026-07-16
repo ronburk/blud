@@ -19,7 +19,7 @@ gcc -std=c99 -Wall -Wextra -Werror \
     ./luajit/src/libluajit.a -lm -ldl
 
 BLUD_SCOPE_ENV=environment "$runner" test/test0010.luatest
-BLUD_SCOPE_ENV=environment ./blud -B -f test/test0010.blud all >"$log"
+BLUD_SCOPE_ENV=environment ./blud -B -f test/test0010.blud all private_parent >"$log"
 
 grep -Fx './all' "$log" >/dev/null
 grep -Fx './first' "$log" >/dev/null
@@ -27,5 +27,9 @@ grep -Fx 'echo ./first ./second ' "$log" >/dev/null
 grep -Fx './first ./second' "$log" >/dev/null
 grep -Fx 'environment' "$log" >/dev/null
 grep -Fx 'innertail' "$log" >/dev/null
+grep -Fx 'echo child::outer:parent' "$log" >/dev/null
+grep -Fx 'child::outer:parent' "$log" >/dev/null
+grep -Fx 'echo parent:parent:parent:parent' "$log" >/dev/null
+grep -Fx 'parent:parent:parent:parent' "$log" >/dev/null
 
 touch test0010.out

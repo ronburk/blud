@@ -1087,11 +1087,13 @@ do
                 scope:set(new_name, existing_parts)
             end
         elseif operator == "+=" then
+            local private = parts.private
             local new_parts = util.deep_copy(existing_parts or {})
             if #new_parts > 0 and #parts > 0 then
                 table.insert(new_parts, " ")
             end
             util.array_append(new_parts, parts)
+            new_parts.private = private
             parts = new_parts
         else
             error("Unknown assignment operator '" .. operator .. "':")

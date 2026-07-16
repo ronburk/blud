@@ -253,7 +253,7 @@ do  -- : operator
         local parent_name = ''
         if target_atom.PARENT then
             parent_name = target_atom.PARENT.NAME .. ' : '
-            target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
+            target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
         end
         -- util.print("BUILD('%s%s') prereq=%s",
         --            parent_name,
@@ -397,7 +397,7 @@ do  -- :: operator
         local parent_name = ''
         if target_atom.PARENT then
             parent_name = target_atom.PARENT.NAME .. ' :: '
-            target_atom.SCOPE.parent = target_atom.PARENT.SCOPE
+            target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
         end
         -- util.print("BUILD('%s%s') prereq=%s",
         --            parent_name,

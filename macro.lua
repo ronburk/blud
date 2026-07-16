@@ -15,13 +15,22 @@ do
     function M.match_macro_assign(line, skip_leading_white)
         -- print("match_macro_assign(\"" .. util.dump(line) .. "\")")
         local anchor = "^"
-        if skip_leading_white then anchor = "" end
-        local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
-        local macro_name, operator, remainder = line:match(pattern)
-        if macro_name and operator then
-            if operators[operator] == true then
-                return { name=macro_name, operator=operator, macro_text=remainder }
-            end
+        if skip_leading_white then anchor = "^%s*" end
+        local private, macro_name, operator, remainder
+        local pattern = anchor .. "(private)%s+" .. macro_name_pattern ..
+                        "%s*([=+:?]+)%s*(.*)$"
+        private, macro_name, operator, remainder = line:match(pattern)
+        if not macro_name then
+            pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
+            macro_name, operator, remainder = line:match(pattern)
+        end
+        if macro_name and operators[operator] == true then
+            return {
+                name = macro_name,
+                operator = operator,
+                macro_text = remainder,
+                private = private ~= nil,
+            }
         end
         return nil
     end
