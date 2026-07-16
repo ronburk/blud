@@ -2,6 +2,11 @@
 --
 -- Simple test to make sure SOMETHING works
 
+TEST=foo
+do
+    assert($(TEST) == "foo")
+end
+
 all:
     echo "test001 worked"
     touch test0001.out
