@@ -50,6 +50,25 @@ local function match_colon_operator(text, pos)
 end
 
 
+local lua_block_start_words = {
+    ["do"]       = true,
+    ["if"]       = true,
+    ["for"]      = true,
+    ["while"]    = true,
+    ["repeat"]   = true,
+    ["function"] = true,
+}
+
+local function remainder_starts_function(text, pos)
+    local stop = text:match("^[ \t]*function()", pos)
+    if not stop then
+        return false
+    end
+
+    local next_char = text:sub(stop, stop)
+    return next_char == "" or not next_char:match("[%w_]")
+end
+
 local function scan_dependency_word(text, pos)
     local start = pos
 
@@ -90,6 +109,8 @@ end
 
 M.get_token = function()
     local token_type, token_text
+    local at_line_start = current_input.eol
+
     if current_input.eol then
         token_type, token_text = strip_prefix()
         if token_type then
@@ -128,8 +149,17 @@ M.get_token = function()
             token_text = ""
         end
     else
-        token_type = "WORD"
-        token_text = char .. scan_dependency_word(text, pos+1)
+        token_text = char .. scan_dependency_word(text, pos + 1)
+
+        if at_line_start and (
+            lua_block_start_words[token_text] or
+            token_text == "local" and
+                remainder_starts_function(text, pos + #token_text)
+        ) then
+            token_type = "LUASTART"
+        else
+            token_type = "WORD"
+        end
     end
     
     current_input.pos = pos + #token_text
@@ -345,5 +375,78 @@ function M.close()
     sourcemap_lua = sourcemap_to_lua(sourcemap)
     return pre_sourcemap .. sourcemap_lua .. post_sourcemap
 end
+
+---[=[UNIT_TESTS
+do
+    local saved_current_input = current_input
+    local saved_input_stack = input_stack
+    local saved_strip_stack = strip_stack
+
+    local function reset_input(text)
+        current_input = nil
+        input_stack = {}
+        strip_stack = {}
+        M.push_input("<compile_io token test>", text .. "\n")
+    end
+
+    local function assert_first_token(text, expected_type, expected_text, expected_remainder)
+        reset_input(text)
+        local token_type, token_text = M.get_token()
+
+        assert(
+            token_type == expected_type and token_text == expected_text,
+            string.format(
+                "%q: expected %s %q, got %s %q",
+                text,
+                expected_type,
+                expected_text,
+                token_type,
+                token_text
+            )
+        )
+        assert(
+            M.get_line_remainder() == expected_remainder,
+            string.format("%q: tokenizer consumed too much input", text)
+        )
+    end
+
+    assert_first_token("do", "LUASTART", "do", "")
+    assert_first_token("if condition then", "LUASTART", "if", " condition then")
+    assert_first_token("for i = 1, 10 do", "LUASTART", "for", " i = 1, 10 do")
+    assert_first_token("while condition do", "LUASTART", "while", " condition do")
+    assert_first_token("repeat", "LUASTART", "repeat", "")
+    assert_first_token("function f()", "LUASTART", "function", " f()")
+    assert_first_token("local function f()", "LUASTART", "local", " function f()")
+
+    assert_first_token("done", "WORD", "done", "")
+    assert_first_token("iffy", "WORD", "iffy", "")
+    assert_first_token("formatter", "WORD", "formatter", "")
+    assert_first_token("local value", "WORD", "local", " value")
+    assert_first_token("local functionary", "WORD", "local", " functionary")
+    assert_first_token("end", "WORD", "end", "")
+    assert_first_token("until condition", "WORD", "until", " condition")
+
+    reset_input("while condition do")
+    assert(M.get_token() == "LUASTART")
+    M.skip_white()
+    assert(M.get_token() == "WORD")
+    M.skip_white()
+    local token_type, token_text = M.get_token()
+    assert(token_type == "WORD" and token_text == "do")
+
+    reset_input("    do")
+    token_type, token_text = M.get_token()
+    assert(token_type == "LEADWHITE" and token_text == "    ")
+
+    reset_input(": do")
+    M.push_strip_prefix(": ")
+    token_type, token_text = M.get_token()
+    assert(token_type == "LUASTART" and token_text == "do")
+
+    current_input = saved_current_input
+    input_stack = saved_input_stack
+    strip_stack = saved_strip_stack
+end
+--]=]
 
 return M
