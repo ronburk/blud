@@ -5,8 +5,10 @@
 TEST=foo
 do
     assert($(TEST) == "foo")
+    : prog: prog.o
+    :     gcc -o prog $(CFLAGS) prog.o
 end
-
-all:
+CFLAGS += -g
+all: prog
     echo "test001 worked"
     touch test0001.out
