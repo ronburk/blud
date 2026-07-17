@@ -146,6 +146,17 @@ do
 end
 
 
+local function assert_eq(name, actual, expected)
+    if actual ~= expected then
+        error(
+            name .. " failed\n" ..
+            "expected: " .. expected .. "\n" ..
+            "actual:   " .. actual,
+            2
+        )
+    end
+end
+
 do
     local function collect(text, stop_chars)
         local s = Scanner.new(text)
@@ -158,17 +169,6 @@ do
         end
 
         return table.concat(result, "|")
-    end
-
-    local function assert_eq(name, actual, expected)
-        if actual ~= expected then
-            error(
-                name .. " failed\n" ..
-                "expected: " .. expected .. "\n" ..
-                "actual:   " .. actual,
-                2
-            )
-        end
     end
 
     assert_eq(
