@@ -359,7 +359,7 @@ M.parts_to_lua = function(parts)
 --]]
 end
 
-M.part_to_lua_function = function(part)
+M.part_to_lua_expression = function(part)
     if type(part) == "string" then
         return string.format("%q", part)
     end
@@ -367,7 +367,7 @@ M.part_to_lua_function = function(part)
     
     if part.macro then
         assert(part[1])
-        local result = "scope:get_text(" .. M.parts_to_lua_function(part[1])
+        local result = "scope:get_text(" .. M.parts_to_lua_expression(part[1])
         return result .. ")"
     else
         assert(false, "unknown part type!")
@@ -375,11 +375,11 @@ M.part_to_lua_function = function(part)
     
 end
 
-M.parts_to_lua_function = function(parts)
+M.parts_to_lua_expression = function(parts)
     local result = ""
     for _, part in ipairs(parts) do
         if result ~= "" then result = result .. " .. " end
-        result = result .. M.part_to_lua_function(part)
+        result = result .. M.part_to_lua_expression(part)
     end
     return result
 end
@@ -391,7 +391,7 @@ do
     local function try(parts)
         local result = ""
         for _, part in ipairs(parts) do
-            result = result .. M.part_to_lua_function(part)
+            result = result .. M.part_to_lua_expression(part)
         end
         return result
     end
@@ -399,7 +399,7 @@ do
 local s = '    assert($(TEST) == "foo")'
 local parts = M.parts_from_text(s)
 
-util.printf("%s =>\n%s\n%s\n%s\n", s, util.dump(parts), M.parts_to_lua_function(parts), try(parts))
+util.printf("%s =>\n%s\n%s\n%s\n", s, util.dump(parts), M.parts_to_lua_expression(parts), try(parts))
 
     local function part_to_string(part)
         if type(part) == "string" then

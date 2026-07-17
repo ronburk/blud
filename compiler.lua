@@ -281,7 +281,7 @@ function compile_action(compile_io)
 
     local function append_action_line(macro_text)
         local parts = m.parts_from_text(macro_text)
-        local command = m.parts_to_lua_function(parts)
+        local command = m.parts_to_lua_expression(parts)
 
         table.insert(
             statements,
