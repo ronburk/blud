@@ -388,6 +388,19 @@ end
 
 ---[=[UNIT_TESTS
 do
+    local function try(parts)
+        local result = ""
+        for _, part in ipairs(parts) do
+            result = result .. M.part_to_lua_function(part)
+        end
+        return result
+    end
+
+local s = '    assert($(TEST) == "foo")'
+local parts = M.parts_from_text(s)
+
+util.printf("%s =>\n%s\n%s\n%s\n", s, util.dump(parts), M.parts_to_lua_function(parts), try(parts))
+
     local function part_to_string(part)
         if type(part) == "string" then
             return "text:" .. string.format("%q", part)
