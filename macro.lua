@@ -307,56 +307,29 @@ local function q(s)
 end
 
 
-local function part_to_lua(part)
+M.part_to_lua = function(part)
+    if type(part) == "string" then
+        return part
+    end
     assert(type(part) == "table")
-    assert(part.type)
 
-    if part.type == "text"
-    or part.type == "quote"
-    or part.type == "comment"
-    or part.type == "stop" then
-        assert(type(part.text) == "string")
-        return string.format(
-            "{ type = %q, text = %q }",
-            part.type,
-            part.text
-        )
+    if part.macro then
+        assert(part[1])
+        local name_expression = M.parts_to_lua_expression(part[1])
+        return "scope:get_text(" .. name_expression .. ")"
     end
 
-    if part.type == "macro" then
-        local result = {
---            string.format("{ type = %q,", part.type)
-            string.format("{ type = %q, eval = %q,", part.type, part.eval or "delay")
-        }
-
-        for i = 1, #part do
-            table.insert(result,
-                string.format("    [%d] = %s,", i, part_to_lua(part[i]))
-            )
-        end
-
-        table.insert(result, "}")
-
-        return table.concat(result, "\n")
-    end
-
-    error("unknown part type: " .. tostring(part.type))
+    assert(false, "unknown part type!")
 end
 
 M.parts_to_lua = function(parts)
-    assert(type(parts) == "table")
-    return util.dump(parts)
---[[
-    local result = { "{" }
+    local result = ""
 
     for _, part in ipairs(parts) do
-        table.insert(result, "    " .. part_to_lua(part) .. ",")
+        result = result .. M.part_to_lua(part)
     end
 
-    table.insert(result, "}")
-
-    return table.concat(result, "\n")
---]]
+    return result
 end
 
 M.part_to_lua_expression = function(part)
@@ -400,6 +373,27 @@ local s = '    assert($(TEST) == "foo")'
 local parts = M.parts_from_text(s)
 
 util.printf("%s =>\n%s\n%s\n%s\n", s, util.dump(parts), M.parts_to_lua_expression(parts), try(parts))
+
+    assert_eq(
+        "parts_to_lua one macro",
+        M.parts_to_lua(M.parts_from_text('assert($(TEST) == "foo")')),
+        'assert(scope:get_text("TEST") == "foo")'
+    )
+    assert_eq(
+        "parts_to_lua multiple macros",
+        M.parts_to_lua(M.parts_from_text('assert($(LEFT) == $(RIGHT))')),
+        'assert(scope:get_text("LEFT") == scope:get_text("RIGHT"))'
+    )
+    assert_eq(
+        "parts_to_lua no macros",
+        M.parts_to_lua(M.parts_from_text('assert(value == "foo")')),
+        'assert(value == "foo")'
+    )
+    assert_eq(
+        "parts_to_lua nested macro name",
+        M.parts_to_lua(M.parts_from_text('$($(NAME))')),
+        'scope:get_text(scope:get_text("NAME"))'
+    )
 
     local function part_to_string(part)
         if type(part) == "string" then
