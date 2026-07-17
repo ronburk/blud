@@ -369,6 +369,10 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
                          action or "nil")
 end
 
+function compile_lua(compile_io, token_text)
+end
+
+
 
 function compile(compile_io)
     local token_type, token_text = compile_io.get_token()
