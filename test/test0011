@@ -1,0 +1,5 @@
+-- expect: test0011.out
+-- --lua runs an arbitrary LuaJIT source file without entering build mode.
+
+all:
+    shell bash test/test0011.sh

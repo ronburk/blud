@@ -33,7 +33,7 @@ function blud.require(name)
 end
 
 function blud.parse_command_line()
-    local debugger = require("debugger")
+    local debugger
     local options = {
         bludfile_path = "bludfile",
         debug = false,
@@ -50,8 +50,27 @@ function blud.parse_command_line()
             if i <= #args then
                 options.bludfile_path = args[i]
             end
+        elseif arg == "--lua" then
+            i = i + 1
+            if i > #args then
+                error("--lua requires a Lua file")
+            end
+
+            _G.arg = {}
+            for j = i, #args do
+                _G.arg[j - i] = args[j]
+            end
+
+            setmetatable(_G, nil)
+            local chunk, load_error = loadfile(args[i])
+            if not chunk then
+                error(load_error, 0)
+            end
+            chunk()
+            os.exit(0)
         elseif arg == "-d" then
             options.debug = true
+            debugger = debugger or require("debugger")
             debugger.probe = debugger.real_probe
         elseif arg == "-B" then
             options.always_make = true
@@ -74,6 +93,7 @@ function blud.parse_command_line()
         i = i + 1
     end
 
+    debugger = debugger or require("debugger")
     debugger.probe({func="<start>"})
     blud.command_line_options = options
 end
