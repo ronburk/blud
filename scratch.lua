@@ -2,6 +2,9 @@
     
 New approach. You're going to write a new function called
 get_line. You will keep it and its associated code in "scratch.lua"
+The 
+
+
 Tell me what's missing from this spec:
 
 parsed = get_line(next_func)
