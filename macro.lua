@@ -369,11 +369,6 @@ do
         return result
     end
 
-local s = '    assert($(TEST) == "foo")'
-local parts = M.parts_from_text(s)
-
-util.printf("%s =>\n%s\n%s\n%s\n", s, util.dump(parts), M.parts_to_lua_expression(parts), try(parts))
-
     assert_eq(
         "parts_to_lua one macro",
         M.parts_to_lua(M.parts_from_text('assert($(TEST) == "foo")')),

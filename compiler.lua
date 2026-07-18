@@ -369,12 +369,34 @@ function compile_rule_or_target_assignment(compile_io, token_type, token_text)
                          action or "nil")
 end
 
-function compile_lua(compile_io, token_text)
+-- compile a block of Lua code
+local function compile_lua(compile_io, token_type, token_text)
+    local blocks = {}
+    while true do
+        local line = compile_io.get_current_line("virtual")
+        if token_type == "EOF" then
+            missing_lua_closer(blocks[#blocks])
+        elseif token_type == "LUASTART" then
+            table.insert(blocks, token_text)
+        elseif token_type == "LUA_ELSEIF" or token_type == "LUA_ELSE" then
+            require_valid_lua_branch(blocks[#blocks], token_text)
+            blocks[#blocks] = token_text
+        elseif token_type == "LUA_UNTIL" then
+            require_repeat(blocks[#blocks])
+            table.remove(blocks)
+        elseif token_type == "LUAEND" then
+            require_end_block(blocks[#blocks])
+            table.remove(blocks)
+        end
+        emit_lua_line(compile_io, line)
+        if #blocks == 0 then
+            return
+        end
+        token_type, token_text = compile_io.get_token()
+    end
 end
 
-
-
-function compile(compile_io)
+local function compile(compile_io)
     local token_type, token_text = compile_io.get_token()
 
     while token_type ~= "EOF" do
