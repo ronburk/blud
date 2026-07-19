@@ -393,6 +393,20 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
     : : CFLAGS += -g        | true  =>[2] "cannot switch to directive mode from directive mode", ERROR
 ]]},
+    { name="test0022", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",         PUSHCOLON
+    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
+    : bar: bar.o            | false =>[3] "bar: bar.o",         POP
+|                             false =>[2] "bar: bar.o",         POP
+EOF                         | false =>[1] "",                   POP
+|                             false =>[0] "",                   POP
+]]},
+    { name="test0023", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
+: foo: foo.o                | false =>[1] "colon mode switch cannot dedent out of an active prefix", ERROR
+]]},
 }
 
 local test0001 = [[
