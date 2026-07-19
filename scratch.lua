@@ -226,6 +226,65 @@ prog: prog.o                | false =>[0] "prog: prog.o",         nil
 |                             false =>[1] "echo 'building prog'", POP
 EOF                         | false =>[0] "",                     POP
 ]]},
+    { name="test0005", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
+next: next.o                | false =>[0] "next: next.o",         POP
+EOF                         | false =>[0] "",                     nil
+]]},
+    { name="test0006", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
+  next: next.o              | false =>[0] "  next: next.o",       POP
+EOF                         | false =>[0] "",                     nil
+]]},
+    { name="test0007", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    if true then            | true  =>[1] "if true then",          PUSH
+        :not_a_directive()  | false =>[1] "    :not_a_directive()", nil
+        : foo: foo.o        | false =>[2] "foo: foo.o",            PUSHCOLON
+    end                     | true  =>[1] "end",                   POP
+EOF                         | false =>[0] "",                      POP
+]]},
+    { name="test0008", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",            PUSH
+    echo 'building prog'    | false =>[2] "echo 'building prog'",  POP
+|                             false =>[1] "echo 'building prog'",  POP
+    echo 'still prog'       | false =>[1] "echo 'still prog'",     nil
+EOF                         | false =>[0] "",                      POP
+]]},
+    { name="test0009", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     : bar: bar.o      | true  =>[4] "bar: bar.o",            PUSHCOLON
+    echo 'building prog'    | true  =>[3] "echo 'building prog'",  POP
+|                             false =>[2] "echo 'building prog'",  POP
+|                             false =>[1] "echo 'building prog'",  POP
+EOF                         | false =>[0] "",                      POP
+]]},
+    { name="test0010", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+next: next.o                | true  =>[0] "next: next.o",          nil
+    echo 'building next'    | true  =>[1] "echo 'building next'",  PUSH
+EOF                         | false =>[0] "",                      POP
+]]},
+    { name="test0011", text=[[
+if true then                | false =>[0] "if true then",          nil
+    : foo: foo.o            | false =>[1] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'        | true  =>[2] "echo 'foo'",            PUSH
+end                         | false =>[1] "end",                   POP
+|                             false =>[0] "end",                   POP
+EOF                         | false =>[0] "",                      nil
+]]},
+    { name="test0012", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    echo 'one'              | true  =>[1] "echo 'one'",            PUSH
+EMPTY                       | false =>[1] "",                      nil
+    echo 'two'              | false =>[1] "echo 'two'",            nil
+EOF                         | false =>[0] "",                      POP
+]]},
 }
 
 local test0001 = [[
@@ -331,6 +390,9 @@ local function run_get_line_tests(tests)
                     end
                     if expected.input == "EOF" then
                         return nil
+                    end
+                    if expected.input == "EMPTY" then
+                        return ""
                     end
                     return expected.input
                 end
