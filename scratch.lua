@@ -301,6 +301,55 @@ EOF                                               | false =>[2] "",             
 |                                                   false =>[1] "",             POP
 |                                                   false =>[0] "",             POP
 ]]},
+    { name="test0013", text=[[
+prog: prog.o                                      | false =>[0] "prog: prog.o", nil
+    echo 'prog'                                   | true  =>[1] "echo 'prog'",  PUSH
+READ {"", "   ", "    : ", false}                 | false =>[0] "",             POP
+]]},
+    { name="test0014", text=[[
+: foo: foo.o                | false =>[1] "foo: foo.o",       PUSHCOLON
+:     echo 'foo'            | true  =>[2] "echo 'foo'",       PUSH
+EOF                         | false =>[1] "",                 POP
+|                             false =>[0] "",                 POP
+]]},
+    { name="test0015", text=[[
+prog: prog.o                         | false =>[0] "prog: prog.o", nil
+READ {"\techo 'one'"}                 | true  =>[1] "echo 'one'",  PUSH
+READ {"\techo 'two'"}                 | false =>[1] "echo 'two'",  nil
+EOF                                  | false =>[0] "",            POP
+]]},
+    { name="test0016", text=[[
+prog: prog.o                                      | false =>[0] "prog: prog.o", nil
+READ {"", "   ", "    echo 'building prog'"}      | true  =>[1] "echo 'building prog'", PUSH
+EOF                                               | false =>[0] "",             POP
+]]},
+    { name="test0017", text=[[
+: if true then              | false =>[1] "if true then",       PUSHCOLON
+:     print('true')         | false =>[1] "    print('true')",  nil
+: end                       | false =>[1] "end",                nil
+EOF                         | false =>[0] "",                   POP
+]]},
+    { name="test0018", text=[[
+prog: prog.o                              | false =>[0] "prog: prog.o", nil
+READ {"\t  : foo: foo.o"}                  | true  =>[2] "foo: foo.o",   PUSHCOLON
+READ {"\t  : \techo 'foo'"}                | true  =>[3] "echo 'foo'",   PUSH
+EOF                                       | false =>[2] "",             POP
+|                                           false =>[1] "",             POP
+|                                           false =>[0] "",             POP
+]]},
+    { name="test0019", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    if true then            | true  =>[1] "if true then",       PUSH
+        : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
+        :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
+    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
+|                             false =>[1] ": bar: bar.o",       POP
+|                             false =>[2] "bar: bar.o",         PUSHCOLON
+    :     echo 'bar'        | true  =>[3] "echo 'bar'",         PUSH
+EOF                         | false =>[2] "",                   POP
+|                             false =>[1] "",                   POP
+|                             false =>[0] "",                   POP
+]]},
 }
 
 local test0001 = [[
