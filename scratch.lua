@@ -95,9 +95,7 @@ local ERROR     = "ERROR"
 
 local prefixes = {}
 local pending_line
-local pending_line_continues_colon_run = false
 local pending_eof = false
-local colon_run_prefix
 
 local function normal_line_reader()
     return io.read("*l")
@@ -110,9 +108,7 @@ end
 local function reset_get_line()
     prefixes = {}
     pending_line = nil
-    pending_line_continues_colon_run = false
     pending_eof = false
-    colon_run_prefix = nil
 end
 
 local function strip_prefixes(line)
@@ -140,37 +136,14 @@ local function get_line(previous_was_dependency, line_reader)
 
     while true do
         local line
-        local continues_colon_run = false
 
         if pending_eof then
             line = nil
         elseif pending_line ~= nil then
             line = pending_line
             pending_line = nil
-            continues_colon_run = pending_line_continues_colon_run
-            pending_line_continues_colon_run = false
         else
             line = line_reader()
-
-            if line ~= nil and not is_blank(line) then
-                local physical_colon_prefix =
-                    line:match("^([ \t]*: )")
-
-                if physical_colon_prefix then
-                    continues_colon_run = colon_run_prefix ~= nil
-
-                    if colon_run_prefix ~= nil
-                            and physical_colon_prefix ~= colon_run_prefix then
-                        error("contiguous ': ' lines use different indentation",
-                              0)
-                    end
-
-                    colon_run_prefix =
-                        colon_run_prefix or physical_colon_prefix
-                else
-                    colon_run_prefix = nil
-                end
-            end
         end
 
         if line == nil then
@@ -193,8 +166,6 @@ local function get_line(previous_was_dependency, line_reader)
 
                 if not matched then
                     pending_line = line
-                    pending_line_continues_colon_run =
-                        continues_colon_run
                 end
 
                 return virtual, POP
@@ -225,11 +196,6 @@ local function get_line(previous_was_dependency, line_reader)
 
                 if colon_prefix then
                     if not is_blank(body) then
-                        if continues_colon_run then
-                            error("cannot switch to directive mode from "
-                                  .. "directive mode", 0)
-                        end
-
                         table.insert(prefixes, colon_prefix)
                         return body, PUSHCOLON
                     end
@@ -377,7 +343,9 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     if true then            | true  =>[1] "if true then",       PUSH
         : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
         :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
-    : bar: bar.o            | false =>[3] "contiguous ': ' lines use different indentation", ERROR
+    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
+|                             false =>[1] ": bar: bar.o",       POP
+EOF                         | false =>[0] "",                   POP
 ]]},
     { name="test0020", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
@@ -391,7 +359,10 @@ EOF                         | false =>[3] "",                   POP
     { name="test0021", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
-    : : CFLAGS += -g        | true  =>[2] "cannot switch to directive mode from directive mode", ERROR
+    : : CFLAGS += -g        | true  =>[3] "CFLAGS += -g",       PUSHCOLON
+EOF                         | false =>[2] "",                   POP
+|                             false =>[1] "",                   POP
+|                             false =>[0] "",                   POP
 ]]},
     { name="test0022", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
@@ -411,7 +382,9 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o              | false =>[2] "contiguous ': ' lines use different indentation", ERROR
+  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
+|                             false =>[0] "  : foo: foo.o",     POP
+EOF                         | false =>[0] "",                   nil
 ]]},
 }
 
