@@ -405,7 +405,7 @@ EOF                         | false =>[1] "",                   POP
     { name="test0023", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
     echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
-: foo: foo.o                | false =>[1] "colon mode switch cannot dedent out of an active prefix", ERROR
+: foo: foo.o                | false =>[0] ": foo: foo.o",       POP
 ]]},
     { name="test0024", text=[[
 if true then                | false =>[0] "if true then",       nil
