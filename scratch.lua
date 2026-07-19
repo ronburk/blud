@@ -407,6 +407,12 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
 : foo: foo.o                | false =>[1] "colon mode switch cannot dedent out of an active prefix", ERROR
 ]]},
+    { name="test0024", text=[[
+if true then                | false =>[0] "if true then",       nil
+    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o              | false =>[2] "contiguous ': ' lines use different indentation", ERROR
+]]},
 }
 
 local test0001 = [[
