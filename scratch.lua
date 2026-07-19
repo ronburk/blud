@@ -2,18 +2,19 @@
     
 New approach. You're going to write a new function called
 get_line. You will keep it and its associated code in "scratch.lua"
-The 
+We will debug it there as standalone code, using "./blud --lua scratch.lua".
+You will add inline tests at the end of the file, in its own do/end block.
+The function accepts a function that fetches the next line, which will allow
+the unit tests to "fake" input to be tested.
 
-
-Tell me what's missing from this spec:
 
 parsed = get_line(next_func)
 
 Where:
-    next_func is a function parses the next line of text and returns:
+    next_func is a function fetches the next line of text.
 
     parsed is a table with these fields:
-        type: "LUA" or "ASSIGN" or "ACTION" or "UNKNOWN" or "POP" or "COMMENT"
+        type: "LUA" or "ASSIGN" or "ACTION" or "UNKNOWN" or "POP" or "EMPTY"
         keyword: if line starts with Lua keyword, text of that keyword, else nil
         parts: result of running macro.lua's parts_from_text on the "real"
             portion of the line
@@ -38,25 +39,345 @@ calling next_func.
     
 If it does find all the prefixes, then it sets its result virtual_line
 to the remainder of the line. It next checks the beginning of virtual_line
-for the presence of a new prefix. A prefix is one of three forms:
+for the presence of a new additional prefix. A prefix is one of three forms:
+
     <whitespace>:<space>
          or
     <whitespace>$<space>
          or
     <whitespace><not white-space>
 
+If 
+
 If the line starts with one of these patterns, the prefix text matched
 is stripped and pushed onto the strip_stack before proceeding. The
 current 'mode' is also pushed with that same entry. If the new prefix
 was a colon type, our mode is set to DIRECTIVE. If it was the dollar
-sign type then the mode is set to ACTION. There is an exception: if
-the current mode is LUA and the prefix is just whitespace, we pretend
-we saw no prefix at all
+sign type or just whitespace then the mode is set to ACTION. There is
+an exception: if the current mode is LUA and the prefix is just
+whitespace, we pretend we saw no prefix at all.
 
 Now we have the final virtual_line to analyze. parts_to_text is called
-to produce a 'parts' array from virtual_line. The analysis depends on
-the current mode:
+to produce a 'parts' array from virtual_line. We next must analyze the
+parts array to determine the return type.
+
+The first test is mode-independent. Does it look like an empty line
+or a line that only contains a lua comment? In that case, just set the
+return type to "EMPTY".
+
+Otherwise, the analysis depends on the current mode:
 
 In DIRECTIVE mode, 
 
+The only indentations that get stacked are:
+    * leading white space if previous line was dependency rule
+    * switch to DIRECTIVE mode via ": "
+
+State_0: DIRECTIVE mode
+   EMPTY -> State_0
+   
+prog: prog.o
+    if true then
+        $ echo "true"
+        : prog: prog.o
+        if true then
+            : foo : foo.o
+            :     echo "but that's OK"
+        end
+    end
+
 ]]--
+
+local PUSH      = "PUSH"
+local PUSHCOLON = "PUSHCOLON"
+local POP       = "POP"
+
+local prefixes = {}
+local pending_line
+local pending_eof = false
+
+local function normal_line_reader()
+    return io.read("*l")
+end
+
+local function get_line_depth()
+    return #prefixes
+end
+
+local function reset_get_line()
+    prefixes = {}
+    pending_line = nil
+    pending_eof = false
+end
+
+local function strip_prefixes(line)
+    local virtual = line
+
+    for i = 1, #prefixes do
+        local prefix = prefixes[i]
+
+        if virtual:sub(1, #prefix) ~= prefix then
+            return virtual, false
+        end
+
+        virtual = virtual:sub(#prefix + 1)
+    end
+
+    return virtual, true
+end
+
+local function get_line(previous_was_dependency, line_reader)
+    line_reader = line_reader or normal_line_reader
+
+    local line
+
+    if pending_eof then
+        line = nil
+    elseif pending_line ~= nil then
+        line = pending_line
+        pending_line = nil
+    else
+        line = line_reader()
+    end
+
+    if line == nil then
+        if #prefixes == 0 then
+            pending_eof = false
+            return "", nil
+        end
+
+        table.remove(prefixes)
+        pending_eof = #prefixes > 0
+        return "", POP
+    end
+
+    local virtual, matched = strip_prefixes(line)
+
+    if not matched then
+        table.remove(prefixes)
+        virtual, matched = strip_prefixes(line)
+
+        if not matched then
+            pending_line = line
+        end
+
+        return virtual, POP
+    end
+
+    if previous_was_dependency then
+        local indent, body = virtual:match("^([ \t]+)(.*)$")
+
+        if indent then
+            local directive = body:match("^: (.*)$")
+
+            if directive ~= nil then
+                table.insert(prefixes, indent)
+                table.insert(prefixes, ": ")
+                return directive, PUSHCOLON
+            end
+
+            table.insert(prefixes, indent)
+            return body, PUSH
+        end
+    end
+
+    local colon_prefix, body = virtual:match("^([ \t]*: )(.*)$")
+
+    if colon_prefix then
+        table.insert(prefixes, colon_prefix)
+        return body, PUSHCOLON
+    end
+
+    return virtual, nil
+end
+
+
+
+
+
+
+local tests = {
+    { name="test0001", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'simple action'    | true  =>[1] "echo 'simple action'", PUSH
+EOF                         | false =>[0] "",                     POP
+]]},
+    { name="test0002", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",     nil
+    if true then            | true  =>[1] "if true then",     PUSH
+        : foo: foo.o        | false =>[2] "foo: foo.o",       PUSHCOLON
+    end                     | true  =>[1] "end",              POP
+EOF                         | false  =>[0] "",                 POP
+]]},
+    { name="test0003", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",     nil
+    : foo: foo.o            | true  =>[1] "foo: foo.o",       PUSHCOLON
+    :     echo 'foo'        | true  =>[2] "echo 'foo'",       PUSH
+EOF                         | false =>[1] "",                 POP
+|                             false =>[0] "",                 POP
+]]},
+
+    { name="test0004", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
+    echo 'building prog'    | false =>[2] "echo 'building prog'", POP
+|                             false =>[1] "echo 'building prog'", POP
+EOF                         | false =>[0] "",                     POP
+]]},
+}
+
+local test0001 = [[
+prog: prog.o                              -- { type='LINE' }
+    if true then                          -- { type='PUSHINDENT' }  { type='LINE' }
+        $ echo "true"                     -- { type='LINE' }
+                                          -- { type='EMPTY' }
+        if true then                      -- { type='LINE' }
+            $ echo "false"
+            $ echo "but that's ok"
+        end
+    end                                   -- { type='LINE' }
+                                          -- { type='POPINDENT' } { type='EMPTY' }
+]]
+
+local test0002 = [[
+if true then                          -- { type='LINE' }
+    $ echo "true"                     -- { type='LINE' }
+                                      -- { type='EMPTY' }
+    : prog: prog.o
+        if true then                  -- { type='PUSHINDENT' }
+            : foo : foo.o
+            :     echo "but that's ok"
+        end
+end                                   -- { type='POPINDENT' }
+
+]]
+do
+local change_value = {
+    PUSH      = PUSH,
+    PUSHCOLON = PUSHCOLON,
+    POP       = POP,
+}
+
+local function fail(test, row, message, ...)
+    error(("%s:%d: " .. message):format(test, row, ...), 0)
+end
+
+local function parse_row(test, row, text)
+    local input, expected = text:match("^(.-)|%s*(.-)%s*$")
+    if not input then
+        fail(test, row, "missing |")
+    end
+
+    local dependency, depth, result =
+        expected:match("^([%a]+)%s*=>%[(%d+)%]%s*(.-)%s*$")
+
+    if dependency ~= "true" and dependency ~= "false" then
+        fail(test, row, "expected true or false")
+    end
+
+    local literal, change_name =
+        result:match("^(.*),%s*([%a]+)%s*$")
+
+    if not literal then
+        fail(test, row, "bad expected result")
+    end
+
+    local loader, message = loadstring("return " .. literal)
+    if not loader then
+        fail(test, row, "%s", message)
+    end
+
+    input = input:gsub("%s+$", "")
+
+    local change
+    if change_name ~= "nil" then
+        change = change_value[change_name]
+        if change == nil then
+            fail(test, row, "unknown change %q", change_name)
+        end
+    end
+
+    return {
+        input = input,
+        dependency = dependency == "true",
+        depth = tonumber(depth),
+        line = loader(),
+        change = change,
+        change_name = change_name,
+    }
+end
+
+local function run_get_line_tests(tests)
+    local depth = 0
+
+    for _, test in ipairs(tests) do
+        local row = 0
+
+        for text in (test.text .. "\n"):gmatch("(.-)\n") do
+            if text:match("%S") then
+                row = row + 1
+                local expected = parse_row(test.name, row, text)
+                local reads = 0
+
+                local function reader()
+                    reads = reads + 1
+
+                    if expected.input == "" then
+                        fail(test.name, row, "get_line unexpectedly read input")
+                    end
+                    if reads > 1 then
+                        fail(test.name, row, "get_line read input more than once")
+                    end
+                    if expected.input == "EOF" then
+                        return nil
+                    end
+                    return expected.input
+                end
+
+                local line, change =
+                    get_line(expected.dependency, reader)
+
+                local expected_reads = expected.input == "" and 0 or 1
+                if reads ~= expected_reads then
+                    fail(test.name, row,
+                         "expected %d input reads, got %d",
+                         expected_reads, reads)
+                end
+
+                if line ~= expected.line then
+                    fail(test.name, row,
+                         "expected line %q, got %q",
+                         expected.line, line)
+                end
+
+                if change ~= expected.change then
+                    fail(test.name, row,
+                         "expected change %s, got %s",
+                         expected.change_name, tostring(change))
+                end
+
+                if change == PUSH or change == PUSHCOLON then
+                    depth = depth + 1
+                elseif change == POP then
+                    depth = depth - 1
+                end
+
+                if depth ~= expected.depth then
+                    fail(test.name, row,
+                         "expected depth %d, got %d",
+                         expected.depth, depth)
+                end
+            end
+        end
+
+        if depth ~= 0 then
+            error(("%s: finished at depth %d"):format(test.name, depth), 0)
+        end
+
+        print(test.name .. ": OK")
+    end
+end
+
+run_get_line_tests(tests)
+end

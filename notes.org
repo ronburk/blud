@@ -97,6 +97,10 @@ means the following when 'test' is built:
 
 If you have any memory of CHATGPT_PREFLIGHT.sh, forget it. It was obsolete and removed.
 
+When showing code or command snippets, omit the language identifier
+after the opening triple backticks so the block uses less vertical
+space.
+
 Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
