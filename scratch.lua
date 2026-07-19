@@ -211,9 +211,10 @@ EOF                         | false  =>[0] "",                 POP
 ]]},
     { name="test0003", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",     nil
-    : foo: foo.o            | true  =>[1] "foo: foo.o",       PUSHCOLON
-    :     echo 'foo'        | true  =>[2] "echo 'foo'",       PUSH
-EOF                         | false =>[1] "",                 POP
+    : foo: foo.o            | true  =>[2] "foo: foo.o",       PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",       PUSH
+EOF                         | false =>[2] "",                 POP
+|                             false =>[1] "",                 POP
 |                             false =>[0] "",                 POP
 ]]},
 
@@ -309,9 +310,8 @@ local function parse_row(test, row, text)
 end
 
 local function run_get_line_tests(tests)
-    local depth = 0
-
     for _, test in ipairs(tests) do
+        reset_get_line()
         local row = 0
 
         for text in (test.text .. "\n"):gmatch("(.-)\n") do
@@ -357,12 +357,7 @@ local function run_get_line_tests(tests)
                          expected.change_name, tostring(change))
                 end
 
-                if change == PUSH or change == PUSHCOLON then
-                    depth = depth + 1
-                elseif change == POP then
-                    depth = depth - 1
-                end
-
+                local depth = get_line_depth()
                 if depth ~= expected.depth then
                     fail(test.name, row,
                          "expected depth %d, got %d",
@@ -371,6 +366,7 @@ local function run_get_line_tests(tests)
             end
         end
 
+        local depth = get_line_depth()
         if depth ~= 0 then
             error(("%s: finished at depth %d"):format(test.name, depth), 0)
         end
