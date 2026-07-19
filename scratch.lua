@@ -91,10 +91,13 @@ prog: prog.o
 local PUSH      = "PUSH"
 local PUSHCOLON = "PUSHCOLON"
 local POP       = "POP"
+local ERROR     = "ERROR"
 
 local prefixes = {}
 local pending_line
+local pending_line_continues_colon_run = false
 local pending_eof = false
+local colon_run_prefix
 
 local function normal_line_reader()
     return io.read("*l")
@@ -107,7 +110,9 @@ end
 local function reset_get_line()
     prefixes = {}
     pending_line = nil
+    pending_line_continues_colon_run = false
     pending_eof = false
+    colon_run_prefix = nil
 end
 
 local function strip_prefixes(line)
@@ -135,14 +140,37 @@ local function get_line(previous_was_dependency, line_reader)
 
     while true do
         local line
+        local continues_colon_run = false
 
         if pending_eof then
             line = nil
         elseif pending_line ~= nil then
             line = pending_line
             pending_line = nil
+            continues_colon_run = pending_line_continues_colon_run
+            pending_line_continues_colon_run = false
         else
             line = line_reader()
+
+            if line ~= nil and not is_blank(line) then
+                local physical_colon_prefix =
+                    line:match("^([ \t]*: )")
+
+                if physical_colon_prefix then
+                    continues_colon_run = colon_run_prefix ~= nil
+
+                    if colon_run_prefix ~= nil
+                            and physical_colon_prefix ~= colon_run_prefix then
+                        error("contiguous ': ' lines use different indentation",
+                              0)
+                    end
+
+                    colon_run_prefix =
+                        colon_run_prefix or physical_colon_prefix
+                else
+                    colon_run_prefix = nil
+                end
+            end
         end
 
         if line == nil then
@@ -165,6 +193,8 @@ local function get_line(previous_was_dependency, line_reader)
 
                 if not matched then
                     pending_line = line
+                    pending_line_continues_colon_run =
+                        continues_colon_run
                 end
 
                 return virtual, POP
@@ -195,6 +225,11 @@ local function get_line(previous_was_dependency, line_reader)
 
                 if colon_prefix then
                     if not is_blank(body) then
+                        if continues_colon_run then
+                            error("cannot switch to directive mode from "
+                                  .. "directive mode", 0)
+                        end
+
                         table.insert(prefixes, colon_prefix)
                         return body, PUSHCOLON
                     end
@@ -342,13 +377,21 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     if true then            | true  =>[1] "if true then",       PUSH
         : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
         :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
-    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
-|                             false =>[1] ": bar: bar.o",       POP
-|                             false =>[2] "bar: bar.o",         PUSHCOLON
-    :     echo 'bar'        | true  =>[3] "echo 'bar'",         PUSH
-EOF                         | false =>[2] "",                   POP
+    : bar: bar.o            | false =>[3] "contiguous ': ' lines use different indentation", ERROR
+]]},
+    { name="test0020", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
+EOF                         | false =>[3] "",                   POP
+|                             false =>[2] "",                   POP
 |                             false =>[1] "",                   POP
 |                             false =>[0] "",                   POP
+]]},
+    { name="test0021", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    : : CFLAGS += -g        | true  =>[2] "cannot switch to directive mode from directive mode", ERROR
 ]]},
 }
 
@@ -382,6 +425,7 @@ local change_value = {
     PUSH      = PUSH,
     PUSHCOLON = PUSHCOLON,
     POP       = POP,
+    ERROR     = ERROR,
 }
 
 local function fail(test, row, message, ...)
@@ -471,6 +515,7 @@ local function run_get_line_tests(tests)
     for _, test in ipairs(tests) do
         reset_get_line()
         local row = 0
+        local ended_with_error = false
 
         for text in (test.text .. "\n"):gmatch("(.-)\n") do
             if text:match("%S") then
@@ -497,8 +542,8 @@ local function run_get_line_tests(tests)
                     return input
                 end
 
-                local line, change =
-                    get_line(expected.dependency, reader)
+                local ok, line, change =
+                    pcall(get_line, expected.dependency, reader)
 
                 local expected_reads = #expected.inputs
                 if reads ~= expected_reads then
@@ -507,16 +552,37 @@ local function run_get_line_tests(tests)
                          expected_reads, reads)
                 end
 
-                if line ~= expected.line then
-                    fail(test.name, row,
-                         "expected line %q, got %q",
-                         expected.line, line)
-                end
+                if expected.change == ERROR then
+                    if ok then
+                        fail(test.name, row,
+                             "expected error %q, got line %q and change %s",
+                             expected.line, line, tostring(change))
+                    end
 
-                if change ~= expected.change then
-                    fail(test.name, row,
-                         "expected change %s, got %s",
-                         expected.change_name, tostring(change))
+                    if line ~= expected.line then
+                        fail(test.name, row,
+                             "expected error %q, got %q",
+                             expected.line, line)
+                    end
+
+                    ended_with_error = true
+                else
+                    if not ok then
+                        fail(test.name, row,
+                             "unexpected error: %s", tostring(line))
+                    end
+
+                    if line ~= expected.line then
+                        fail(test.name, row,
+                             "expected line %q, got %q",
+                             expected.line, line)
+                    end
+
+                    if change ~= expected.change then
+                        fail(test.name, row,
+                             "expected change %s, got %s",
+                             expected.change_name, tostring(change))
+                    end
                 end
 
                 local depth = get_line_depth()
@@ -525,12 +591,18 @@ local function run_get_line_tests(tests)
                          "expected depth %d, got %d",
                          expected.depth, depth)
                 end
+
+                if ended_with_error then
+                    break
+                end
             end
         end
 
-        local depth = get_line_depth()
-        if depth ~= 0 then
-            error(("%s: finished at depth %d"):format(test.name, depth), 0)
+        if not ended_with_error then
+            local depth = get_line_depth()
+            if depth ~= 0 then
+                error(("%s: finished at depth %d"):format(test.name, depth), 0)
+            end
         end
 
         print(test.name .. ": OK")
