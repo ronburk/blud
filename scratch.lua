@@ -126,69 +126,84 @@ local function strip_prefixes(line)
     return virtual, true
 end
 
+local function is_blank(line)
+    return line:match("^[ \t]*$") ~= nil
+end
+
 local function get_line(previous_was_dependency, line_reader)
     line_reader = line_reader or normal_line_reader
 
-    local line
+    while true do
+        local line
 
-    if pending_eof then
-        line = nil
-    elseif pending_line ~= nil then
-        line = pending_line
-        pending_line = nil
-    else
-        line = line_reader()
-    end
-
-    if line == nil then
-        if #prefixes == 0 then
-            pending_eof = false
-            return "", nil
+        if pending_eof then
+            line = nil
+        elseif pending_line ~= nil then
+            line = pending_line
+            pending_line = nil
+        else
+            line = line_reader()
         end
 
-        table.remove(prefixes)
-        pending_eof = #prefixes > 0
-        return "", POP
-    end
-
-    local virtual, matched = strip_prefixes(line)
-
-    if not matched then
-        table.remove(prefixes)
-        virtual, matched = strip_prefixes(line)
-
-        if not matched then
-            pending_line = line
-        end
-
-        return virtual, POP
-    end
-
-    if previous_was_dependency then
-        local indent, body = virtual:match("^([ \t]+)(.*)$")
-
-        if indent then
-            local directive = body:match("^: (.*)$")
-
-            if directive ~= nil then
-                table.insert(prefixes, indent)
-                table.insert(prefixes, ": ")
-                return directive, PUSHCOLON
+        if line == nil then
+            if #prefixes == 0 then
+                pending_eof = false
+                return "", nil
             end
 
-            table.insert(prefixes, indent)
-            return body, PUSH
+            table.remove(prefixes)
+            pending_eof = #prefixes > 0
+            return "", POP
+        end
+
+        if not is_blank(line) then
+            local virtual, matched = strip_prefixes(line)
+
+            if not matched then
+                table.remove(prefixes)
+                virtual, matched = strip_prefixes(line)
+
+                if not matched then
+                    pending_line = line
+                end
+
+                return virtual, POP
+            end
+
+            if not is_blank(virtual) then
+                if previous_was_dependency then
+                    local indent, body = virtual:match("^([ \t]+)(.*)$")
+
+                    if indent then
+                        local directive = body:match("^: (.*)$")
+
+                        if directive ~= nil then
+                            if not is_blank(directive) then
+                                table.insert(prefixes, indent)
+                                table.insert(prefixes, ": ")
+                                return directive, PUSHCOLON
+                            end
+                        else
+                            table.insert(prefixes, indent)
+                            return body, PUSH
+                        end
+                    end
+                end
+
+                local colon_prefix, body =
+                    virtual:match("^([ \t]*: )(.*)$")
+
+                if colon_prefix then
+                    if not is_blank(body) then
+                        table.insert(prefixes, colon_prefix)
+                        return body, PUSHCOLON
+                    end
+                else
+                    return virtual, nil
+                end
+            end
         end
     end
-
-    local colon_prefix, body = virtual:match("^([ \t]*: )(.*)$")
-
-    if colon_prefix then
-        table.insert(prefixes, colon_prefix)
-        return body, PUSHCOLON
-    end
-
-    return virtual, nil
 end
 
 
@@ -279,11 +294,12 @@ end                         | false =>[1] "end",                   POP
 EOF                         | false =>[0] "",                      nil
 ]]},
     { name="test0012", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    echo 'one'              | true  =>[1] "echo 'one'",            PUSH
-EMPTY                       | false =>[1] "",                      nil
-    echo 'two'              | false =>[1] "echo 'two'",            nil
-EOF                         | false =>[0] "",                      POP
+prog: prog.o                                      | false =>[0] "prog: prog.o", nil
+    : foo: foo.o                                  | true  =>[2] "foo: foo.o",   PUSHCOLON
+READ {"", "    : ", "    :     echo 'foo'"}       | true  =>[3] "echo 'foo'",   PUSH
+EOF                                               | false =>[2] "",             POP
+|                                                   false =>[1] "",             POP
+|                                                   false =>[0] "",             POP
 ]]},
 }
 
@@ -350,6 +366,39 @@ local function parse_row(test, row, text)
 
     input = input:gsub("%s+$", "")
 
+    local inputs
+    local input_expression = input:match("^READ%s+(.+)$")
+
+    if input_expression then
+        local input_loader, input_message =
+            loadstring("return " .. input_expression)
+
+        if not input_loader then
+            fail(test, row, "%s", input_message)
+        end
+
+        inputs = input_loader()
+
+        if type(inputs) ~= "table" then
+            fail(test, row, "READ input must be a table")
+        end
+
+        for i = 1, #inputs do
+            if type(inputs[i]) ~= "string" and inputs[i] ~= false then
+                fail(test, row,
+                     "READ input %d must be a string or false", i)
+            end
+        end
+    elseif input == "" then
+        inputs = {}
+    elseif input == "EOF" then
+        inputs = { false }
+    elseif input == "EMPTY" then
+        inputs = { "" }
+    else
+        inputs = { input }
+    end
+
     local change
     if change_name ~= "nil" then
         change = change_value[change_name]
@@ -360,6 +409,7 @@ local function parse_row(test, row, text)
 
     return {
         input = input,
+        inputs = inputs,
         dependency = dependency == "true",
         depth = tonumber(depth),
         line = loader(),
@@ -382,25 +432,26 @@ local function run_get_line_tests(tests)
                 local function reader()
                     reads = reads + 1
 
-                    if expected.input == "" then
+                    if #expected.inputs == 0 then
                         fail(test.name, row, "get_line unexpectedly read input")
                     end
-                    if reads > 1 then
-                        fail(test.name, row, "get_line read input more than once")
+                    if reads > #expected.inputs then
+                        fail(test.name, row,
+                             "get_line read input more than %d times",
+                             #expected.inputs)
                     end
-                    if expected.input == "EOF" then
+
+                    local input = expected.inputs[reads]
+                    if input == false then
                         return nil
                     end
-                    if expected.input == "EMPTY" then
-                        return ""
-                    end
-                    return expected.input
+                    return input
                 end
 
                 local line, change =
                     get_line(expected.dependency, reader)
 
-                local expected_reads = expected.input == "" and 0 or 1
+                local expected_reads = #expected.inputs
                 if reads ~= expected_reads then
                     fail(test.name, row,
                          "expected %d input reads, got %d",
