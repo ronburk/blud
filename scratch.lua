@@ -386,6 +386,42 @@ if true then                | false =>[0] "if true then",       nil
 |                             false =>[0] "  : foo: foo.o",     POP
 EOF                         | false =>[0] "",                   nil
 ]]},
+    { name="test0025", text=[[
+prog: prog.o                                      | false =>[0] "prog: prog.o",         nil
+    : foo: foo.o                                  | true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'                              | true  =>[3] "echo 'foo'",           PUSH
+READ {"", "    echo 'building prog'"}             | false =>[2] "echo 'building prog'", POP
+|                                                   false =>[1] "echo 'building prog'", POP
+EOF                                               | false =>[0] "",                     POP
+]]},
+    { name="test0026", text=[[
+READ {":\tfoo: foo.o"}     | false =>[0] ":\tfoo: foo.o", nil
+]]},
+    { name="test0027", text=[[
+if true then                | false =>[0] "if true then",        nil
+    print("four")           | false =>[0] "    print(\"four\")", nil
+  print("two")              | false =>[0] "  print(\"two\")",    nil
+end                         | false =>[0] "end",                  nil
+]]},
+    { name="test0028", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    :not_a_directive()      | true  =>[1] ":not_a_directive()", PUSH
+EOF                         | false =>[0] "",                   POP
+]]},
+    { name="test0029", text=[[
+if true then                | false =>[0] "if true then",       nil
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
+  : bar: bar.o              | false =>[1] "bar: bar.o",         POP
+EOF                         | false =>[0] "",                   POP
+]]},
+    { name="test0030", text=[[
+if true then                | false =>[0] "if true then",       nil
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
+READ {"  : "}               | false =>[1] "",                   POP
+EOF                         | false =>[0] "",                   POP
+]]},
 }
 
 local test0001 = [[
