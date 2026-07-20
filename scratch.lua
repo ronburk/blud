@@ -164,7 +164,7 @@ local function get_line(previous_was_dependency, line_reader)
                 table.remove(prefixes)
                 virtual, matched = strip_prefixes(line)
 
-                if not matched then
+                if not matched or virtual:match("^[ \t]*: ") then
                     pending_line = line
                 end
 
@@ -345,7 +345,9 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
         :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
     : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
 |                             false =>[1] ": bar: bar.o",       POP
-EOF                         | false =>[0] "",                   POP
+|                             false =>[2] "bar: bar.o",         PUSHCOLON
+EOF                         | false =>[1] "",                   POP
+|                             false =>[0] "",                   POP
 ]]},
     { name="test0020", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
@@ -377,6 +379,8 @@ EOF                         | false =>[1] "",                   POP
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
     echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
 : foo: foo.o                | false =>[0] ": foo: foo.o",       POP
+|                             false =>[1] "foo: foo.o",         PUSHCOLON
+EOF                         | false =>[0] "",                   POP
 ]]},
     { name="test0024", text=[[
 if true then                | false =>[0] "if true then",       nil
@@ -384,7 +388,8 @@ if true then                | false =>[0] "if true then",       nil
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
   : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
-EOF                         | false =>[0] "",                   nil
+|                             false =>[1] "foo: foo.o",         PUSHCOLON
+EOF                         | false =>[0] "",                   POP
 ]]},
     { name="test0025", text=[[
 prog: prog.o                                      | false =>[0] "prog: prog.o",         nil
@@ -420,6 +425,15 @@ if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
   :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
 READ {"  : "}               | false =>[1] "",                   POP
+EOF                         | false =>[0] "",                   POP
+]]},
+    { name="test0031", text=[[
+if true then                | false =>[0] "if true then",       nil
+    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
+|                             false =>[0] "  : foo: foo.o",     POP
+|                             false =>[1] "foo: foo.o",         PUSHCOLON
 EOF                         | false =>[0] "",                   POP
 ]]},
 }
