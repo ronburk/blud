@@ -1,91 +1,28 @@
 --[[
-    
-New approach. You're going to write a new function called
-get_line. You will keep it and its associated code in "scratch.lua"
-We will debug it there as standalone code, using "./blud --lua scratch.lua".
-You will add inline tests at the end of the file, in its own do/end block.
-The function accepts a function that fetches the next line, which will allow
-the unit tests to "fake" input to be tested.
+get_line() is the structural line reader shared by nested source parsers. It
+returns a virtual source line plus an optional stack event: PUSH, PUSHCOLON,
+or POP.
 
+The prefix stack contains exact text to remove from each physical line. Only
+syntax known to be structural may add a prefix:
 
-parsed = get_line(next_func)
+  * indentation immediately following a dependency line;
+  * a leading ": " directive marker, including any whitespace before it.
 
-Where:
-    next_func is a function fetches the next line of text.
+All other indentation belongs to the source language and remains in the
+virtual line. Exact prefix text is stored instead of indentation columns
+because tabs, spaces, and colon markers are semantically distinct.
 
-    parsed is a table with these fields:
-        type: "LUA" or "ASSIGN" or "ACTION" or "UNKNOWN" or "POP" or "EMPTY"
-        keyword: if line starts with Lua keyword, text of that keyword, else nil
-        parts: result of running macro.lua's parts_from_text on the "real"
-            portion of the line
-        line: the entire original line
-        virtual_line: the entire original line minus prefix that was stripped
+A physical line may be returned by several calls. When it no longer matches
+the active prefix stack, one prefix is removed and POP is returned. The same
+line is replayed when more prefixes must be removed, or when the newly exposed
+line starts with ": " and must subsequently produce PUSHCOLON at the caller's
+level. Otherwise the caller receiving POP also receives the exposed line.
 
-get_line() calls next_func() to get next line of text. It maintains an
-internal 'mode' variable that is either "LUA" or "DIRECTIVE" or
-"ACTION". This is initially set to "DIRECTIVE".
-
-It also maintains an internal 'strip_stack', which contains a stack of
-prefix contexts it is currently stripping off of input lines to get to
-the "virtual" line. This is initially empty. Each element of
-strip_stack is a table: { prefix, mode }
-
-get_line first handles push/pop operations on the strip_stack. It
-begins by trying to strip each prefix on the stack, bottom to top. If
-it cannot find all the prefixes in order, it pops the topmost element,
-sets the current mode to that element's .mode and returns a POP type.
-The next call to get_line will operate on these same line instead of
-calling next_func.
-    
-If it does find all the prefixes, then it sets its result virtual_line
-to the remainder of the line. It next checks the beginning of virtual_line
-for the presence of a new additional prefix. A prefix is one of three forms:
-
-    <whitespace>:<space>
-         or
-    <whitespace>$<space>
-         or
-    <whitespace><not white-space>
-
-If 
-
-If the line starts with one of these patterns, the prefix text matched
-is stripped and pushed onto the strip_stack before proceeding. The
-current 'mode' is also pushed with that same entry. If the new prefix
-was a colon type, our mode is set to DIRECTIVE. If it was the dollar
-sign type or just whitespace then the mode is set to ACTION. There is
-an exception: if the current mode is LUA and the prefix is just
-whitespace, we pretend we saw no prefix at all.
-
-Now we have the final virtual_line to analyze. parts_to_text is called
-to produce a 'parts' array from virtual_line. We next must analyze the
-parts array to determine the return type.
-
-The first test is mode-independent. Does it look like an empty line
-or a line that only contains a lua comment? In that case, just set the
-return type to "EMPTY".
-
-Otherwise, the analysis depends on the current mode:
-
-In DIRECTIVE mode, 
-
-The only indentations that get stacked are:
-    * leading white space if previous line was dependency rule
-    * switch to DIRECTIVE mode via ": "
-
-State_0: DIRECTIVE mode
-   EMPTY -> State_0
-   
-prog: prog.o
-    if true then
-        $ echo "true"
-        : prog: prog.o
-        if true then
-            : foo : foo.o
-            :     echo "but that's OK"
-        end
-    end
-
+Blank physical and virtual lines are skipped internally. EOF is similarly
+replayed long enough to emit one POP for each active prefix. The
+previous_was_dependency argument remains in effect while blank lines are
+skipped, allowing an action to follow its dependency after intervening blanks.
 ]]--
 
 local PUSH      = "PUSH"
@@ -94,8 +31,7 @@ local POP       = "POP"
 local ERROR     = "ERROR"
 
 local prefixes = {}
-local pending_line
-local pending_eof = false
+local pending_input -- nil, false for EOF, or a physical line to replay
 
 local function normal_line_reader()
     return io.read("*l")
@@ -107,8 +43,7 @@ end
 
 local function reset_get_line()
     prefixes = {}
-    pending_line = nil
-    pending_eof = false
+    pending_input = nil
 end
 
 local function strip_prefixes(line)
@@ -131,86 +66,130 @@ local function is_blank(line)
     return line:match("^[ \t]*$") ~= nil
 end
 
+local function split_colon_prefix(line)
+    return line:match("^([ \t]*: )(.*)$")
+end
+
+local function push_prefix(prefix)
+    prefixes[#prefixes + 1] = prefix
+end
+
+local function pop_prefix()
+    assert(#prefixes > 0, "prefix stack underflow")
+    table.remove(prefixes)
+end
+
+local function read_physical_line(line_reader)
+    if pending_input == nil then
+        return line_reader()
+    end
+
+    local line = pending_input
+    pending_input = nil
+
+    if line == false then
+        return nil
+    end
+
+    return line
+end
+
+local function pop_for_eof()
+    pop_prefix()
+
+    if #prefixes > 0 then
+        pending_input = false
+    end
+
+    return "", POP
+end
+
+local function pop_for_line(line)
+    pop_prefix()
+
+    local virtual, matched = strip_prefixes(line)
+
+    -- A remaining mismatch requires another POP. A colon line that has
+    -- reached its caller must be replayed once more to create PUSHCOLON.
+    if not matched or split_colon_prefix(virtual) then
+        pending_input = line
+    end
+
+    return virtual, POP
+end
+
+local function push_after_dependency(virtual)
+    local indent, body = virtual:match("^([ \t]+)(.*)$")
+
+    if not indent then
+        return nil
+    end
+
+    local directive = body:match("^: (.*)$")
+
+    if directive == nil then
+        push_prefix(indent)
+        return body, PUSH
+    end
+
+    if not is_blank(directive) then
+        -- These are separate parser boundaries: first leave the directive,
+        -- then leave the action introduced by dependency indentation.
+        push_prefix(indent)
+        push_prefix(": ")
+        return directive, PUSHCOLON
+    end
+
+    return nil
+end
+
 local function get_line(previous_was_dependency, line_reader)
     line_reader = line_reader or normal_line_reader
 
     while true do
-        local line
-
-        if pending_eof then
-            line = nil
-        elseif pending_line ~= nil then
-            line = pending_line
-            pending_line = nil
-        else
-            line = line_reader()
-        end
+        local line = read_physical_line(line_reader)
 
         if line == nil then
             if #prefixes == 0 then
-                pending_eof = false
                 return "", nil
             end
 
-            table.remove(prefixes)
-            pending_eof = #prefixes > 0
-            return "", POP
+            return pop_for_eof()
         end
 
         if not is_blank(line) then
             local virtual, matched = strip_prefixes(line)
 
             if not matched then
-                table.remove(prefixes)
-                virtual, matched = strip_prefixes(line)
-
-                if not matched or virtual:match("^[ \t]*: ") then
-                    pending_line = line
-                end
-
-                return virtual, POP
+                return pop_for_line(line)
             end
 
             if not is_blank(virtual) then
                 if previous_was_dependency then
-                    local indent, body = virtual:match("^([ \t]+)(.*)$")
+                    local line_after_push, change =
+                        push_after_dependency(virtual)
 
-                    if indent then
-                        local directive = body:match("^: (.*)$")
-
-                        if directive ~= nil then
-                            if not is_blank(directive) then
-                                table.insert(prefixes, indent)
-                                table.insert(prefixes, ": ")
-                                return directive, PUSHCOLON
-                            end
-                        else
-                            table.insert(prefixes, indent)
-                            return body, PUSH
-                        end
+                    if line_after_push ~= nil then
+                        return line_after_push, change
                     end
                 end
 
-                local colon_prefix, body =
-                    virtual:match("^([ \t]*: )(.*)$")
+                local colon_prefix, body = split_colon_prefix(virtual)
 
-                if colon_prefix then
-                    if not is_blank(body) then
-                        table.insert(prefixes, colon_prefix)
-                        return body, PUSHCOLON
-                    end
-                else
+                if not colon_prefix then
                     return virtual, nil
+                end
+
+                if not is_blank(body) then
+                    -- Without a preceding dependency, the whitespace and
+                    -- colon marker form one directive-switch boundary.
+                    push_prefix(colon_prefix)
+                    return body, PUSHCOLON
                 end
             end
         end
     end
 end
-
-
-
-
-
 
 local tests = {
     -- Push a simple action indent and pop it at EOF.
