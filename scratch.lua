@@ -246,7 +246,7 @@ EOF                         | false =>[0] "",                     POP
 prog: prog.o                | false =>[0] "prog: prog.o",         nil
     echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
 next: next.o                | false =>[0] "next: next.o",         POP
-EOF                         | false =>[0] "",                     nil
+EOF                         | true  =>[0] "",                     nil
 ]]},
     { name="test0006", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",         nil
@@ -346,7 +346,7 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
 |                             false =>[1] ": bar: bar.o",       POP
 |                             false =>[2] "bar: bar.o",         PUSHCOLON
-EOF                         | false =>[1] "",                   POP
+EOF                         | true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0020", text=[[
@@ -372,7 +372,7 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
     : bar: bar.o            | false =>[3] "bar: bar.o",         POP
 |                             false =>[2] "bar: bar.o",         POP
-EOF                         | false =>[1] "",                   POP
+EOF                         | true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0023", text=[[
@@ -380,7 +380,7 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
 : foo: foo.o                | false =>[0] ": foo: foo.o",       POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | false =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
     { name="test0024", text=[[
 if true then                | false =>[0] "if true then",       nil
@@ -389,7 +389,7 @@ if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | false =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
     { name="test0025", text=[[
 prog: prog.o                                      | false =>[0] "prog: prog.o",         nil
@@ -418,7 +418,7 @@ if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
   :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
   : bar: bar.o              | false =>[1] "bar: bar.o",         POP
-EOF                         | false =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
     { name="test0030", text=[[
 if true then                | false =>[0] "if true then",       nil
@@ -434,7 +434,7 @@ if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | false =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
 }
 
