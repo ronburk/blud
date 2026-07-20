@@ -21,7 +21,7 @@ level. Otherwise the caller receiving POP also receives the exposed line.
 
 Blank physical and virtual lines are skipped internally. EOF is similarly
 replayed long enough to emit one POP for each active prefix. The
-previous_was_dependency argument remains in effect while blank lines are
+after_dependency argument remains in effect while blank lines are
 skipped, allowing an action to follow its dependency after intervening blanks.
 ]]--
 
@@ -30,161 +30,188 @@ local PUSHCOLON = "PUSHCOLON"
 local POP       = "POP"
 local ERROR     = "ERROR"
 
-local prefixes = {}
-local pending_input -- nil, false for EOF, or a physical line to replay
+local active_prefixes = {}
+-- Input is replayed only when one physical item must produce more than one
+-- structural event across successive get_line() calls.
+local replay_line
+local replay_eof = false
 
-local function normal_line_reader()
+local function read_stdin_line()
     return io.read("*l")
 end
 
-local function get_line_depth()
-    return #prefixes
+local function get_prefix_depth()
+    return #active_prefixes
 end
 
-local function reset_get_line()
-    prefixes = {}
-    pending_input = nil
+local function reset_get_line_state()
+    active_prefixes = {}
+    replay_line = nil
+    replay_eof = false
 end
 
-local function strip_prefixes(line)
-    local virtual = line
+-- Remove every currently active structural prefix. The boolean result says
+-- whether all prefixes matched; the returned line always reflects whatever
+-- prefixes were successfully removed before the first mismatch.
+local function strip_active_prefixes(line)
+    local virtual_line = line
 
-    for i = 1, #prefixes do
-        local prefix = prefixes[i]
+    for i = 1, #active_prefixes do
+        local prefix = active_prefixes[i]
 
-        if virtual:sub(1, #prefix) ~= prefix then
-            return virtual, false
+        if virtual_line:sub(1, #prefix) ~= prefix then
+            return virtual_line, false
         end
 
-        virtual = virtual:sub(#prefix + 1)
+        virtual_line = virtual_line:sub(#prefix + 1)
     end
 
-    return virtual, true
+    return virtual_line, true
 end
 
-local function is_blank(line)
+local function is_whitespace_only(line)
     return line:match("^[ \t]*$") ~= nil
 end
 
-local function split_colon_prefix(line)
+-- Split a directive-switch prefix from its body. Whitespace before ": " is
+-- part of this single structural prefix unless dependency indentation has
+-- already been established separately.
+local function split_directive_prefix(line)
     return line:match("^([ \t]*: )(.*)$")
 end
 
-local function push_prefix(prefix)
-    prefixes[#prefixes + 1] = prefix
+local function push_active_prefix(prefix)
+    active_prefixes[#active_prefixes + 1] = prefix
 end
 
-local function pop_prefix()
-    assert(#prefixes > 0, "prefix stack underflow")
-    table.remove(prefixes)
+local function pop_active_prefix()
+    assert(#active_prefixes > 0, "prefix stack underflow")
+    table.remove(active_prefixes)
 end
 
-local function read_physical_line(line_reader)
-    if pending_input == nil then
-        return line_reader()
-    end
-
-    local line = pending_input
-    pending_input = nil
-
-    if line == false then
+-- Return pending input before consulting the physical reader. Replaying input
+-- lets one physical line or EOF generate several POP events across calls.
+local function read_or_replay_line(line_reader)
+    if replay_eof then
+        replay_eof = false
         return nil
     end
 
-    return line
+    if replay_line ~= nil then
+        local line = replay_line
+        replay_line = nil
+        return line
+    end
+
+    return line_reader()
 end
 
-local function pop_for_eof()
-    pop_prefix()
+-- Emit one POP while unwinding the prefix stack at EOF. EOF is replayed until
+-- every active parser boundary has received its own POP.
+local function unwind_one_prefix_at_eof()
+    pop_active_prefix()
 
-    if #prefixes > 0 then
-        pending_input = false
+    if #active_prefixes > 0 then
+        replay_eof = true
     end
 
     return "", POP
 end
 
-local function pop_for_line(line)
-    pop_prefix()
+-- A physical line no longer matches the current nesting level. Remove one
+-- structural prefix, return the line as seen at the newly exposed level, and
+-- replay it when another POP or a subsequent PUSHCOLON is still required.
+local function unwind_mismatched_line(line)
+    pop_active_prefix()
 
-    local virtual, matched = strip_prefixes(line)
+    local virtual_line, all_prefixes_matched =
+        strip_active_prefixes(line)
+    local directive_prefix = split_directive_prefix(virtual_line)
 
     -- A remaining mismatch requires another POP. A colon line that has
     -- reached its caller must be replayed once more to create PUSHCOLON.
-    if not matched or split_colon_prefix(virtual) then
-        pending_input = line
+    if not all_prefixes_matched or directive_prefix then
+        replay_line = line
     end
 
-    return virtual, POP
+    return virtual_line, POP
 end
 
-local function push_after_dependency(virtual)
-    local indent, body = virtual:match("^([ \t]+)(.*)$")
+-- If a dependency is followed by an indented line, establish the action
+-- boundary. A directive marker immediately inside that indentation adds a
+-- second boundary because the action and directive parsers return separately.
+local function start_indented_block_after_dependency(virtual_line)
+    local indentation, indented_line =
+        virtual_line:match("^([ \t]+)(.*)$")
 
-    if not indent then
+    if not indentation then
         return nil
     end
 
-    local directive = body:match("^: (.*)$")
+    local directive_body = indented_line:match("^: (.*)$")
 
-    if directive == nil then
-        push_prefix(indent)
-        return body, PUSH
+    if directive_body == nil then
+        push_active_prefix(indentation)
+        return indented_line, PUSH
     end
 
-    if not is_blank(directive) then
+    if not is_whitespace_only(directive_body) then
         -- These are separate parser boundaries: first leave the directive,
         -- then leave the action introduced by dependency indentation.
-        push_prefix(indent)
-        push_prefix(": ")
-        return directive, PUSHCOLON
+        push_active_prefix(indentation)
+        push_active_prefix(": ")
+        return directive_body, PUSHCOLON
     end
 
     return nil
 end
 
-local function get_line(previous_was_dependency, line_reader)
-    line_reader = line_reader or normal_line_reader
+-- after_dependency reports what the caller parsed from the preceding returned
+-- line. It is intentionally retained while this function skips blank input.
+local function get_line(after_dependency, line_reader)
+    line_reader = line_reader or read_stdin_line
 
     while true do
-        local line = read_physical_line(line_reader)
+        local physical_line = read_or_replay_line(line_reader)
 
-        if line == nil then
-            if #prefixes == 0 then
+        if physical_line == nil then
+            if #active_prefixes == 0 then
                 return "", nil
             end
 
-            return pop_for_eof()
+            return unwind_one_prefix_at_eof()
         end
 
-        if not is_blank(line) then
-            local virtual, matched = strip_prefixes(line)
+        if not is_whitespace_only(physical_line) then
+            local virtual_line, all_prefixes_matched =
+                strip_active_prefixes(physical_line)
 
-            if not matched then
-                return pop_for_line(line)
+            if not all_prefixes_matched then
+                return unwind_mismatched_line(physical_line)
             end
 
-            if not is_blank(virtual) then
-                if previous_was_dependency then
-                    local line_after_push, change =
-                        push_after_dependency(virtual)
+            if not is_whitespace_only(virtual_line) then
+                if after_dependency then
+                    local returned_line, stack_event =
+                        start_indented_block_after_dependency(virtual_line)
 
-                    if line_after_push ~= nil then
-                        return line_after_push, change
+                    if returned_line ~= nil then
+                        return returned_line, stack_event
                     end
                 end
 
-                local colon_prefix, body = split_colon_prefix(virtual)
+                local directive_prefix, directive_body =
+                    split_directive_prefix(virtual_line)
 
-                if not colon_prefix then
-                    return virtual, nil
+                if not directive_prefix then
+                    return virtual_line, nil
                 end
 
-                if not is_blank(body) then
+                if not is_whitespace_only(directive_body) then
                     -- Without a preceding dependency, the whitespace and
                     -- colon marker form one directive-switch boundary.
-                    push_prefix(colon_prefix)
-                    return body, PUSHCOLON
+                    push_active_prefix(directive_prefix)
+                    return directive_body, PUSHCOLON
                 end
             end
         end
@@ -579,7 +606,7 @@ end
 
 local function run_get_line_tests(tests)
     for _, test in ipairs(tests) do
-        reset_get_line()
+        reset_get_line_state()
         local row = 0
         local ended_with_error = false
         local pending_inputs = {}
@@ -671,7 +698,7 @@ local function run_get_line_tests(tests)
                         end
                     end
 
-                    local depth = get_line_depth()
+                    local depth = get_prefix_depth()
                     if depth ~= expected.depth then
                         fail(test.name, row,
                              "expected depth %d, got %d",
@@ -691,7 +718,7 @@ local function run_get_line_tests(tests)
         end
 
         if not ended_with_error then
-            local depth = get_line_depth()
+            local depth = get_prefix_depth()
             if depth ~= 0 then
                 error(("%s: finished at depth %d"):format(test.name, depth), 0)
             end
