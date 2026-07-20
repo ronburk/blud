@@ -213,245 +213,277 @@ end
 
 
 local tests = {
+    -- Push a simple action indent and pop it at EOF.
     { name="test0001", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",         nil
-    echo 'simple action'|     true  =>[1] "echo 'simple action'", PUSH
-EOF|                          false =>[0] "",                     POP
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'simple action'    | true  =>[1] "echo 'simple action'", PUSH
+EOF                         | false =>[0] "",                     POP
 ]]},
+    -- Enter a directive from indented Lua and return to the action.
     { name="test0002", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",     nil
-    if true then|             true  =>[1] "if true then",     PUSH
-        : foo: foo.o|         false =>[2] "foo: foo.o",       PUSHCOLON
-    end|                      true  =>[1] "end",              POP
-EOF|                          false  =>[0] "",                 POP
+prog: prog.o                | false =>[0] "prog: prog.o",     nil
+    if true then            | true  =>[1] "if true then",     PUSH
+        : foo: foo.o        | false =>[2] "foo: foo.o",       PUSHCOLON
+    end                     | true  =>[1] "end",              POP
+EOF                         | false  =>[0] "",                 POP
 ]]},
+    -- Unwind nested action and directive prefixes at EOF.
     { name="test0003", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",     nil
-    : foo: foo.o|             true  =>[2] "foo: foo.o",       PUSHCOLON
-    :     echo 'foo'|         true  =>[3] "echo 'foo'",       PUSH
-EOF|                          false =>[2] "",                 POP
+prog: prog.o                | false =>[0] "prog: prog.o",     nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",       PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",       PUSH
+EOF                         | false =>[2] "",                 POP
 |                             false =>[1] "",                 POP
 |                             false =>[0] "",                 POP
 ]]},
 
+    -- Pop nested directive levels before resuming an outer action.
     { name="test0004", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",         nil
-    : foo: foo.o|             true  =>[2] "foo: foo.o",           PUSHCOLON
-    :     echo 'foo'|         true  =>[3] "echo 'foo'",           PUSH
-    echo 'building prog'|     false =>[2] "echo 'building prog'", POP
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
+    echo 'building prog'    | false =>[2] "echo 'building prog'", POP
 |                             false =>[1] "echo 'building prog'", POP
-EOF|                          false =>[0] "",                     POP
+EOF                         | false =>[0] "",                     POP
 ]]},
+    -- End an action when a new top-level dependency appears.
     { name="test0005", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",         nil
-    echo 'building prog'|     true  =>[1] "echo 'building prog'", PUSH
-next: next.o|                 false =>[0] "next: next.o",         POP
-EOF|                          true  =>[0] "",                     nil
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
+next: next.o                | false =>[0] "next: next.o",         POP
+EOF                         | true  =>[0] "",                     nil
 ]]},
+    -- Preserve unmatched leading whitespace after an action pop.
     { name="test0006", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",         nil
-    echo 'building prog'|     true  =>[1] "echo 'building prog'", PUSH
-  next: next.o|               false =>[0] "  next: next.o",       POP
-EOF|                          false =>[0] "",                     nil
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
+  next: next.o              | false =>[0] "  next: next.o",       POP
+EOF                         | false =>[0] "",                     nil
 ]]},
+    -- Recognize only colon-plus-space as a directive prefix.
     { name="test0007", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",          nil
-    if true then|             true  =>[1] "if true then",          PUSH
-        :not_a_directive()|   false =>[1] "    :not_a_directive()", nil
-        : foo: foo.o|         false =>[2] "foo: foo.o",            PUSHCOLON
-    end|                      true  =>[1] "end",                   POP
-EOF|                          false =>[0] "",                      POP
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    if true then            | true  =>[1] "if true then",          PUSH
+        :not_a_directive()  | false =>[1] "    :not_a_directive()", nil
+        : foo: foo.o        | false =>[2] "foo: foo.o",            PUSHCOLON
+    end                     | true  =>[1] "end",                   POP
+EOF                         | false =>[0] "",                      POP
 ]]},
+    -- Resume an outer action after repeated pops.
     { name="test0008", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",          nil
-    : foo: foo.o|             true  =>[2] "foo: foo.o",            PUSHCOLON
-    :     echo 'foo'|         true  =>[3] "echo 'foo'",            PUSH
-    echo 'building prog'|     false =>[2] "echo 'building prog'",  POP
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",            PUSH
+    echo 'building prog'    | false =>[2] "echo 'building prog'",  POP
 |                             false =>[1] "echo 'building prog'",  POP
-    echo 'still prog'|        false =>[1] "echo 'still prog'",     nil
-EOF|                          false =>[0] "",                      POP
+    echo 'still prog'       | false =>[1] "echo 'still prog'",     nil
+EOF                         | false =>[0] "",                      POP
 ]]},
+    -- Unwind a dependency nested inside another directive.
     { name="test0009", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",          nil
-    : foo: foo.o|             true  =>[2] "foo: foo.o",            PUSHCOLON
-    :     : bar: bar.o|       true  =>[4] "bar: bar.o",            PUSHCOLON
-    echo 'building prog'|     true  =>[3] "echo 'building prog'",  POP
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     : bar: bar.o      | true  =>[4] "bar: bar.o",            PUSHCOLON
+    echo 'building prog'    | true  =>[3] "echo 'building prog'",  POP
 |                             false =>[2] "echo 'building prog'",  POP
 |                             false =>[1] "echo 'building prog'",  POP
-EOF|                          false =>[0] "",                      POP
+EOF                         | false =>[0] "",                      POP
 ]]},
+    -- Attach an action to the second of consecutive dependencies.
     { name="test0010", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",          nil
-next: next.o|                 true  =>[0] "next: next.o",          nil
-    echo 'building next'|     true  =>[1] "echo 'building next'",  PUSH
-EOF|                          false =>[0] "",                      POP
+prog: prog.o                | false =>[0] "prog: prog.o",          nil
+next: next.o                | true  =>[0] "next: next.o",          nil
+    echo 'building next'    | true  =>[1] "echo 'building next'",  PUSH
+EOF                         | false =>[0] "",                      POP
 ]]},
+    -- Return from a directive action to surrounding Lua.
     { name="test0011", text=[[
-if true then|                 false =>[0] "if true then",          nil
-    : foo: foo.o|             false =>[1] "foo: foo.o",            PUSHCOLON
-    :     echo 'foo'|         true  =>[2] "echo 'foo'",            PUSH
-end|                          false =>[1] "end",                   POP
+if true then                | false =>[0] "if true then",          nil
+    : foo: foo.o            | false =>[1] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'        | true  =>[2] "echo 'foo'",            PUSH
+end                         | false =>[1] "end",                   POP
 |                             false =>[0] "end",                   POP
-EOF|                          false =>[0] "",                      nil
+EOF                         | false =>[0] "",                      nil
 ]]},
+    -- Skip empty and colon-only physical lines before an action.
     { name="test0012", text=[[
-prog: prog.o|                                       false =>[0] "prog: prog.o", nil
-    : foo: foo.o|                                   true  =>[2] "foo: foo.o",   PUSHCOLON
+prog: prog.o                | false =>[0] "prog: prog.o", nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",   PUSHCOLON
 |
     : |
-    :     echo 'foo'| true  =>[3] "echo 'foo'",   PUSH
-EOF|                                                false =>[2] "",             POP
-|                                                   false =>[1] "",             POP
-|                                                   false =>[0] "",             POP
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",   PUSH
+EOF                         | false =>[2] "",             POP
+|                             false =>[1] "",             POP
+|                             false =>[0] "",             POP
 ]]},
+    -- Pop at EOF after empty, whitespace-only, and colon-only lines.
     { name="test0013", text=[[
-prog: prog.o|                                       false =>[0] "prog: prog.o", nil
-    echo 'prog'|                                    true  =>[1] "echo 'prog'",  PUSH
+prog: prog.o                | false =>[0] "prog: prog.o", nil
+    echo 'prog'             | true  =>[1] "echo 'prog'",  PUSH
 |
    |
     : |
-EOF| false =>[0] "",             POP
+EOF                         | false =>[0] "",             POP
 ]]},
+    -- Handle a top-level colon directive and its action.
     { name="test0014", text=[[
-: foo: foo.o|                 false =>[1] "foo: foo.o",       PUSHCOLON
-:     echo 'foo'|             true  =>[2] "echo 'foo'",       PUSH
-EOF|                          false =>[1] "",                 POP
+: foo: foo.o                | false =>[1] "foo: foo.o",       PUSHCOLON
+:     echo 'foo'            | true  =>[2] "echo 'foo'",       PUSH
+EOF                         | false =>[1] "",                 POP
 |                             false =>[0] "",                 POP
 ]]},
+    -- Use a tab as the action indentation prefix.
     { name="test0015", text=[[
-prog: prog.o|                          false =>[0] "prog: prog.o", nil
-	echo 'one'| true  =>[1] "echo 'one'",  PUSH
-	echo 'two'| false =>[1] "echo 'two'",  nil
-EOF|                                   false =>[0] "",            POP
+prog: prog.o                | false =>[0] "prog: prog.o", nil
+	echo 'one'          | true  =>[1] "echo 'one'",  PUSH
+	echo 'two'          | false =>[1] "echo 'two'",  nil
+EOF                         | false =>[0] "",            POP
 ]]},
+    -- Skip blank physical lines before the first action.
     { name="test0016", text=[[
-prog: prog.o|                                       false =>[0] "prog: prog.o", nil
+prog: prog.o                | false =>[0] "prog: prog.o", nil
 |
    |
-    echo 'building prog'| true  =>[1] "echo 'building prog'", PUSH
-EOF|                                                false =>[0] "",             POP
+    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
+EOF                         | false =>[0] "",             POP
 ]]},
+    -- Keep Lua indentation as content under a colon prefix.
     { name="test0017", text=[[
-: if true then|               false =>[1] "if true then",       PUSHCOLON
-:     print('true')|          false =>[1] "    print('true')",  nil
-: end|                        false =>[1] "end",                nil
-EOF|                          false =>[0] "",                   POP
+: if true then              | false =>[1] "if true then",       PUSHCOLON
+:     print('true')         | false =>[1] "    print('true')",  nil
+: end                       | false =>[1] "end",                nil
+EOF                         | false =>[0] "",                   POP
 ]]},
+    -- Handle mixed tabs and spaces in structural prefixes.
     { name="test0018", text=[[
-prog: prog.o|                               false =>[0] "prog: prog.o", nil
-	  : foo: foo.o| true  =>[2] "foo: foo.o",   PUSHCOLON
-	  : 	echo 'foo'| true  =>[3] "echo 'foo'",   PUSH
-EOF|                                        false =>[2] "",             POP
-|                                           false =>[1] "",             POP
-|                                           false =>[0] "",             POP
+prog: prog.o                | false =>[0] "prog: prog.o", nil
+	  : foo: foo.o      | true  =>[2] "foo: foo.o",   PUSHCOLON
+	  : 	echo 'foo'  | true  =>[3] "echo 'foo'",   PUSH
+EOF                         | false =>[2] "",             POP
+|                             false =>[1] "",             POP
+|                             false =>[0] "",             POP
 ]]},
+    -- Pop nested levels before starting a shallower directive.
     { name="test0019", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    if true then|             true  =>[1] "if true then",       PUSH
-        : foo: foo.o|         false =>[2] "foo: foo.o",         PUSHCOLON
-        :     echo 'foo'|     true  =>[3] "echo 'foo'",         PUSH
-    : bar: bar.o|             false =>[2] ": bar: bar.o",       POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    if true then            | true  =>[1] "if true then",       PUSH
+        : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
+        :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
+    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
 |                             false =>[1] ": bar: bar.o",       POP
 |                             false =>[2] "bar: bar.o",         PUSHCOLON
-EOF|                          true  =>[1] "",                   POP
+EOF                         | true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
+    -- Build multiple nested indentation-and-colon prefix levels.
     { name="test0020", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o|        true  =>[2] "prog: oslinux.o",    PUSHCOLON
-    :     : CFLAGS += -g|     true  =>[4] "CFLAGS += -g",       PUSHCOLON
-EOF|                          false =>[3] "",                   POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
+EOF                         | false =>[3] "",                   POP
 |                             false =>[2] "",                   POP
 |                             false =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
+    -- Nest a colon-only directive prefix at the same indentation.
     { name="test0021", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o|        true  =>[2] "prog: oslinux.o",    PUSHCOLON
-    : : CFLAGS += -g|         true  =>[3] "CFLAGS += -g",       PUSHCOLON
-EOF|                          false =>[2] "",                   POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    : : CFLAGS += -g        | true  =>[3] "CFLAGS += -g",       PUSHCOLON
+EOF                         | false =>[2] "",                   POP
 |                             false =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
+    -- Return from a nested assignment to a sibling dependency.
     { name="test0022", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    : foo: foo.o|             true  =>[2] "foo: foo.o",         PUSHCOLON
-    :     : CFLAGS += -g|     true  =>[4] "CFLAGS += -g",       PUSHCOLON
-    : bar: bar.o|             false =>[3] "bar: bar.o",         POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",         PUSHCOLON
+    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
+    : bar: bar.o            | false =>[3] "bar: bar.o",         POP
 |                             false =>[2] "bar: bar.o",         POP
-EOF|                          true  =>[1] "",                   POP
+EOF                         | true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
+    -- Replay a top-level colon directive after an action pop.
     { name="test0023", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    echo 'prog'|              true  =>[1] "echo 'prog'",        PUSH
-: foo: foo.o|                 false =>[0] ": foo: foo.o",       POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
+: foo: foo.o                | false =>[0] ": foo: foo.o",       POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF|                          true  =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
+    -- Start a shallower directive after returning to Lua.
     { name="test0024", text=[[
-if true then|                 false =>[0] "if true then",       nil
-    : prog: prog.o|           false =>[1] "prog: prog.o",       PUSHCOLON
-    :     echo 'prog'|        true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o|               false =>[1] "  : foo: foo.o",     POP
+if true then                | false =>[0] "if true then",       nil
+    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF|                          true  =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
+    -- Ignore a blank line before a multi-level action unwind.
     { name="test0025", text=[[
-prog: prog.o|                                       false =>[0] "prog: prog.o",         nil
-    : foo: foo.o|                                   true  =>[2] "foo: foo.o",           PUSHCOLON
-    :     echo 'foo'|                               true  =>[3] "echo 'foo'",           PUSH
-|
-    echo 'building prog'| false =>[2] "echo 'building prog'", POP
-|                                                   false =>[1] "echo 'building prog'", POP
-EOF|                                                false =>[0] "",                     POP
+prog: prog.o                | false =>[0] "prog: prog.o",         nil
+    : foo: foo.o            | true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
+                            |
+    echo 'building prog'    | false =>[2] "echo 'building prog'", POP
+|                             false =>[1] "echo 'building prog'", POP
+EOF                         | false =>[0] "",                     POP
 ]]},
+    -- Reject colon-plus-tab as a directive delimiter.
     { name="test0026", text=[[
-:	foo: foo.o| false =>[0] ":\tfoo: foo.o", nil
+:	foo: foo.o          | false =>[0] ":\tfoo: foo.o", nil
 ]]},
+    -- Treat arbitrary Lua indentation as non-structural content.
     { name="test0027", text=[[
-if true then|                 false =>[0] "if true then",        nil
-    print("four")|            false =>[0] "    print(\"four\")", nil
-  print("two")|               false =>[0] "  print(\"two\")",    nil
-end|                          false =>[0] "end",                  nil
+if true then                | false =>[0] "if true then",        nil
+    print("four")           | false =>[0] "    print(\"four\")", nil
+  print("two")              | false =>[0] "  print(\"two\")",    nil
+end                         | false =>[0] "end",                  nil
 ]]},
+    -- Treat a colon without following space as action text.
     { name="test0028", text=[[
-prog: prog.o|                 false =>[0] "prog: prog.o",       nil
-    :not_a_directive()|       true  =>[1] ":not_a_directive()", PUSH
-EOF|                          false =>[0] "",                   POP
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    :not_a_directive()      | true  =>[1] ":not_a_directive()", PUSH
+EOF                         | false =>[0] "",                   POP
 ]]},
+    -- Resume a sibling directive under a combined prefix.
     { name="test0029", text=[[
-if true then|                 false =>[0] "if true then",       nil
-  : foo: foo.o|               false =>[1] "foo: foo.o",         PUSHCOLON
-  :     echo 'foo'|           true  =>[2] "echo 'foo'",         PUSH
-  : bar: bar.o|               false =>[1] "bar: bar.o",         POP
-EOF|                          true  =>[0] "",                   POP
+if true then                | false =>[0] "if true then",       nil
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
+  : bar: bar.o              | false =>[1] "bar: bar.o",         POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
+    -- Pop on a line consisting only of the active colon prefix.
     { name="test0030", text=[[
-if true then|                 false =>[0] "if true then",       nil
-  : foo: foo.o|               false =>[1] "foo: foo.o",         PUSHCOLON
-  :     echo 'foo'|           true  =>[2] "echo 'foo'",         PUSH
-  : | false =>[1] "",                   POP
-EOF|                          false =>[0] "",                   POP
+if true then                | false =>[0] "if true then",       nil
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
+  : |                         false =>[1] "",                   POP
+EOF                         | false =>[0] "",                   POP
 ]]},
+    -- Replay an exposed colon line through POP, POP, PUSHCOLON.
     { name="test0031", text=[[
-if true then|                 false =>[0] "if true then",       nil
-    : prog: prog.o|           false =>[1] "prog: prog.o",       PUSHCOLON
-    :     echo 'prog'|        true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o|               false =>[1] "  : foo: foo.o",     POP
+if true then                | false =>[0] "if true then",       nil
+    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF|                          true  =>[0] "",                   POP
+EOF                         | true  =>[0] "",                   POP
 ]]},
+    -- Skip a shallower colon-only line before a new directive.
     { name="test0032", text=[[
-if true then|                false =>[0] "if true then",       nil
-    : prog: prog.o|          false =>[1] "prog: prog.o",       PUSHCOLON
-    :     echo 'prog'|       true  =>[2] "echo 'prog'",        PUSH
-  : |                        false =>[1] "  : ",               POP
-|                            false =>[0] "  : ",               POP
-  : foo: foo.o|              false =>[1] "foo: foo.o",         PUSHCOLON
-EOF|                         true  =>[0] "",                   POP
+if true then                | false =>[0] "if true then",       nil
+    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
+  : |                         false =>[1] "  : ",               POP
+|                             false =>[0] "  : ",               POP
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+EOF                         | true  =>[0] "",                   POP
 ]]},
 }
 
@@ -501,9 +533,9 @@ local function parse_row(test, row, text)
     if not expected:match("%S") then
         local value
 
-        if input == "EOF" then
+        if input:match("^EOF[ \t]*$") then
             value = false
-        elseif input == "EMPTY" then
+        elseif input:match("^EMPTY[ \t]*$") then
             value = ""
         else
             value = input
@@ -539,9 +571,9 @@ local function parse_row(test, row, text)
     local inputs
     if input == "" then
         inputs = {}
-    elseif input == "EOF" then
+    elseif input:match("^EOF[ \t]*$") then
         inputs = { false }
-    elseif input == "EMPTY" then
+    elseif input:match("^EMPTY[ \t]*$") then
         inputs = { "" }
     else
         inputs = { input }
@@ -640,7 +672,14 @@ local function run_get_line_tests(tests)
                                  "unexpected error: %s", tostring(line))
                         end
 
-                        if line ~= expected.line then
+                        local comparable_line = line
+
+                        if not expected.line:match("[ \t]$") then
+                            comparable_line =
+                                comparable_line:gsub("[ \t]+$", "")
+                        end
+
+                        if comparable_line ~= expected.line then
                             fail(test.name, row,
                                  "expected line %q, got %q",
                                  expected.line, line)
