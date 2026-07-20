@@ -214,227 +214,244 @@ end
 
 local tests = {
     { name="test0001", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    echo 'simple action'    | true  =>[1] "echo 'simple action'", PUSH
-EOF                         | false =>[0] "",                     POP
+prog: prog.o|                 false =>[0] "prog: prog.o",         nil
+    echo 'simple action'|     true  =>[1] "echo 'simple action'", PUSH
+EOF|                          false =>[0] "",                     POP
 ]]},
     { name="test0002", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",     nil
-    if true then            | true  =>[1] "if true then",     PUSH
-        : foo: foo.o        | false =>[2] "foo: foo.o",       PUSHCOLON
-    end                     | true  =>[1] "end",              POP
-EOF                         | false  =>[0] "",                 POP
+prog: prog.o|                 false =>[0] "prog: prog.o",     nil
+    if true then|             true  =>[1] "if true then",     PUSH
+        : foo: foo.o|         false =>[2] "foo: foo.o",       PUSHCOLON
+    end|                      true  =>[1] "end",              POP
+EOF|                          false  =>[0] "",                 POP
 ]]},
     { name="test0003", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",     nil
-    : foo: foo.o            | true  =>[2] "foo: foo.o",       PUSHCOLON
-    :     echo 'foo'        | true  =>[3] "echo 'foo'",       PUSH
-EOF                         | false =>[2] "",                 POP
+prog: prog.o|                 false =>[0] "prog: prog.o",     nil
+    : foo: foo.o|             true  =>[2] "foo: foo.o",       PUSHCOLON
+    :     echo 'foo'|         true  =>[3] "echo 'foo'",       PUSH
+EOF|                          false =>[2] "",                 POP
 |                             false =>[1] "",                 POP
 |                             false =>[0] "",                 POP
 ]]},
 
     { name="test0004", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    : foo: foo.o            | true  =>[2] "foo: foo.o",           PUSHCOLON
-    :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
-    echo 'building prog'    | false =>[2] "echo 'building prog'", POP
+prog: prog.o|                 false =>[0] "prog: prog.o",         nil
+    : foo: foo.o|             true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'|         true  =>[3] "echo 'foo'",           PUSH
+    echo 'building prog'|     false =>[2] "echo 'building prog'", POP
 |                             false =>[1] "echo 'building prog'", POP
-EOF                         | false =>[0] "",                     POP
+EOF|                          false =>[0] "",                     POP
 ]]},
     { name="test0005", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
-next: next.o                | false =>[0] "next: next.o",         POP
-EOF                         | true  =>[0] "",                     nil
+prog: prog.o|                 false =>[0] "prog: prog.o",         nil
+    echo 'building prog'|     true  =>[1] "echo 'building prog'", PUSH
+next: next.o|                 false =>[0] "next: next.o",         POP
+EOF|                          true  =>[0] "",                     nil
 ]]},
     { name="test0006", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    echo 'building prog'    | true  =>[1] "echo 'building prog'", PUSH
-  next: next.o              | false =>[0] "  next: next.o",       POP
-EOF                         | false =>[0] "",                     nil
+prog: prog.o|                 false =>[0] "prog: prog.o",         nil
+    echo 'building prog'|     true  =>[1] "echo 'building prog'", PUSH
+  next: next.o|               false =>[0] "  next: next.o",       POP
+EOF|                          false =>[0] "",                     nil
 ]]},
     { name="test0007", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    if true then            | true  =>[1] "if true then",          PUSH
-        :not_a_directive()  | false =>[1] "    :not_a_directive()", nil
-        : foo: foo.o        | false =>[2] "foo: foo.o",            PUSHCOLON
-    end                     | true  =>[1] "end",                   POP
-EOF                         | false =>[0] "",                      POP
+prog: prog.o|                 false =>[0] "prog: prog.o",          nil
+    if true then|             true  =>[1] "if true then",          PUSH
+        :not_a_directive()|   false =>[1] "    :not_a_directive()", nil
+        : foo: foo.o|         false =>[2] "foo: foo.o",            PUSHCOLON
+    end|                      true  =>[1] "end",                   POP
+EOF|                          false =>[0] "",                      POP
 ]]},
     { name="test0008", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
-    :     echo 'foo'        | true  =>[3] "echo 'foo'",            PUSH
-    echo 'building prog'    | false =>[2] "echo 'building prog'",  POP
+prog: prog.o|                 false =>[0] "prog: prog.o",          nil
+    : foo: foo.o|             true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'|         true  =>[3] "echo 'foo'",            PUSH
+    echo 'building prog'|     false =>[2] "echo 'building prog'",  POP
 |                             false =>[1] "echo 'building prog'",  POP
-    echo 'still prog'       | false =>[1] "echo 'still prog'",     nil
-EOF                         | false =>[0] "",                      POP
+    echo 'still prog'|        false =>[1] "echo 'still prog'",     nil
+EOF|                          false =>[0] "",                      POP
 ]]},
     { name="test0009", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    : foo: foo.o            | true  =>[2] "foo: foo.o",            PUSHCOLON
-    :     : bar: bar.o      | true  =>[4] "bar: bar.o",            PUSHCOLON
-    echo 'building prog'    | true  =>[3] "echo 'building prog'",  POP
+prog: prog.o|                 false =>[0] "prog: prog.o",          nil
+    : foo: foo.o|             true  =>[2] "foo: foo.o",            PUSHCOLON
+    :     : bar: bar.o|       true  =>[4] "bar: bar.o",            PUSHCOLON
+    echo 'building prog'|     true  =>[3] "echo 'building prog'",  POP
 |                             false =>[2] "echo 'building prog'",  POP
 |                             false =>[1] "echo 'building prog'",  POP
-EOF                         | false =>[0] "",                      POP
+EOF|                          false =>[0] "",                      POP
 ]]},
     { name="test0010", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",          nil
-next: next.o                | true  =>[0] "next: next.o",          nil
-    echo 'building next'    | true  =>[1] "echo 'building next'",  PUSH
-EOF                         | false =>[0] "",                      POP
+prog: prog.o|                 false =>[0] "prog: prog.o",          nil
+next: next.o|                 true  =>[0] "next: next.o",          nil
+    echo 'building next'|     true  =>[1] "echo 'building next'",  PUSH
+EOF|                          false =>[0] "",                      POP
 ]]},
     { name="test0011", text=[[
-if true then                | false =>[0] "if true then",          nil
-    : foo: foo.o            | false =>[1] "foo: foo.o",            PUSHCOLON
-    :     echo 'foo'        | true  =>[2] "echo 'foo'",            PUSH
-end                         | false =>[1] "end",                   POP
+if true then|                 false =>[0] "if true then",          nil
+    : foo: foo.o|             false =>[1] "foo: foo.o",            PUSHCOLON
+    :     echo 'foo'|         true  =>[2] "echo 'foo'",            PUSH
+end|                          false =>[1] "end",                   POP
 |                             false =>[0] "end",                   POP
-EOF                         | false =>[0] "",                      nil
+EOF|                          false =>[0] "",                      nil
 ]]},
     { name="test0012", text=[[
-prog: prog.o                                      | false =>[0] "prog: prog.o", nil
-    : foo: foo.o                                  | true  =>[2] "foo: foo.o",   PUSHCOLON
-READ {"", "    : ", "    :     echo 'foo'"}       | true  =>[3] "echo 'foo'",   PUSH
-EOF                                               | false =>[2] "",             POP
+prog: prog.o|                                       false =>[0] "prog: prog.o", nil
+    : foo: foo.o|                                   true  =>[2] "foo: foo.o",   PUSHCOLON
+|
+    : |
+    :     echo 'foo'| true  =>[3] "echo 'foo'",   PUSH
+EOF|                                                false =>[2] "",             POP
 |                                                   false =>[1] "",             POP
 |                                                   false =>[0] "",             POP
 ]]},
     { name="test0013", text=[[
-prog: prog.o                                      | false =>[0] "prog: prog.o", nil
-    echo 'prog'                                   | true  =>[1] "echo 'prog'",  PUSH
-READ {"", "   ", "    : ", false}                 | false =>[0] "",             POP
+prog: prog.o|                                       false =>[0] "prog: prog.o", nil
+    echo 'prog'|                                    true  =>[1] "echo 'prog'",  PUSH
+|
+   |
+    : |
+EOF| false =>[0] "",             POP
 ]]},
     { name="test0014", text=[[
-: foo: foo.o                | false =>[1] "foo: foo.o",       PUSHCOLON
-:     echo 'foo'            | true  =>[2] "echo 'foo'",       PUSH
-EOF                         | false =>[1] "",                 POP
+: foo: foo.o|                 false =>[1] "foo: foo.o",       PUSHCOLON
+:     echo 'foo'|             true  =>[2] "echo 'foo'",       PUSH
+EOF|                          false =>[1] "",                 POP
 |                             false =>[0] "",                 POP
 ]]},
     { name="test0015", text=[[
-prog: prog.o                         | false =>[0] "prog: prog.o", nil
-READ {"\techo 'one'"}                 | true  =>[1] "echo 'one'",  PUSH
-READ {"\techo 'two'"}                 | false =>[1] "echo 'two'",  nil
-EOF                                  | false =>[0] "",            POP
+prog: prog.o|                          false =>[0] "prog: prog.o", nil
+	echo 'one'| true  =>[1] "echo 'one'",  PUSH
+	echo 'two'| false =>[1] "echo 'two'",  nil
+EOF|                                   false =>[0] "",            POP
 ]]},
     { name="test0016", text=[[
-prog: prog.o                                      | false =>[0] "prog: prog.o", nil
-READ {"", "   ", "    echo 'building prog'"}      | true  =>[1] "echo 'building prog'", PUSH
-EOF                                               | false =>[0] "",             POP
+prog: prog.o|                                       false =>[0] "prog: prog.o", nil
+|
+   |
+    echo 'building prog'| true  =>[1] "echo 'building prog'", PUSH
+EOF|                                                false =>[0] "",             POP
 ]]},
     { name="test0017", text=[[
-: if true then              | false =>[1] "if true then",       PUSHCOLON
-:     print('true')         | false =>[1] "    print('true')",  nil
-: end                       | false =>[1] "end",                nil
-EOF                         | false =>[0] "",                   POP
+: if true then|               false =>[1] "if true then",       PUSHCOLON
+:     print('true')|          false =>[1] "    print('true')",  nil
+: end|                        false =>[1] "end",                nil
+EOF|                          false =>[0] "",                   POP
 ]]},
     { name="test0018", text=[[
-prog: prog.o                              | false =>[0] "prog: prog.o", nil
-READ {"\t  : foo: foo.o"}                  | true  =>[2] "foo: foo.o",   PUSHCOLON
-READ {"\t  : \techo 'foo'"}                | true  =>[3] "echo 'foo'",   PUSH
-EOF                                       | false =>[2] "",             POP
+prog: prog.o|                               false =>[0] "prog: prog.o", nil
+	  : foo: foo.o| true  =>[2] "foo: foo.o",   PUSHCOLON
+	  : 	echo 'foo'| true  =>[3] "echo 'foo'",   PUSH
+EOF|                                        false =>[2] "",             POP
 |                                           false =>[1] "",             POP
 |                                           false =>[0] "",             POP
 ]]},
     { name="test0019", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    if true then            | true  =>[1] "if true then",       PUSH
-        : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
-        :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
-    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    if true then|             true  =>[1] "if true then",       PUSH
+        : foo: foo.o|         false =>[2] "foo: foo.o",         PUSHCOLON
+        :     echo 'foo'|     true  =>[3] "echo 'foo'",         PUSH
+    : bar: bar.o|             false =>[2] ": bar: bar.o",       POP
 |                             false =>[1] ": bar: bar.o",       POP
 |                             false =>[2] "bar: bar.o",         PUSHCOLON
-EOF                         | true  =>[1] "",                   POP
+EOF|                          true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0020", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
-    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
-EOF                         | false =>[3] "",                   POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o|        true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    :     : CFLAGS += -g|     true  =>[4] "CFLAGS += -g",       PUSHCOLON
+EOF|                          false =>[3] "",                   POP
 |                             false =>[2] "",                   POP
 |                             false =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0021", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
-    : : CFLAGS += -g        | true  =>[3] "CFLAGS += -g",       PUSHCOLON
-EOF                         | false =>[2] "",                   POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    : prog: oslinux.o|        true  =>[2] "prog: oslinux.o",    PUSHCOLON
+    : : CFLAGS += -g|         true  =>[3] "CFLAGS += -g",       PUSHCOLON
+EOF|                          false =>[2] "",                   POP
 |                             false =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0022", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : foo: foo.o            | true  =>[2] "foo: foo.o",         PUSHCOLON
-    :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
-    : bar: bar.o            | false =>[3] "bar: bar.o",         POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    : foo: foo.o|             true  =>[2] "foo: foo.o",         PUSHCOLON
+    :     : CFLAGS += -g|     true  =>[4] "CFLAGS += -g",       PUSHCOLON
+    : bar: bar.o|             false =>[3] "bar: bar.o",         POP
 |                             false =>[2] "bar: bar.o",         POP
-EOF                         | true  =>[1] "",                   POP
+EOF|                          true  =>[1] "",                   POP
 |                             false =>[0] "",                   POP
 ]]},
     { name="test0023", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
-: foo: foo.o                | false =>[0] ": foo: foo.o",       POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    echo 'prog'|              true  =>[1] "echo 'prog'",        PUSH
+: foo: foo.o|                 false =>[0] ": foo: foo.o",       POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+EOF|                          true  =>[0] "",                   POP
 ]]},
     { name="test0024", text=[[
-if true then                | false =>[0] "if true then",       nil
-    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
-    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
+if true then|                 false =>[0] "if true then",       nil
+    : prog: prog.o|           false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'|        true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o|               false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+EOF|                          true  =>[0] "",                   POP
 ]]},
     { name="test0025", text=[[
-prog: prog.o                                      | false =>[0] "prog: prog.o",         nil
-    : foo: foo.o                                  | true  =>[2] "foo: foo.o",           PUSHCOLON
-    :     echo 'foo'                              | true  =>[3] "echo 'foo'",           PUSH
-READ {"", "    echo 'building prog'"}             | false =>[2] "echo 'building prog'", POP
+prog: prog.o|                                       false =>[0] "prog: prog.o",         nil
+    : foo: foo.o|                                   true  =>[2] "foo: foo.o",           PUSHCOLON
+    :     echo 'foo'|                               true  =>[3] "echo 'foo'",           PUSH
+|
+    echo 'building prog'| false =>[2] "echo 'building prog'", POP
 |                                                   false =>[1] "echo 'building prog'", POP
-EOF                                               | false =>[0] "",                     POP
+EOF|                                                false =>[0] "",                     POP
 ]]},
     { name="test0026", text=[[
-READ {":\tfoo: foo.o"}     | false =>[0] ":\tfoo: foo.o", nil
+:	foo: foo.o| false =>[0] ":\tfoo: foo.o", nil
 ]]},
     { name="test0027", text=[[
-if true then                | false =>[0] "if true then",        nil
-    print("four")           | false =>[0] "    print(\"four\")", nil
-  print("two")              | false =>[0] "  print(\"two\")",    nil
-end                         | false =>[0] "end",                  nil
+if true then|                 false =>[0] "if true then",        nil
+    print("four")|            false =>[0] "    print(\"four\")", nil
+  print("two")|               false =>[0] "  print(\"two\")",    nil
+end|                          false =>[0] "end",                  nil
 ]]},
     { name="test0028", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    :not_a_directive()      | true  =>[1] ":not_a_directive()", PUSH
-EOF                         | false =>[0] "",                   POP
+prog: prog.o|                 false =>[0] "prog: prog.o",       nil
+    :not_a_directive()|       true  =>[1] ":not_a_directive()", PUSH
+EOF|                          false =>[0] "",                   POP
 ]]},
     { name="test0029", text=[[
-if true then                | false =>[0] "if true then",       nil
-  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
-  : bar: bar.o              | false =>[1] "bar: bar.o",         POP
-EOF                         | true  =>[0] "",                   POP
+if true then|                 false =>[0] "if true then",       nil
+  : foo: foo.o|               false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'|           true  =>[2] "echo 'foo'",         PUSH
+  : bar: bar.o|               false =>[1] "bar: bar.o",         POP
+EOF|                          true  =>[0] "",                   POP
 ]]},
     { name="test0030", text=[[
-if true then                | false =>[0] "if true then",       nil
-  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-  :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
-READ {"  : "}               | false =>[1] "",                   POP
-EOF                         | false =>[0] "",                   POP
+if true then|                 false =>[0] "if true then",       nil
+  : foo: foo.o|               false =>[1] "foo: foo.o",         PUSHCOLON
+  :     echo 'foo'|           true  =>[2] "echo 'foo'",         PUSH
+  : | false =>[1] "",                   POP
+EOF|                          false =>[0] "",                   POP
 ]]},
     { name="test0031", text=[[
-if true then                | false =>[0] "if true then",       nil
-    : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
-    :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
+if true then|                 false =>[0] "if true then",       nil
+    : prog: prog.o|           false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'|        true  =>[2] "echo 'prog'",        PUSH
+  : foo: foo.o|               false =>[1] "  : foo: foo.o",     POP
 |                             false =>[0] "  : foo: foo.o",     POP
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+EOF|                          true  =>[0] "",                   POP
+]]},
+    { name="test0032", text=[[
+if true then|                false =>[0] "if true then",       nil
+    : prog: prog.o|          false =>[1] "prog: prog.o",       PUSHCOLON
+    :     echo 'prog'|       true  =>[2] "echo 'prog'",        PUSH
+  : |                        false =>[1] "  : ",               POP
+|                            false =>[0] "  : ",               POP
+  : foo: foo.o|              false =>[1] "foo: foo.o",         PUSHCOLON
+EOF|                         true  =>[0] "",                   POP
 ]]},
 }
 
@@ -476,10 +493,29 @@ local function fail(test, row, message, ...)
 end
 
 local function parse_row(test, row, text)
-    local input, expected = text:match("^(.-)|%s*(.-)%s*$")
+    local input, expected = text:match("^(.-)|(.*)$")
     if not input then
         fail(test, row, "missing |")
     end
+
+    if not expected:match("%S") then
+        local value
+
+        if input == "EOF" then
+            value = false
+        elseif input == "EMPTY" then
+            value = ""
+        else
+            value = input
+        end
+
+        return {
+            input_only = true,
+            value = value,
+        }
+    end
+
+    expected = expected:match("^%s*(.-)%s*$")
 
     local dependency, depth, result =
         expected:match("^([%a]+)%s*=>%[(%d+)%]%s*(.-)%s*$")
@@ -500,32 +536,8 @@ local function parse_row(test, row, text)
         fail(test, row, "%s", message)
     end
 
-    input = input:gsub("%s+$", "")
-
     local inputs
-    local input_expression = input:match("^READ%s+(.+)$")
-
-    if input_expression then
-        local input_loader, input_message =
-            loadstring("return " .. input_expression)
-
-        if not input_loader then
-            fail(test, row, "%s", input_message)
-        end
-
-        inputs = input_loader()
-
-        if type(inputs) ~= "table" then
-            fail(test, row, "READ input must be a table")
-        end
-
-        for i = 1, #inputs do
-            if type(inputs[i]) ~= "string" and inputs[i] ~= false then
-                fail(test, row,
-                     "READ input %d must be a string or false", i)
-            end
-        end
-    elseif input == "" then
+    if input == "" then
         inputs = {}
     elseif input == "EOF" then
         inputs = { false }
@@ -559,86 +571,105 @@ local function run_get_line_tests(tests)
         reset_get_line()
         local row = 0
         local ended_with_error = false
+        local pending_inputs = {}
 
         for text in (test.text .. "\n"):gmatch("(.-)\n") do
             if text:match("%S") then
                 row = row + 1
                 local expected = parse_row(test.name, row, text)
-                local reads = 0
 
-                local function reader()
-                    reads = reads + 1
-
-                    if #expected.inputs == 0 then
-                        fail(test.name, row, "get_line unexpectedly read input")
-                    end
-                    if reads > #expected.inputs then
-                        fail(test.name, row,
-                             "get_line read input more than %d times",
-                             #expected.inputs)
-                    end
-
-                    local input = expected.inputs[reads]
-                    if input == false then
-                        return nil
-                    end
-                    return input
-                end
-
-                local ok, line, change =
-                    pcall(get_line, expected.dependency, reader)
-
-                local expected_reads = #expected.inputs
-                if reads ~= expected_reads then
-                    fail(test.name, row,
-                         "expected %d input reads, got %d",
-                         expected_reads, reads)
-                end
-
-                if expected.change == ERROR then
-                    if ok then
-                        fail(test.name, row,
-                             "expected error %q, got line %q and change %s",
-                             expected.line, line, tostring(change))
-                    end
-
-                    if line ~= expected.line then
-                        fail(test.name, row,
-                             "expected error %q, got %q",
-                             expected.line, line)
-                    end
-
-                    ended_with_error = true
+                if expected.input_only then
+                    pending_inputs[#pending_inputs + 1] = expected.value
                 else
-                    if not ok then
-                        fail(test.name, row,
-                             "unexpected error: %s", tostring(line))
+                    for _, input in ipairs(expected.inputs) do
+                        pending_inputs[#pending_inputs + 1] = input
                     end
 
-                    if line ~= expected.line then
-                        fail(test.name, row,
-                             "expected line %q, got %q",
-                             expected.line, line)
+                    expected.inputs = pending_inputs
+                    pending_inputs = {}
+
+                    local reads = 0
+
+                    local function reader()
+                        reads = reads + 1
+
+                        if #expected.inputs == 0 then
+                            fail(test.name, row,
+                                 "get_line unexpectedly read input")
+                        end
+                        if reads > #expected.inputs then
+                            fail(test.name, row,
+                                 "get_line read input more than %d times",
+                                 #expected.inputs)
+                        end
+
+                        local input = expected.inputs[reads]
+                        if input == false then
+                            return nil
+                        end
+                        return input
                     end
 
-                    if change ~= expected.change then
+                    local ok, line, change =
+                        pcall(get_line, expected.dependency, reader)
+
+                    local expected_reads = #expected.inputs
+                    if reads ~= expected_reads then
                         fail(test.name, row,
-                             "expected change %s, got %s",
-                             expected.change_name, tostring(change))
+                             "expected %d input reads, got %d",
+                             expected_reads, reads)
                     end
-                end
 
-                local depth = get_line_depth()
-                if depth ~= expected.depth then
-                    fail(test.name, row,
-                         "expected depth %d, got %d",
-                         expected.depth, depth)
-                end
+                    if expected.change == ERROR then
+                        if ok then
+                            fail(test.name, row,
+                                 "expected error %q, got line %q and change %s",
+                                 expected.line, line, tostring(change))
+                        end
 
-                if ended_with_error then
-                    break
+                        if line ~= expected.line then
+                            fail(test.name, row,
+                                 "expected error %q, got %q",
+                                 expected.line, line)
+                        end
+
+                        ended_with_error = true
+                    else
+                        if not ok then
+                            fail(test.name, row,
+                                 "unexpected error: %s", tostring(line))
+                        end
+
+                        if line ~= expected.line then
+                            fail(test.name, row,
+                                 "expected line %q, got %q",
+                                 expected.line, line)
+                        end
+
+                        if change ~= expected.change then
+                            fail(test.name, row,
+                                 "expected change %s, got %s",
+                                 expected.change_name, tostring(change))
+                        end
+                    end
+
+                    local depth = get_line_depth()
+                    if depth ~= expected.depth then
+                        fail(test.name, row,
+                             "expected depth %d, got %d",
+                             expected.depth, depth)
+                    end
+
+                    if ended_with_error then
+                        break
+                    end
                 end
             end
+        end
+
+        if #pending_inputs ~= 0 then
+            error(("%s: source input without expectation")
+                  :format(test.name), 0)
         end
 
         if not ended_with_error then
