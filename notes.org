@@ -117,7 +117,7 @@ If this command fails, stop current task, show the user the output of EXACTLY
 After every successful preflight check or successful .FRESH rebuild:
 
 1. Use a non-shell time tool to obtain the current time.
-2. Record PRECHECK_VALID_UNTIL as exactly 300 seconds after that time.
+2. Record PRECHECK_VALID_UNTIL as exactly 400 seconds after that time.
 
 Before any later operation that would normally require preflight:
 
