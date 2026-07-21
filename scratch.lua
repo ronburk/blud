@@ -19,10 +19,11 @@ line is replayed when more prefixes must be removed, or when the newly exposed
 line starts with ": " and must subsequently produce PUSHCOLON at the caller's
 level. Otherwise the caller receiving POP also receives the exposed line.
 
-Blank physical and virtual lines are skipped internally. EOF is similarly
-replayed long enough to emit one POP for each active prefix. The
-after_dependency argument remains in effect while blank lines are
-skipped, allowing an action to follow its dependency after intervening blanks.
+Blank physical and virtual lines are skipped internally. At EOF, each call
+removes one active prefix and returns POP. The input reader must continue
+returning nil after its first EOF. The after_dependency argument remains in
+effect while blank lines are skipped, allowing an action to follow its
+dependency after intervening blanks.
 ]]--
 
 local PUSH      = "PUSH"
@@ -31,23 +32,13 @@ local POP       = "POP"
 local ERROR     = "ERROR"
 
 local active_prefixes = {}
--- Input is replayed only when one physical item must produce more than one
--- structural event across successive get_line() calls.
+-- A line is replayed only when it must produce more than one structural event
+-- across successive get_line() calls.
 local replay_line
-local replay_eof = false
-
-local function read_stdin_line()
-    return io.read("*l")
-end
-
-local function get_prefix_depth()
-    return #active_prefixes
-end
 
 local function reset_get_line_state()
     active_prefixes = {}
     replay_line = nil
-    replay_eof = false
 end
 
 -- Remove every currently active structural prefix. The boolean result says
@@ -69,6 +60,7 @@ local function strip_active_prefixes(line)
     return virtual_line, true
 end
 
+-- Match the whole line against zero or more spaces and tabs.
 local function is_whitespace_only(line)
     return line:match("^[ \t]*$") ~= nil
 end
@@ -80,23 +72,9 @@ local function split_directive_prefix(line)
     return line:match("^([ \t]*: )(.*)$")
 end
 
-local function push_active_prefix(prefix)
-    active_prefixes[#active_prefixes + 1] = prefix
-end
-
-local function pop_active_prefix()
-    assert(#active_prefixes > 0, "prefix stack underflow")
-    table.remove(active_prefixes)
-end
-
 -- Return pending input before consulting the physical reader. Replaying input
--- lets one physical line or EOF generate several POP events across calls.
+-- lets one physical line generate several structural events across calls.
 local function read_or_replay_line(line_reader)
-    if replay_eof then
-        replay_eof = false
-        return nil
-    end
-
     if replay_line ~= nil then
         local line = replay_line
         replay_line = nil
@@ -106,23 +84,11 @@ local function read_or_replay_line(line_reader)
     return line_reader()
 end
 
--- Emit one POP while unwinding the prefix stack at EOF. EOF is replayed until
--- every active parser boundary has received its own POP.
-local function unwind_one_prefix_at_eof()
-    pop_active_prefix()
-
-    if #active_prefixes > 0 then
-        replay_eof = true
-    end
-
-    return "", POP
-end
-
 -- A physical line no longer matches the current nesting level. Remove one
 -- structural prefix, return the line as seen at the newly exposed level, and
 -- replay it when another POP or a subsequent PUSHCOLON is still required.
 local function unwind_mismatched_line(line)
-    pop_active_prefix()
+    table.remove(active_prefixes)
 
     local virtual_line, all_prefixes_matched =
         strip_active_prefixes(line)
@@ -151,15 +117,15 @@ local function start_indented_block_after_dependency(virtual_line)
     local directive_body = indented_line:match("^: (.*)$")
 
     if directive_body == nil then
-        push_active_prefix(indentation)
+        table.insert(active_prefixes, indentation)
         return indented_line, PUSH
     end
 
     if not is_whitespace_only(directive_body) then
         -- These are separate parser boundaries: first leave the directive,
         -- then leave the action introduced by dependency indentation.
-        push_active_prefix(indentation)
-        push_active_prefix(": ")
+        table.insert(active_prefixes, indentation)
+        table.insert(active_prefixes, ": ")
         return directive_body, PUSHCOLON
     end
 
@@ -169,7 +135,8 @@ end
 -- after_dependency reports what the caller parsed from the preceding returned
 -- line. It is intentionally retained while this function skips blank input.
 local function get_line(after_dependency, line_reader)
-    line_reader = line_reader or read_stdin_line
+    -- With no format argument, io.read() reads one line.
+    line_reader = line_reader or io.read
 
     while true do
         local physical_line = read_or_replay_line(line_reader)
@@ -179,7 +146,8 @@ local function get_line(after_dependency, line_reader)
                 return "", nil
             end
 
-            return unwind_one_prefix_at_eof()
+            table.remove(active_prefixes)
+            return "", POP
         end
 
         if not is_whitespace_only(physical_line) then
@@ -210,7 +178,7 @@ local function get_line(after_dependency, line_reader)
                 if not is_whitespace_only(directive_body) then
                     -- Without a preceding dependency, the whitespace and
                     -- colon marker form one directive-switch boundary.
-                    push_active_prefix(directive_prefix)
+                    table.insert(active_prefixes, directive_prefix)
                     return directive_body, PUSHCOLON
                 end
             end
@@ -239,8 +207,8 @@ prog: prog.o                | false =>[0] "prog: prog.o",     nil
     : foo: foo.o            | true  =>[2] "foo: foo.o",       PUSHCOLON
     :     echo 'foo'        | true  =>[3] "echo 'foo'",       PUSH
 EOF                         | false =>[2] "",                 POP
-|                             false =>[1] "",                 POP
-|                             false =>[0] "",                 POP
+EOF                         | false =>[1] "",                 POP
+EOF                         | false =>[0] "",                 POP
 ]]},
 
     -- Pop nested directive levels before resuming an outer action.
@@ -319,8 +287,8 @@ prog: prog.o                | false =>[0] "prog: prog.o", nil
     : |
     :     echo 'foo'        | true  =>[3] "echo 'foo'",   PUSH
 EOF                         | false =>[2] "",             POP
-|                             false =>[1] "",             POP
-|                             false =>[0] "",             POP
+EOF                         | false =>[1] "",             POP
+EOF                         | false =>[0] "",             POP
 ]]},
     -- Pop at EOF after empty, whitespace-only, and colon-only lines.
     { name="test0013", text=[[
@@ -336,7 +304,7 @@ EOF                         | false =>[0] "",             POP
 : foo: foo.o                | false =>[1] "foo: foo.o",       PUSHCOLON
 :     echo 'foo'            | true  =>[2] "echo 'foo'",       PUSH
 EOF                         | false =>[1] "",                 POP
-|                             false =>[0] "",                 POP
+EOF                         | false =>[0] "",                 POP
 ]]},
     -- Use a tab as the action indentation prefix.
     { name="test0015", text=[[
@@ -366,8 +334,8 @@ prog: prog.o                | false =>[0] "prog: prog.o", nil
 	  : foo: foo.o      | true  =>[2] "foo: foo.o",   PUSHCOLON
 	  : 	echo 'foo'  | true  =>[3] "echo 'foo'",   PUSH
 EOF                         | false =>[2] "",             POP
-|                             false =>[1] "",             POP
-|                             false =>[0] "",             POP
+EOF                         | false =>[1] "",             POP
+EOF                         | false =>[0] "",             POP
 ]]},
     -- Pop nested levels before starting a shallower directive.
     { name="test0019", text=[[
@@ -379,7 +347,7 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
 |                             false =>[1] ": bar: bar.o",       POP
 |                             false =>[2] "bar: bar.o",         PUSHCOLON
 EOF                         | true  =>[1] "",                   POP
-|                             false =>[0] "",                   POP
+EOF                         | false =>[0] "",                   POP
 ]]},
     -- Build multiple nested indentation-and-colon prefix levels.
     { name="test0020", text=[[
@@ -387,9 +355,9 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
     :     : CFLAGS += -g    | true  =>[4] "CFLAGS += -g",       PUSHCOLON
 EOF                         | false =>[3] "",                   POP
-|                             false =>[2] "",                   POP
-|                             false =>[1] "",                   POP
-|                             false =>[0] "",                   POP
+EOF                         | false =>[2] "",                   POP
+EOF                         | false =>[1] "",                   POP
+EOF                         | false =>[0] "",                   POP
 ]]},
     -- Nest a colon-only directive prefix at the same indentation.
     { name="test0021", text=[[
@@ -397,8 +365,8 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : prog: oslinux.o       | true  =>[2] "prog: oslinux.o",    PUSHCOLON
     : : CFLAGS += -g        | true  =>[3] "CFLAGS += -g",       PUSHCOLON
 EOF                         | false =>[2] "",                   POP
-|                             false =>[1] "",                   POP
-|                             false =>[0] "",                   POP
+EOF                         | false =>[1] "",                   POP
+EOF                         | false =>[0] "",                   POP
 ]]},
     -- Return from a nested assignment to a sibling dependency.
     { name="test0022", text=[[
@@ -408,7 +376,7 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     : bar: bar.o            | false =>[3] "bar: bar.o",         POP
 |                             false =>[2] "bar: bar.o",         POP
 EOF                         | true  =>[1] "",                   POP
-|                             false =>[0] "",                   POP
+EOF                         | false =>[0] "",                   POP
 ]]},
     -- Replay a top-level colon directive after an action pop.
     { name="test0023", text=[[
@@ -698,7 +666,7 @@ local function run_get_line_tests(tests)
                         end
                     end
 
-                    local depth = get_prefix_depth()
+                    local depth = #active_prefixes
                     if depth ~= expected.depth then
                         fail(test.name, row,
                              "expected depth %d, got %d",
@@ -718,7 +686,7 @@ local function run_get_line_tests(tests)
         end
 
         if not ended_with_error then
-            local depth = get_prefix_depth()
+            local depth = #active_prefixes
             if depth ~= 0 then
                 error(("%s: finished at depth %d"):format(test.name, depth), 0)
             end
