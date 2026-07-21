@@ -5,8 +5,8 @@ or POP.
 
 Each non-nil stack event changes the prefix stack by exactly one entry. When
 dependency indentation and a directive marker occur on the same physical
-line, get_line() returns an empty PUSH first and retains the directive text so
-the following call can return PUSHCOLON.
+line, get_line() returns a line-less PUSH first and retains the directive text
+so the following call can return PUSHCOLON.
 
 The prefix stack contains exact text to remove from each physical line. Only
 syntax known to be structural may add a prefix:
@@ -153,7 +153,7 @@ local function start_indented_block_after_dependency(virtual_line)
 
     if not is_whitespace_only(directive_body) then
         table.insert(active_prefixes, indentation)
-        return "", PUSH, {
+        return nil, PUSH, {
             virtual_line = indented_line,
             inherited_depth = #active_prefixes,
         }
@@ -218,7 +218,7 @@ local function get_line(after_dependency, line_reader)
                     local returned_line, stack_event, replay_line =
                         start_indented_block_after_dependency(virtual_line)
 
-                    if returned_line ~= nil then
+                    if stack_event ~= nil then
                         pending_line = replay_line
                         return returned_line, stack_event
                     end
@@ -260,7 +260,7 @@ EOF                         | false  =>[0] "",                 POP
     -- Expose action and directive pushes separately, then unwind at EOF.
     { name="test0003", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",     nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
     :     echo 'foo'        | true  =>[3] "echo 'foo'",       PUSH
 EOF                         | false =>[2] "",                 POP
@@ -271,7 +271,7 @@ EOF                         | false =>[0] "",                 POP
     -- Pop nested directive levels before resuming an outer action.
     { name="test0004", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
     :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
     echo 'building prog'    | false =>[2] "echo 'building prog'", POP
@@ -304,7 +304,7 @@ EOF                         | false =>[0] "",                      POP
     -- Resume an outer action after repeated pops.
     { name="test0008", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
     :     echo 'foo'        | true  =>[3] "echo 'foo'",            PUSH
     echo 'building prog'    | false =>[2] "echo 'building prog'",  POP
@@ -315,9 +315,9 @@ EOF                         | false =>[0] "",                      POP
     -- Unwind a dependency nested inside another directive.
     { name="test0009", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",          nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
-    :     : bar: bar.o      | true  =>[3] "",                   PUSH
+    :     : bar: bar.o      | true  =>[3] nil,                   PUSH
 |                             false =>[4] "bar: bar.o",       PUSHCOLON
     echo 'building prog'    | true  =>[3] "echo 'building prog'",  POP
 |                             false =>[2] "echo 'building prog'",  POP
@@ -343,7 +343,7 @@ EOF                         | false =>[0] "",                      nil
     -- Skip empty and colon-only physical lines before an action.
     { name="test0012", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o", nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
 |
     : |
@@ -393,7 +393,7 @@ EOF                         | false =>[0] "",                   POP
     -- Handle unequal space widths in nested structural prefixes.
     { name="test0018", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o", nil
-  : foo: foo.o              | true  =>[1] "",                   PUSH
+  : foo: foo.o              | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
   :   echo 'foo'            | true  =>[3] "echo 'foo'",   PUSH
 EOF                         | false =>[2] "",             POP
@@ -411,9 +411,9 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
     -- Build multiple nested indentation-and-colon prefix levels.
     { name="test0020", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o       | true  =>[1] "",                   PUSH
+    : prog: oslinux.o       | true  =>[1] nil,                   PUSH
 |                             false =>[2] "prog: oslinux.o",       PUSHCOLON
-    :     : CFLAGS += -g    | true  =>[3] "",                   PUSH
+    :     : CFLAGS += -g    | true  =>[3] nil,                   PUSH
 |                             false =>[4] "CFLAGS += -g",       PUSHCOLON
 EOF                         | false =>[3] "",                   POP
 EOF                         | false =>[2] "",                   POP
@@ -423,7 +423,7 @@ EOF                         | false =>[0] "",                   POP
     -- Nest a colon-only directive prefix at the same indentation.
     { name="test0021", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : prog: oslinux.o       | true  =>[1] "",                   PUSH
+    : prog: oslinux.o       | true  =>[1] nil,                   PUSH
 |                             false =>[2] "prog: oslinux.o",       PUSHCOLON
     : : CFLAGS += -g        | true  =>[3] "CFLAGS += -g",       PUSHCOLON
 EOF                         | false =>[2] "",                   POP
@@ -433,9 +433,9 @@ EOF                         | false =>[0] "",                   POP
     -- Return from a nested assignment to a sibling dependency.
     { name="test0022", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
-    :     : CFLAGS += -g    | true  =>[3] "",                   PUSH
+    :     : CFLAGS += -g    | true  =>[3] nil,                   PUSH
 |                             false =>[4] "CFLAGS += -g",       PUSHCOLON
     : bar: bar.o            | false =>[3] "bar: bar.o",         POP
 |                             false =>[2] "bar: bar.o",         POP
@@ -460,7 +460,7 @@ if true then                | false =>[0] "if true then",       nil
     -- Ignore a blank line before a multi-level action unwind.
     { name="test0025", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",         nil
-    : foo: foo.o            | true  =>[1] "",                   PUSH
+    : foo: foo.o            | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
     :     echo 'foo'        | true  =>[3] "echo 'foo'",           PUSH
                             |
@@ -522,7 +522,7 @@ EOF                         | false =>[0] "",                    nil
     { name="test0033", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-  :   : CFLAGS += -g        | true  =>[2] "",                   PUSH
+  :   : CFLAGS += -g        | true  =>[2] nil,                   PUSH
 |                             false =>[3] "CFLAGS += -g",       PUSHCOLON
   : : CXXFLAGS += -g        | false =>[3] "indentation prefix \"  : : \" does not align with active prefix \"  :   : \"", ERROR
 ]]},
@@ -530,7 +530,7 @@ if true then                | false =>[0] "if true then",       nil
     { name="test0034", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-  :   : CFLAGS += -g        | true  =>[2] "",                   PUSH
+  :   : CFLAGS += -g        | true  =>[2] nil,                   PUSH
 |                             false =>[3] "CFLAGS += -g",       PUSHCOLON
    print("outer")           | false =>[2] "   print(\"outer\")", POP
 |                             false =>[1] "   print(\"outer\")", POP
@@ -549,7 +549,7 @@ EOF                         | false =>[0] "",                    POP
     -- Replay a root directive through several active nested boundaries.
     { name="test0036", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-  : foo: foo.o              | true  =>[1] "",                   PUSH
+  : foo: foo.o              | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
   :   echo 'foo'            | true  =>[3] "echo 'foo'",         PUSH
 : bar: bar.o                | false =>[2] ": bar: bar.o",       POP
@@ -561,7 +561,7 @@ EOF                         | true  =>[0] "",                   POP
     -- Preserve after_dependency across an aligned nested colon-only line.
     { name="test0037", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-  : foo: foo.o              | true  =>[1] "",                   PUSH
+  : foo: foo.o              | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
   : : bar: bar.o            | true  =>[3] "bar: bar.o",         PUSHCOLON
   : : |
@@ -586,7 +586,7 @@ EOF                         | false =>[0] "",                    nil
     -- Replay a root colon-only line through several active boundaries.
     { name="test0040", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
-  : foo: foo.o              | true  =>[1] "",                   PUSH
+  : foo: foo.o              | true  =>[1] nil,                   PUSH
 |                             false =>[2] "foo: foo.o",       PUSHCOLON
   :   echo 'foo'            | true  =>[3] "echo 'foo'",         PUSH
 : |                           false =>[2] ": ",                  POP
@@ -795,15 +795,17 @@ local function run_get_line_tests(tests)
 
                         local comparable_line = line
 
-                        if not expected.line:match("[ \t]$") then
+                        if type(expected.line) == "string"
+                                and type(comparable_line) == "string"
+                                and not expected.line:match("[ \t]$") then
                             comparable_line =
                                 comparable_line:gsub("[ \t]+$", "")
                         end
 
                         if comparable_line ~= expected.line then
                             fail(test.name, row,
-                                 "expected line %q, got %q",
-                                 expected.line, line)
+                                 "expected line %s, got %s",
+                                 tostring(expected.line), tostring(line))
                         end
 
                         if change ~= expected.change then
