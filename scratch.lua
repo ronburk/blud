@@ -28,11 +28,12 @@ returning nil after its first EOF. The after_dependency argument remains in
 effect while blank lines are skipped, allowing an action to follow its
 dependency after intervening blanks.
 
-When a line stops matching the active stack, any remaining leading spaces,
-tabs, and colons must agree with the next active prefix through the length of
-the shorter string. A newly exposed ": " prefix is exempt because it begins a
-valid pop-then-push transition. Other disagreements are reported as likely
-indentation errors.
+When a line contains leading directive prefixes, their structural spaces and
+colon markers must agree with the active prefix through the length of the
+shorter string. Plain leading whitespace is not structural until it is
+accepted as action indentation after a dependency, so it may instead expose a
+line at an outer parser level. A newly exposed ": " prefix is exempt because
+it begins a valid pop-then-push transition.
 ]]--
 
 local PUSH      = "PUSH"
@@ -81,10 +82,25 @@ local function split_directive_prefix(line)
     return line:match("^([ \t]*: )(.*)$")
 end
 
--- Capture the part of a line that looks like structural indentation: leading
--- spaces, tabs, and colons.
-local function leading_indentation_prefix(line)
-    return line:match("^([ \t:]*)")
+-- Capture only syntax already recognizable as structural on this physical
+-- line. Whitespace is included when it positions a ": " directive marker;
+-- otherwise it remains source-language content until after_dependency accepts
+-- it as action indentation.
+local function leading_structural_prefix(line)
+    local prefix = ""
+    local remainder = line
+
+    while true do
+        local directive_prefix, directive_body =
+            split_directive_prefix(remainder)
+
+        if directive_prefix == nil then
+            return prefix
+        end
+
+        prefix = prefix .. directive_prefix
+        remainder = directive_body
+    end
 end
 
 -- Before stripping or changing the active stack, require the old and new
@@ -98,7 +114,7 @@ local function validate_line_prefix(line)
     end
 
     local active_prefix = table.concat(active_prefixes)
-    local line_prefix = leading_indentation_prefix(line)
+    local line_prefix = leading_structural_prefix(line)
     local common_length = math.min(#line_prefix, #active_prefix)
 
     if line_prefix:sub(1, common_length)
@@ -475,11 +491,12 @@ if true then                | false =>[0] "if true then",       nil
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
   : |                         false =>[2] "indentation prefix \"  : \" does not align with active prefix \"    :     \"", ERROR
 ]]},
-    -- Reject indentation that shifts an active colon marker.
+    -- A dependency need not have an action; ordinary indentation may unwind.
     { name="test0032", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-   print("misaligned")      | true  =>[1] "indentation prefix \"   \" does not align with active prefix \"  : \"", ERROR
+   print("not an action")   | true  =>[0] "   print(\"not an action\")", POP
+EOF                         | false =>[0] "",                    nil
 ]]},
 
 }
