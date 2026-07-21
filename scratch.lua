@@ -494,7 +494,7 @@ EOF                         | true  =>[0] "",                   POP
     { name="test0032", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-   print("misaligned")      | false =>[1] "indentation prefix \"   \" does not align with active prefix \"  : \"", ERROR
+   print("misaligned")      | true  =>[1] "indentation prefix \"   \" does not align with active prefix \"  : \"", ERROR
 ]]},
 
 }
