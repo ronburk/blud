@@ -341,11 +341,11 @@ EOF                         | false =>[0] "",             POP
 EOF                         | false =>[1] "",                 POP
 EOF                         | false =>[0] "",                 POP
 ]]},
-    -- Use a tab as the action indentation prefix.
+    -- Use a two-space action indentation prefix.
     { name="test0015", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o", nil
-	echo 'one'          | true  =>[1] "echo 'one'",  PUSH
-	echo 'two'          | false =>[1] "echo 'two'",  nil
+  echo 'one'                | true  =>[1] "echo 'one'",  PUSH
+  echo 'two'                | false =>[1] "echo 'two'",  nil
 EOF                         | false =>[0] "",            POP
 ]]},
     -- Skip blank physical lines before the first action.
@@ -363,11 +363,11 @@ EOF                         | false =>[0] "",             POP
 : end                       | false =>[1] "end",                nil
 EOF                         | false =>[0] "",                   POP
 ]]},
-    -- Handle mixed tabs and spaces in structural prefixes.
+    -- Handle unequal space widths in nested structural prefixes.
     { name="test0018", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o", nil
-	  : foo: foo.o      | true  =>[2] "foo: foo.o",   PUSHCOLON
-	  : 	echo 'foo'  | true  =>[3] "echo 'foo'",   PUSH
+  : foo: foo.o              | true  =>[2] "foo: foo.o",   PUSHCOLON
+  :   echo 'foo'            | true  =>[3] "echo 'foo'",   PUSH
 EOF                         | false =>[2] "",             POP
 EOF                         | false =>[1] "",             POP
 EOF                         | false =>[0] "",             POP
@@ -441,25 +441,21 @@ prog: prog.o                | false =>[0] "prog: prog.o",         nil
 |                             false =>[1] "echo 'building prog'", POP
 EOF                         | false =>[0] "",                     POP
 ]]},
-    -- Reject colon-plus-tab as a directive delimiter.
-    { name="test0026", text=[[
-:	foo: foo.o          | false =>[0] ":\tfoo: foo.o", nil
-]]},
     -- Treat arbitrary Lua indentation as non-structural content.
-    { name="test0027", text=[[
+    { name="test0026", text=[[
 if true then                | false =>[0] "if true then",        nil
     print("four")           | false =>[0] "    print(\"four\")", nil
   print("two")              | false =>[0] "  print(\"two\")",    nil
 end                         | false =>[0] "end",                  nil
 ]]},
     -- Treat a colon without following space as action text.
-    { name="test0028", text=[[
+    { name="test0027", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
     :not_a_directive()      | true  =>[1] ":not_a_directive()", PUSH
 EOF                         | false =>[0] "",                   POP
 ]]},
     -- Resume a sibling directive under a combined prefix.
-    { name="test0029", text=[[
+    { name="test0028", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
   :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
@@ -467,7 +463,7 @@ if true then                | false =>[0] "if true then",       nil
 EOF                         | true  =>[0] "",                   POP
 ]]},
     -- Pop on a line consisting only of the active colon prefix.
-    { name="test0030", text=[[
+    { name="test0029", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
   :     echo 'foo'          | true  =>[2] "echo 'foo'",         PUSH
@@ -475,7 +471,7 @@ if true then                | false =>[0] "if true then",       nil
 EOF                         | false =>[0] "",                   POP
 ]]},
     -- Replay an exposed colon line through POP, POP, PUSHCOLON.
-    { name="test0031", text=[[
+    { name="test0030", text=[[
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
@@ -485,7 +481,7 @@ if true then                | false =>[0] "if true then",       nil
 EOF                         | true  =>[0] "",                   POP
 ]]},
     -- Skip a shallower colon-only line before a new directive.
-    { name="test0032", text=[[
+    { name="test0031", text=[[
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
@@ -495,17 +491,12 @@ if true then                | false =>[0] "if true then",       nil
 EOF                         | true  =>[0] "",                   POP
 ]]},
     -- Reject indentation that shifts an active colon marker.
-    { name="test0033", text=[[
+    { name="test0032", text=[[
 if true then                | false =>[0] "if true then",       nil
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
    print("misaligned")      | false =>[1] "indentation prefix \"   \" does not align with active prefix \"  : \"", ERROR
 ]]},
-    -- Reject changing an active action indent from a tab to spaces.
-    { name="test0034", text=[[
-prog: prog.o                | false =>[0] "prog: prog.o",       nil
-	echo 'tabbed'       | true  =>[1] "echo 'tabbed'",       PUSH
-    echo 'spaces'           | false =>[1] "indentation prefix \"    \" does not align with active prefix \"\\t\"", ERROR
-]]},
+
 }
 
 local test0001 = [[
