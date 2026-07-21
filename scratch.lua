@@ -13,17 +13,26 @@ All other indentation belongs to the source language and remains in the
 virtual line. Exact prefix text is stored instead of indentation columns
 because tabs, spaces, and colon markers are semantically distinct.
 
-A physical line may be returned by several calls. When it no longer matches
-the active prefix stack, one prefix is removed and POP is returned. The same
-line is replayed when more prefixes must be removed, or when the newly exposed
-line starts with ": " and must subsequently produce PUSHCOLON at the caller's
-level. Otherwise the caller receiving POP also receives the exposed line.
+A nonblank physical line inherits zero or more complete entries from the
+bottom of the active prefix stack. Its inherited depth and the line remaining
+after those prefixes are stripped are calculated once. If deeper stack entries
+must be removed, the analyzed line is retained while one POP is returned per
+call. It is also retained after the final POP when the newly exposed line
+starts with ": " and must subsequently produce PUSHCOLON at the caller's
+level. Otherwise the caller receiving the final POP also receives the exposed
+line.
 
 Blank physical and virtual lines are skipped internally. At EOF, each call
 removes one active prefix and returns POP. The input reader must continue
 returning nil after its first EOF. The after_dependency argument remains in
 effect while blank lines are skipped, allowing an action to follow its
 dependency after intervening blanks.
+
+When a line stops matching the active stack, any remaining leading spaces,
+tabs, and colons must agree with the next active prefix through the length of
+the shorter string. A newly exposed ": " prefix is exempt because it begins a
+valid pop-then-push transition. Other disagreements are reported as likely
+indentation errors.
 ]]--
 
 local PUSH      = "PUSH"
@@ -32,18 +41,18 @@ local POP       = "POP"
 local ERROR     = "ERROR"
 
 local active_prefixes = {}
--- A line is replayed only when it must produce more than one structural event
--- across successive get_line() calls.
-local replay_line
+-- An analyzed line is retained only when it must produce more than one
+-- structural event across successive get_line() calls.
+local pending_line
 
 local function reset_get_line_state()
     active_prefixes = {}
-    replay_line = nil
+    pending_line = nil
 end
 
--- Remove every currently active structural prefix. The boolean result says
--- whether all prefixes matched; the returned line always reflects whatever
--- prefixes were successfully removed before the first mismatch.
+-- Strip complete active-prefix entries until the first mismatch. The returned
+-- depth identifies the inherited leading portion of active_prefixes; this
+-- function does not modify the stack.
 local function strip_active_prefixes(line)
     local virtual_line = line
 
@@ -51,13 +60,13 @@ local function strip_active_prefixes(line)
         local prefix = active_prefixes[i]
 
         if virtual_line:sub(1, #prefix) ~= prefix then
-            return virtual_line, false
+            return virtual_line, i - 1
         end
 
         virtual_line = virtual_line:sub(#prefix + 1)
     end
 
-    return virtual_line, true
+    return virtual_line, #active_prefixes
 end
 
 -- Match the whole line against zero or more spaces and tabs.
@@ -72,35 +81,36 @@ local function split_directive_prefix(line)
     return line:match("^([ \t]*: )(.*)$")
 end
 
--- Return pending input before consulting the physical reader. Replaying input
--- lets one physical line generate several structural events across calls.
-local function read_or_replay_line(line_reader)
-    if replay_line ~= nil then
-        local line = replay_line
-        replay_line = nil
-        return line
-    end
-
-    return line_reader()
+-- Capture the part of a line that looks like structural indentation: leading
+-- spaces, tabs, and colons. A nonempty prefix must align with the next active
+-- stack entry unless it is a new directive prefix at the exposed level.
+local function leading_indentation_prefix(line)
+    return line:match("^([ \t:]*)")
 end
 
--- A physical line no longer matches the current nesting level. Remove one
--- structural prefix, return the line as seen at the newly exposed level, and
--- replay it when another POP or a subsequent PUSHCOLON is still required.
-local function unwind_mismatched_line(line)
-    table.remove(active_prefixes)
-
-    local virtual_line, all_prefixes_matched =
-        strip_active_prefixes(line)
-    local directive_prefix = split_directive_prefix(virtual_line)
-
-    -- A remaining mismatch requires another POP. A colon line that has
-    -- reached its caller must be replayed once more to create PUSHCOLON.
-    if not all_prefixes_matched or directive_prefix then
-        replay_line = line
+local function validate_inherited_prefix(virtual_line, inherited_depth)
+    if inherited_depth == #active_prefixes
+            or split_directive_prefix(virtual_line) then
+        return
     end
 
-    return virtual_line, POP
+    local line_prefix = leading_indentation_prefix(virtual_line)
+
+    if line_prefix == "" then
+        return
+    end
+
+    local active_prefix = active_prefixes[inherited_depth + 1]
+    local common_length = math.min(#line_prefix, #active_prefix)
+
+    if line_prefix:sub(1, common_length)
+            ~= active_prefix:sub(1, common_length) then
+        local shown_line_prefix = line_prefix:gsub("\t", "\\t")
+        local shown_active_prefix = active_prefix:gsub("\t", "\\t")
+
+        error(('indentation prefix "%s" does not align with active prefix "%s"')
+              :format(shown_line_prefix, shown_active_prefix), 0)
+    end
 end
 
 -- If a dependency is followed by an indented line, establish the action
@@ -139,24 +149,49 @@ local function get_line(after_dependency, line_reader)
     line_reader = line_reader or io.read
 
     while true do
-        local physical_line = read_or_replay_line(line_reader)
+        local line = pending_line
+        pending_line = nil
 
-        if physical_line == nil then
-            if #active_prefixes == 0 then
-                return "", nil
+        if line == nil then
+            local physical_line = line_reader()
+
+            if physical_line == nil then
+                if #active_prefixes == 0 then
+                    return "", nil
+                end
+
+                table.remove(active_prefixes)
+                return "", POP
             end
 
-            table.remove(active_prefixes)
-            return "", POP
+            if not is_whitespace_only(physical_line) then
+                local virtual_line, inherited_depth =
+                    strip_active_prefixes(physical_line)
+
+                validate_inherited_prefix(virtual_line, inherited_depth)
+
+                line = {
+                    virtual_line = virtual_line,
+                    inherited_depth = inherited_depth,
+                }
+            end
         end
 
-        if not is_whitespace_only(physical_line) then
-            local virtual_line, all_prefixes_matched =
-                strip_active_prefixes(physical_line)
+        if line ~= nil then
+            if #active_prefixes > line.inherited_depth then
+                table.remove(active_prefixes)
 
-            if not all_prefixes_matched then
-                return unwind_mismatched_line(physical_line)
+                -- Retain the analyzed line for another POP, or so a newly
+                -- exposed directive prefix can produce PUSHCOLON next time.
+                if #active_prefixes > line.inherited_depth
+                        or split_directive_prefix(line.virtual_line) then
+                    pending_line = line
+                end
+
+                return line.virtual_line, POP
             end
+
+            local virtual_line = line.virtual_line
 
             if not is_whitespace_only(virtual_line) then
                 if after_dependency then
@@ -458,6 +493,18 @@ if true then                | false =>[0] "if true then",       nil
 |                             false =>[0] "  : ",               POP
   : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
 EOF                         | true  =>[0] "",                   POP
+]]},
+    -- Reject indentation that shifts an active colon marker.
+    { name="test0033", text=[[
+if true then                | false =>[0] "if true then",       nil
+  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
+   print("misaligned")      | false =>[1] "indentation prefix \"   \" does not align with active prefix \"  : \"", ERROR
+]]},
+    -- Reject changing an active action indent from a tab to spaces.
+    { name="test0034", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+	echo 'tabbed'       | true  =>[1] "echo 'tabbed'",       PUSH
+    echo 'spaces'           | false =>[1] "indentation prefix \"    \" does not align with active prefix \"\\t\"", ERROR
 ]]},
 }
 
