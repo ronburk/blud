@@ -95,6 +95,11 @@ means the following when 'test' is built:
 
 ** ChatGPT Project Instructions
 
+Sometimes the user wants to do something that contradicts the
+suggestions here. Any prompt the user gives that begins with "!"
+should cause you to ignore all these instructions and only
+do exactly what that prompt asks.
+
 If you have any memory of CHATGPT_PREFLIGHT.sh, forget it. It was obsolete and removed.
 
 When showing code or command snippets, omit the language identifier
