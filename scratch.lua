@@ -82,25 +82,44 @@ local function split_directive_prefix(line)
 end
 
 -- Capture the part of a line that looks like structural indentation: leading
--- spaces, tabs, and colons. A nonempty prefix must align with the next active
--- stack entry unless it is a new directive prefix at the exposed level.
+-- spaces, tabs, and colons.
 local function leading_indentation_prefix(line)
     return line:match("^([ \t:]*)")
 end
 
-local function validate_inherited_prefix(virtual_line, inherited_depth)
-    if inherited_depth == #active_prefixes
-            or split_directive_prefix(virtual_line) then
+-- A line made entirely from directive prefixes and whitespace is logically
+-- blank. It may unwind active prefixes without participating in alignment
+-- validation.
+local function is_logically_blank(line)
+    local remainder = line
+
+    while not is_whitespace_only(remainder) do
+        local _, directive_body = split_directive_prefix(remainder)
+
+        if directive_body == nil then
+            return false
+        end
+
+        remainder = directive_body
+    end
+
+    return true
+end
+
+-- Before stripping or changing the active stack, require the old and new
+-- structural prefixes to agree through the shorter prefix. A shorter matching
+-- prefix is an unwind; a longer matching prefix may introduce deeper content.
+local function validate_line_prefix(line)
+    local directive_prefix = split_directive_prefix(line)
+
+    if #active_prefixes == 0
+            or is_logically_blank(line)
+            or directive_prefix == ": " then
         return
     end
 
-    local line_prefix = leading_indentation_prefix(virtual_line)
-
-    if line_prefix == "" then
-        return
-    end
-
-    local active_prefix = active_prefixes[inherited_depth + 1]
+    local active_prefix = table.concat(active_prefixes)
+    local line_prefix = leading_indentation_prefix(line)
     local common_length = math.min(#line_prefix, #active_prefix)
 
     if line_prefix:sub(1, common_length)
@@ -165,10 +184,10 @@ local function get_line(after_dependency, line_reader)
             end
 
             if not is_whitespace_only(physical_line) then
+                validate_line_prefix(physical_line)
+
                 local virtual_line, inherited_depth =
                     strip_active_prefixes(physical_line)
-
-                validate_inherited_prefix(virtual_line, inherited_depth)
 
                 line = {
                     virtual_line = virtual_line,
@@ -372,17 +391,13 @@ EOF                         | false =>[2] "",             POP
 EOF                         | false =>[1] "",             POP
 EOF                         | false =>[0] "",             POP
 ]]},
-    -- Pop nested levels before starting a shallower directive.
+    -- Reject a colon shifted left across nested action/directive prefixes.
     { name="test0019", text=[[
 prog: prog.o                | false =>[0] "prog: prog.o",       nil
     if true then            | true  =>[1] "if true then",       PUSH
         : foo: foo.o        | false =>[2] "foo: foo.o",         PUSHCOLON
         :     echo 'foo'    | true  =>[3] "echo 'foo'",         PUSH
-    : bar: bar.o            | false =>[2] ": bar: bar.o",       POP
-|                             false =>[1] ": bar: bar.o",       POP
-|                             false =>[2] "bar: bar.o",         PUSHCOLON
-EOF                         | true  =>[1] "",                   POP
-EOF                         | false =>[0] "",                   POP
+    : bar: bar.o            | false =>[3] "indentation prefix \"    : \" does not align with active prefix \"        :     \"", ERROR
 ]]},
     -- Build multiple nested indentation-and-colon prefix levels.
     { name="test0020", text=[[
@@ -421,15 +436,12 @@ prog: prog.o                | false =>[0] "prog: prog.o",       nil
 |                             false =>[1] "foo: foo.o",         PUSHCOLON
 EOF                         | true  =>[0] "",                   POP
 ]]},
-    -- Start a shallower directive after returning to Lua.
+    -- Reject a colon shifted right while unwinding to Lua.
     { name="test0024", text=[[
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
-|                             false =>[0] "  : foo: foo.o",     POP
-|                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+      : foo: foo.o          | false =>[2] "indentation prefix \"      : \" does not align with active prefix \"    :     \"", ERROR
 ]]},
     -- Ignore a blank line before a multi-level action unwind.
     { name="test0025", text=[[
@@ -470,15 +482,12 @@ if true then                | false =>[0] "if true then",       nil
   : |                         false =>[1] "",                   POP
 EOF                         | false =>[0] "",                   POP
 ]]},
-    -- Replay an exposed colon line through POP, POP, PUSHCOLON.
+    -- Reject a colon marker shifted left while unwinding nested prefixes.
     { name="test0030", text=[[
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : foo: foo.o              | false =>[1] "  : foo: foo.o",     POP
-|                             false =>[0] "  : foo: foo.o",     POP
-|                             false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+  : foo: foo.o              | false =>[2] "indentation prefix \"  : \" does not align with active prefix \"    :     \"", ERROR
 ]]},
     -- Skip a shallower colon-only line before a new directive.
     { name="test0031", text=[[
