@@ -547,6 +547,39 @@ EOF                         | false =>[2] "",                   POP
 EOF                         | false =>[1] "",                   POP
 EOF                         | false =>[0] "",                   POP
 ]]},
+    -- Reject a shifted directive marker beneath plain action indentation.
+    { name="test0038", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+    echo 'prog'             | true  =>[1] "echo 'prog'",        PUSH
+  : foo: foo.o              | false =>[1] "indentation prefix \"  : \" does not align with active prefix \"    \"", ERROR
+]]},
+    -- A colon without following space is content and unwinds a directive.
+    { name="test0039", text=[[
+: foo: foo.o                | false =>[1] "foo: foo.o",         PUSHCOLON
+:not_a_directive()          | false =>[0] ":not_a_directive()", POP
+EOF                         | false =>[0] "",                    nil
+]]},
+    -- Replay a root colon-only line through several active boundaries.
+    { name="test0040", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+  : foo: foo.o              | true  =>[2] "foo: foo.o",         PUSHCOLON
+  :   echo 'foo'            | true  =>[3] "echo 'foo'",         PUSH
+: |                           false =>[2] ": ",                  POP
+|                             false =>[1] ": ",                  POP
+|                             false =>[0] ": ",                  POP
+EOF                         | false =>[0] "",                    nil
+]]},
+    -- Strip exactly one delimiter space after a directive colon.
+    { name="test0041", text=[[
+:  print("x")               | false =>[1] " print(\"x\")",      PUSHCOLON
+EOF                         | false =>[0] "",                    POP
+]]},
+    -- A root directive after a dependency is not action indentation.
+    { name="test0042", text=[[
+prog: prog.o                | false =>[0] "prog: prog.o",       nil
+: foo: foo.o                | true  =>[1] "foo: foo.o",         PUSHCOLON
+EOF                         | true  =>[0] "",                    POP
+]]},
 
 }
 
