@@ -87,34 +87,13 @@ local function leading_indentation_prefix(line)
     return line:match("^([ \t:]*)")
 end
 
--- A line made entirely from directive prefixes and whitespace is logically
--- blank. It may unwind active prefixes without participating in alignment
--- validation.
-local function is_logically_blank(line)
-    local remainder = line
-
-    while not is_whitespace_only(remainder) do
-        local _, directive_body = split_directive_prefix(remainder)
-
-        if directive_body == nil then
-            return false
-        end
-
-        remainder = directive_body
-    end
-
-    return true
-end
-
 -- Before stripping or changing the active stack, require the old and new
 -- structural prefixes to agree through the shorter prefix. A shorter matching
 -- prefix is an unwind; a longer matching prefix may introduce deeper content.
 local function validate_line_prefix(line)
     local directive_prefix = split_directive_prefix(line)
 
-    if #active_prefixes == 0
-            or is_logically_blank(line)
-            or directive_prefix == ": " then
+    if #active_prefixes == 0 or directive_prefix == ": " then
         return
     end
 
@@ -489,15 +468,12 @@ if true then                | false =>[0] "if true then",       nil
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
   : foo: foo.o              | false =>[2] "indentation prefix \"  : \" does not align with active prefix \"    :     \"", ERROR
 ]]},
-    -- Skip a shallower colon-only line before a new directive.
+    -- Reject a shifted colon marker even when the line has no directive text.
     { name="test0031", text=[[
 if true then                | false =>[0] "if true then",       nil
     : prog: prog.o          | false =>[1] "prog: prog.o",       PUSHCOLON
     :     echo 'prog'       | true  =>[2] "echo 'prog'",        PUSH
-  : |                         false =>[1] "  : ",               POP
-|                             false =>[0] "  : ",               POP
-  : foo: foo.o              | false =>[1] "foo: foo.o",         PUSHCOLON
-EOF                         | true  =>[0] "",                   POP
+  : |                         false =>[2] "indentation prefix \"  : \" does not align with active prefix \"    :     \"", ERROR
 ]]},
     -- Reject indentation that shifts an active colon marker.
     { name="test0032", text=[[
