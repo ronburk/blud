@@ -50,7 +50,7 @@ if ! $LLM ; then
     "$PYTHON" ./generate_lua_index.py
 fi
 
-zip -FS blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore "${LUAJIT_FILES[@]}" *.json -x bludlua.c
+zip -FS blud.zip *.c *.lua *.awk *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore "${LUAJIT_FILES[@]}" *.json -x bludlua.c
 if command -v xclip >/dev/null; then
     echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
 else
