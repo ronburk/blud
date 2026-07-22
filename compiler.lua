@@ -153,19 +153,14 @@ do
 end
 --]]
 
-local TC_EMPTY = { LEADWHITE=true, COMMENT=true }
-local TC_END   = { EOF=true, EOL=true }
-local TC_WORD  = { LUASTART=true, LUAEND=true, WORD=true }
-
-function compile_empty_line(compile_io, token_type, token_text)
-    while TC_EMPTY[token_type] do
-        token_type, token_text = compile_io.get_token()
-    end
-    if not TC_END[token_type] then
-        compile_io.error("Unexpected token: %s", token_text)
-    end
-    return token_type
-end
+local TC_WORD = {
+    LUASTART = true,
+    LUAEND = true,
+    LUA_ELSE = true,
+    LUA_ELSEIF = true,
+    LUA_UNTIL = true,
+    WORD = true,
+}
 
 local function parts_to_body_lua(parts)
     return util.dump(parts)
@@ -269,46 +264,17 @@ local function split_parts_at_colon_operator(parts)
     return nil
 end
 
--- Compile the indented action block following a rule.  The result is Lua
--- source for a function that will expand and execute the action later, when
--- the target's scope and automatic variables are available.
-function compile_action(compile_io)
-    if not compile_io.is_indented_line() then
-        return "nil"
-    end
+local function get_line_record(compile_io, after_dependency)
+    local text, change, again = compile_io.get_line(after_dependency)
+    return {
+        text = text,
+        change = change,
+        again = again,
+    }
+end
 
-    local statements = {}
 
-    local function append_action_line(macro_text)
-        local parts = m.parts_from_text(macro_text)
-        local command = m.parts_to_lua_expression(parts)
-
-        table.insert(
-            statements,
-            "status =  blud.execute(scope, " .. command .. ")" ..
-            "; if status ~= 0 then return status end"
-        )
-    end
-
-    -- The first action line establishes the prefix stripped from every
-    -- subsequent physical line in this action block.
-    local token_type, token_text = compile_io.get_token()
-    assert(token_type == "LEADWHITE")
-    compile_io.push_strip_prefix(token_text)
-
-    token_type, token_text = compile_io.get_token()
-    while token_type ~= "STRIP_END" do
-        if token_type == "EOF" then
-            error("Action strip prefix reached EOF without STRIP_END")
-        elseif token_type ~= "EOL" then
-            local macro_text = token_text .. compile_io.get_line_remainder()
-            append_action_line(macro_text)
-            assert(compile_io.get_token() == "EOL")
-        end
-
-        token_type, token_text = compile_io.get_token()
-    end
-
+local function action_to_lua(statements)
     if #statements == 0 then
         return "nil"
     end
@@ -318,107 +284,206 @@ function compile_action(compile_io)
         " end "
 end
 
+local function append_action_line(statements, macro_text)
+    local parts = m.parts_from_text(macro_text)
+    local command = m.parts_to_lua_expression(parts)
 
--- We don't know what this line is, so we hope it is a dependency rule
---    a b c d :OP: d e f
--- or a target assignment
---    a b c d : name <assign_op> text
--- we are called with the first token on the line, which we know started
--- in column 1.
-function compile_rule_or_target_assignment(compile_io, token_type, token_text)
+    table.insert(
+        statements,
+        "status =  blud.execute(scope, " .. command .. ")" ..
+        "; if status ~= 0 then return status end"
+    )
+end
+
+local compile_directives
+
+local function pop_lookahead(compile_io, record)
+    assert(record.change == compile_io.POP)
+    if record.again then
+        return nil
+    end
+    record.change = nil
+    return record
+end
+
+local function compile_action(compile_io)
+    local record = get_line_record(compile_io, true)
+
+    if record.change ~= compile_io.PUSH then
+        return "nil", record
+    end
+
+    record.change = nil
+    if record.text == nil then
+        record = nil
+    end
+
+    local statements = {}
+
+    while true do
+        if record == nil then
+            record = get_line_record(compile_io, false)
+        end
+
+        if record.change == compile_io.POP then
+            return action_to_lua(statements),
+                   pop_lookahead(compile_io, record)
+        elseif record.change == compile_io.PUSHCOLON then
+            record.change = nil
+            record = compile_directives(compile_io, record, true)
+        elseif record.change == compile_io.PUSH then
+            compile_io.error("Unexpected nested action indentation")
+        elseif record.text == "" then
+            return action_to_lua(statements), record
+        else
+            append_action_line(statements, record.text)
+            record = nil
+        end
+    end
+end
+
+local function compile_rule_or_target_assignment(compile_io)
     local parts = m.parts_from_text(compile_io.get_current_line())
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
     if not operator then
         compile_io.error("Expected dependency rule")
     end
-    -- next step:
-    -- decide whether right begins with target-specific macro assignment
---[[
-    if right_parts and #right_parts > 0 and right_parts[1].type == "text" then
-        print("Should check for target-scoiped macro assign")
-        local macro = match_macro_assign(right_parts[1].text, true)
-        if macro then
-            util.print("Found target-scoped assign: %s", util.dump(macro))
-            -- ok, got to turn lhs into an array of target atoms
-            local left  = blud.Macro.expand_tokens(blud.scope_bludfile, left_parts)
-            local target_names = tokenize_dependency_line(left)
 
-            for i = 1, #target_names do
-                compile_io.emit_line(
-                    "blud.macro_assign_parts(%q, %q, %q, %s)",
-                    target_names[i], macro_name, assign_op, parts_to_body_lua(parts))
-            end
-            error("x")
-        end
-    end
---]]
-    
-    -- otherwise emit blud.add_rule_parts(left, operator, right, action)
-    local action = ""
-    -- eat end of line, if any
-    local token_type, token_text = compile_io.get_token()
-    if token_type ~= "EOF" then
-        assert(token_type == "EOL")
-        action = compile_action(compile_io)
-    end
+    assert(compile_io.get_token() == "EOL")
+    local action, lookahead = compile_action(compile_io)
+
     compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
                          operator,
                          parts_to_body_lua(left_parts),
                          parts_to_body_lua(right_parts),
-                         action or "nil")
+                         action)
+    return lookahead
 end
 
--- compile a block of Lua code
-local function compile_lua(compile_io, token_type, token_text)
-    local blocks = {}
-    while true do
-        local line = compile_io.get_current_line("virtual")
-        if token_type == "EOF" then
-            missing_lua_closer(blocks[#blocks])
-        elseif token_type == "LUASTART" then
-            table.insert(blocks, token_text)
-        elseif token_type == "LUA_ELSEIF" or token_type == "LUA_ELSE" then
-            require_valid_lua_branch(blocks[#blocks], token_text)
-            blocks[#blocks] = token_text
-        elseif token_type == "LUA_UNTIL" then
-            require_repeat(blocks[#blocks])
-            table.remove(blocks)
-        elseif token_type == "LUAEND" then
-            require_end_block(blocks[#blocks])
-            table.remove(blocks)
+local function emit_lua_line(compile_io, line)
+    local parts = m.parts_from_text(line)
+    compile_io.emit_line("%s", m.parts_to_lua(parts))
+end
+
+local function lua_opener(token_text)
+    if token_text == "local" then
+        return "function"
+    end
+    return token_text
+end
+
+local function update_lua_blocks(compile_io, blocks, token_type, token_text)
+    if token_type == "LUASTART" then
+        table.insert(blocks, lua_opener(token_text))
+    elseif token_type == "LUA_ELSEIF" or token_type == "LUA_ELSE" then
+        local block = blocks[#blocks]
+        if block ~= "if" and block ~= "elseif" and block ~= "else" then
+            compile_io.error("Unexpected Lua %s", token_text)
         end
-        emit_lua_line(compile_io, line)
-        if #blocks == 0 then
-            return
+        blocks[#blocks] = token_text
+    elseif token_type == "LUA_UNTIL" then
+        if blocks[#blocks] ~= "repeat" then
+            compile_io.error("Lua until without matching repeat")
         end
-        token_type, token_text = compile_io.get_token()
+        table.remove(blocks)
+    elseif token_type == "LUAEND" then
+        if blocks[#blocks] == nil or blocks[#blocks] == "repeat" then
+            compile_io.error("Lua end without matching block")
+        end
+        table.remove(blocks)
     end
 end
 
-local function compile(compile_io)
+local function first_lua_token(compile_io)
     local token_type, token_text = compile_io.get_token()
-
-    while token_type ~= "EOF" do
-        if TC_EMPTY[token_type] then -- if could be empty line
-            compile_empty_line(compile_io, token_type, token_text)
-        elseif TC_WORD[token_type] and compile_io.peek_assign() then
-            compile_macro_assign(compile_io, token_text)
-        elseif token_type == "LEADWHITE" then
-            compile_io.error("Line looks like action, but is not part of rule")
-        elseif token_type == "LUASTART" then
-            compile_lua(compile_io, token_text)
-        elseif token_type == "EOL" then
-        else
-            compile_rule_or_target_assignment(compile_io, token_type, token_text)
-        end
+    while token_type == "LEADWHITE" do
         token_type, token_text = compile_io.get_token()
+    end
+    return token_type, token_text
+end
+
+local function compile_lua(compile_io, first_record,
+                           first_token_type, first_token_text)
+    local blocks = {}
+    local record = first_record
+    local token_type = first_token_type
+    local token_text = first_token_text
+
+    while true do
+        if record.change == compile_io.PUSHCOLON then
+            record.change = nil
+            record = compile_directives(compile_io, record, true)
+        elseif record.change == compile_io.POP then
+            compile_io.error("Lua block ended before its closing line")
+        elseif record.text == "" then
+            compile_io.error("Lua block reached EOF before its closing line")
+        else
+            if token_type == nil then
+                token_type, token_text = first_lua_token(compile_io)
+            end
+
+            update_lua_blocks(compile_io, blocks, token_type, token_text)
+            emit_lua_line(compile_io, compile_io.get_current_line())
+
+            if #blocks == 0 then
+                return nil
+            end
+
+            record = get_line_record(compile_io, false)
+            token_type = nil
+            token_text = nil
+        end
     end
 end
 
+compile_directives = function(compile_io, first_record, nested)
+    local record = first_record
+
+    while true do
+        if record == nil then
+            record = get_line_record(compile_io, false)
+        end
+
+        if record.change == compile_io.POP then
+            if not nested then
+                compile_io.error("Unexpected structural pop")
+            end
+            return pop_lookahead(compile_io, record)
+        elseif record.change == compile_io.PUSHCOLON then
+            record.change = nil
+            record = compile_directives(compile_io, record, true)
+        elseif record.change == compile_io.PUSH then
+            compile_io.error("Unexpected action indentation")
+        elseif record.text == "" then
+            return record
+        else
+            local token_type, token_text = compile_io.get_token()
+
+            if token_type == "COMMENT" or token_type == "EOL" then
+                record = nil
+            elseif token_type == "LEADWHITE" then
+                compile_io.error("Line looks like action, but is not part of rule")
+            elseif TC_WORD[token_type] and compile_io.peek_assign() then
+                compile_macro_assign(compile_io, token_text)
+                record = nil
+            elseif token_type == "LUASTART" then
+                record = compile_lua(
+                    compile_io,
+                    record,
+                    token_type,
+                    token_text
+                )
+            else
+                record = compile_rule_or_target_assignment(compile_io)
+            end
+        end
+    end
+end
 
 function M.compile(compile_io)
-    compile(compile_io)
+    compile_io.emit_line("local scope = blud.Scope.bludfile")
+    compile_directives(compile_io, nil, false)
 end
 
 return M
