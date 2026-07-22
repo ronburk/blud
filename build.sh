@@ -36,15 +36,9 @@ g++ -o cstr cstr.cpp $CFLAGS
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
-zip -FS blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore "${LUAJIT_FILES[@]}" *.json -x bludlua.c
-if command -v xclip >/dev/null; then
-    echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
-else
-    echo "warning: xclip not found; clipboard not updated (no problem for ChatGPT)" >&2
-fi
 
 if ! $LLM ; then
-    # generate meta-info for ChatGPT
+    # Refresh ChatGPT navigation metadata before packaging it.
     PYTHON="$HOME/.venvs/blud-lua-index/bin/python"
 
     if [ ! -x "$PYTHON" ]; then
@@ -54,6 +48,13 @@ if ! $LLM ; then
 
     echo "$PYTHON" ./generate_lua_index.py
     "$PYTHON" ./generate_lua_index.py
+fi
+
+zip -FS blud.zip *.c *.lua *.cpp *.h *.org builtin.blud build.sh gpatch.sh chatgpt_patch.sh chatgpt_patch_start.sh chatgpt_patch_finish.sh CHATGPT_NOTES.md CLOBBER.sh test.blud test/* bludfile .gitignore "${LUAJIT_FILES[@]}" *.json -x bludlua.c
+if command -v xclip >/dev/null; then
+    echo -n "file://$(realpath ./blud.zip)" | xclip -selection clipboard -t text/uri-list
+else
+    echo "warning: xclip not found; clipboard not updated (no problem for ChatGPT)" >&2
 fi
 
 exit 0

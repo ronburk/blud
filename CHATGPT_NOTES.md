@@ -46,18 +46,15 @@ preflight command.
   by that script. Never link `/mnt/data/chatgpt.patch`.
 - Do not provide a bare diff.
 
-`chatgpt_patch_finish.sh` now regenerates ignored `lua-index.json` after a
-committed root-level Lua change or a committed change to
-`generate_lua_index.py`. It provisions a cached `/tmp` virtual environment when
-needed with:
+`lua-index.json` is generated on Ron's machine before `build.sh` packages the
+project. Treat that uploaded index as accurate for the fresh baseline only.
+It may become stale as ChatGPT edits Lua sources, so use direct source
+inspection for modified files and newly added or renamed functions.
 
-```text
-tree-sitter==0.25.2
-tree-sitter-lua==0.5.0
-```
-
-The index regeneration happens after the clean commit and before patch
-production, so the generated index describes committed `HEAD`.
+`chatgpt_patch_finish.sh` deliberately does not regenerate the index and has no
+Python, tree-sitter, ctags, package-index, or network dependency. The index is
+resynchronized the next time Ron runs `build.sh` and uploads a fresh project
+archive.
 
 ## Current primary work: private variables
 

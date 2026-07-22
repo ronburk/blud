@@ -18,39 +18,6 @@ git -C "$repo" rev-parse HEAD^ >/dev/null 2>&1 || {
     exit 1
 }
 
-index_inputs=$(git -C "$repo" diff-tree --no-commit-id --name-only -r HEAD -- \
-    ':(top,glob)*.lua' \
-    ':(top)generate_lua_index.py')
-if [ -n "$index_inputs" ]; then
-    venv=/tmp/blud-lua-index-venv
-    export PIP_CACHE_DIR=/tmp/blud-pip-cache
-    mkdir -p "$PIP_CACHE_DIR"
-
-    if ! "$venv/bin/python" - <<'PYTHON' 2>/dev/null
-from importlib.metadata import version
-import tree_sitter
-import tree_sitter_lua
-
-assert version("tree-sitter") == "0.25.2"
-assert version("tree-sitter-lua") == "0.5.0"
-PYTHON
-    then
-        rm -rf -- "$venv"
-        python3 -m venv "$venv"
-        "$venv/bin/python" -m pip install \
-            --disable-pip-version-check \
-            --no-input \
-            --only-binary=:all: \
-            'tree-sitter==0.25.2' \
-            'tree-sitter-lua==0.5.0'
-    fi
-
-    (
-        cd "$repo"
-        "$venv/bin/python" ./generate_lua_index.py
-    )
-fi
-
 rm -f "$patch_dir"/chatgpt*.patch
 
 tmp=$(mktemp /mnt/data/.chatgpt-patch.XXXXXX)
