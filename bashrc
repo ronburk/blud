@@ -3,7 +3,7 @@ shopt -s nullglob
 
 GLOBIGNORE=bludlua.c
 ZIP_FILES=(
-*.{c,h,lua,cpp,org,sh,json}
+*.{awk,c,h,lua,cpp,org,sh,json}
 builtin.blud
 CHATGPT_NOTES.md
 test.blud
