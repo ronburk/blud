@@ -31,8 +31,8 @@ echo $BUILD_ID > .build_id
 CFLAGS="-Wall -Wextra -fmax-errors=2"
 # build cstr utility
 g++ -o cstr cstr.cpp $CFLAGS
-# shell.lua is embedded so require("shell") works without a source file at runtime.
-./cstr runtime.lua shell.lua util.lua macro.lua main.lua init.lua blud.lua builtin.blud debugger.lua implicit.lua compiler.lua compile_io.lua operator.lua scope.lua atom.lua >./bludlua.c
+# Embed the Lua modules so they can be loaded without source files at runtime.
+./cstr runtime.lua shell.lua util.lua macro.lua error.lua main.lua init.lua blud.lua builtin.blud debugger.lua implicit.lua compiler.lua compile_io.lua operator.lua scope.lua atom.lua >./bludlua.c
 
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS

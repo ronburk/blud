@@ -32,6 +32,8 @@ function blud.require(name)
     return chunk()  -- Run the chunk (runtime errors will also be caught by xpcall)
 end
 
+local blud_error = blud.require("error.lua")
+
 function blud.parse_command_line()
     local debugger
     local options = {
@@ -129,3 +131,4 @@ end
 
 -- Example test
 blud.require("blud.lua")
+blud_error.finish()
