@@ -52,7 +52,7 @@ function M:BUILD(target_atom)
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
-                error("Don't know how to build: " .. target_atom.NAME)            
+                BLUD_EXIT(1000, target_atom.NAME)
         end
         
         target_atom:PREPARE_PREREQUISITES()
@@ -66,7 +66,7 @@ function M:BUILD(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
-                error("Don't know how to build: " .. target_atom.NAME);
+                BLUD_EXIT(1000, target_atom.NAME);
             end
         end
         target_atom.TIMESTAMP = timestamp
@@ -277,7 +277,7 @@ do  -- : operator
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
-                error("Don't know how to build: " .. target_atom.NAME)
+                BLUD_EXIT(1000, target_atom.NAME)
         end
 
         local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
@@ -290,7 +290,7 @@ do  -- : operator
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
-                error("Don't know how to build: " .. target_atom.NAME);
+                BLUD_EXIT(1000, target_atom.NAME);
             end
         end
         target_atom.TIMESTAMP = timestamp
@@ -422,7 +422,7 @@ do  -- :: operator
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 then
-                error("Don't know how to build: " .. target_atom.NAME)
+                BLUD_EXIT(1000, target_atom.NAME)
             end
         end
 

@@ -187,7 +187,7 @@ local super_atom = {
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if timestamp == 0 then
-            error("Don't know how to build: " .. target_atom.NAME)
+            BLUD_EXIT(1000, target_atom.NAME)
         end
         return timestamp
     end,
