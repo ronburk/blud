@@ -212,15 +212,24 @@ Do not use a shell command solely to determine whether the lease remains valid.
 -----
 
 
-lua-index.json is generated from the root-level Lua sources. Its files
-field is an array of file records, each containing a path and that
-file’s function names, parameter lists, and line ranges. Use it first
-to locate relevant code, discover actual function names, or rule out
-guessed names before reading source files directly; treat it as a
-navigation aid, not authoritative content, and expect it to become
-stale as the source is modified after a fresh upload. Do not regenerate
-it during patch finalization. It is resynchronized when the user runs
-build.sh and uploads a new project archive.
+lua-nav.awk scans the root-level Lua sources directly and reports function
+names, parameter lists, and line ranges. Use it first to locate relevant
+code, discover actual function names, or rule out guessed names before
+reading source files directly.
+
+Run it from /mnt/data/blud, passing the root-level Lua files explicitly:
+
+    awk -f lua-nav.awk -- function_name *.lua
+    awk -f lua-nav.awk -- --file file.lua function_name *.lua
+    awk -f lua-nav.awk -- --regex 'pattern' *.lua
+    awk -f lua-nav.awk -- --list file.lua *.lua
+    awk -f lua-nav.awk -- --source function_name *.lua
+
+Treat its output as a navigation aid rather than authoritative content.
+Because it scans the current source files on every invocation, rerun the
+query after modifying relevant Lua sources.
+
+Do not use or regenerate lua-index.json. It is obsolete.
 
 Treat /mnt/data/blud as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested

@@ -608,31 +608,6 @@ EOF                         | true  =>[0] "",                    POP
 
 }
 
-local test0001 = [[
-prog: prog.o                              -- { type='LINE' }
-    if true then                          -- { type='PUSHINDENT' }  { type='LINE' }
-        $ echo "true"                     -- { type='LINE' }
-                                          -- { type='EMPTY' }
-        if true then                      -- { type='LINE' }
-            $ echo "false"
-            $ echo "but that's ok"
-        end
-    end                                   -- { type='LINE' }
-                                          -- { type='POPINDENT' } { type='EMPTY' }
-]]
-
-local test0002 = [[
-if true then                          -- { type='LINE' }
-    $ echo "true"                     -- { type='LINE' }
-                                      -- { type='EMPTY' }
-    : prog: prog.o
-        if true then                  -- { type='PUSHINDENT' }
-            : foo : foo.o
-            :     echo "but that's ok"
-        end
-end                                   -- { type='POPINDENT' }
-
-]]
 do
 local change_value = {
     PUSH      = PUSH,
