@@ -1,44 +1,128 @@
 --[[
-get_line() is the structural line reader shared by nested source parsers. It
-returns a virtual source line plus an optional stack event: PUSH, PUSHCOLON,
-or POP.
+get_line() is the structural line reader shared by parsers nested inside one
+another. It removes the structural prefix belonging to the surrounding
+parsers, returns the remaining virtual line, and reports at most one stack
+event:
 
-Each non-nil stack event changes the prefix stack by exactly one entry. When
-dependency indentation and a directive marker occur on the same physical
-line, get_line() returns a line-less PUSH first and retains the directive text
-so the following call can return PUSHCOLON.
+    PUSH        enter an action-indentation boundary
+    PUSHCOLON   enter a ": " directive boundary
+    POP         leave one boundary
+    nil         no boundary changed
 
-The prefix stack contains exact text to remove from each physical line. Only
-syntax known to be structural may add a prefix:
+Only two things are structural prefixes:
 
-  * indentation immediately following a dependency line;
-  * a leading ": " directive marker, including any whitespace before it.
+    1. indentation accepted immediately after a dependency line;
+    2. zero or more spaces or tabs followed by the directive marker ": ".
 
-All other indentation belongs to the source language and remains in the
-virtual line. Exact prefix text is stored instead of indentation columns
-because tabs, spaces, and colon markers are semantically distinct.
-
-A nonblank physical line inherits zero or more complete entries from the
-bottom of the active prefix stack. Its inherited depth and the line remaining
-after those prefixes are stripped are calculated once. If deeper stack entries
-must be removed, the analyzed line is retained while one POP is returned per
-call. It is also retained after the final POP when the newly exposed line
-starts with ": " and must subsequently produce PUSHCOLON at the caller's
-level. Otherwise the caller receiving the final POP also receives the exposed
+Other indentation belongs to the source language and remains in the virtual
 line.
 
-Blank physical and virtual lines are skipped internally. At EOF, each call
-removes one active prefix and returns POP. The input reader must continue
-returning nil after its first EOF. The after_dependency argument remains in
-effect while blank lines are skipped, allowing an action to follow its
-dependency after intervening blanks.
+Here is a complete visual example. Dots in the diagrams stand for spaces; they
+are not characters in the input.
 
-When a line contains leading directive prefixes, their structural spaces and
-colon markers must agree with the active prefix through the length of the
-shorter string. Plain leading whitespace is not structural until it is
-accepted as action indentation after a dependency, so it may instead expose a
-line at an outer parser level. A newly exposed ": " prefix is exempt because
-it begins a valid pop-then-push transition.
+    physical source
+    ----------------------------------------------------------------
+    prog: prog.o
+    ....if true then
+    ........: foo: foo.o
+    ........: ....echo 'foo'
+    ....end
+
+At the nested echo, the active prefix stack contains three exact strings:
+
+    action indentation        "...."
+    directive boundary        "....: "
+    nested action indentation "...."
+                               ---------
+    complete prefix           "........: ...."
+
+Therefore:
+
+    physical  "........: ....echo 'foo'"
+    prefix    "........: ...."
+    virtual                 "echo 'foo'"
+
+The corresponding calls look like this:
+
+    returned virtual line   event       active complete prefix afterward
+    ---------------------------------------------------------------------
+    "prog: prog.o"          nil         ""
+    "if true then"          PUSH        "...."
+    "foo: foo.o"            PUSHCOLON   "........: "
+    "echo 'foo'"            PUSH        "........: ...."
+
+The indentation before a directive and the directive marker are separate
+boundaries. Consequently this source:
+
+    prog: prog.o
+    ....: foo: foo.o
+
+is exposed in two calls after the dependency:
+
+    nil                     PUSH
+    "foo: foo.o"            PUSHCOLON
+
+The first call records the four-space action indentation. The second consumes
+the ": " marker. A single physical line can therefore generate more than one
+stack event.
+
+Unwinding works the same way in reverse. Suppose the active complete prefix is:
+
+    "........: ...."
+
+and the next physical line is an outer action line:
+
+    "....echo 'building prog'"
+
+The line inherits only the first four-space entry, so get_line() retains the
+analyzed line and returns one POP per call:
+
+    "echo 'building prog'"   POP     complete prefix is now "........: "
+    "echo 'building prog'"   POP     complete prefix is now "...."
+
+The final POP carries the exposed line to the parser at that level. Earlier
+POPs merely announce boundaries that must be left before that parser can use
+the line.
+
+Prefixes are stored and compared as exact text, not as indentation columns.
+Spaces, tabs, and colon markers are distinct. When a physical line has one or
+more leading directive markers, each colon must remain in the same character
+position as the corresponding colon in the active prefix, through the length
+of the shorter structural prefix.
+
+For example, these prefixes align:
+
+    ruler    12345678
+    active   ..:...:.
+    new      ..:...:.
+
+A shorter prefix may unwind when its visible part still agrees:
+
+    ruler    12345678
+    active   ..:...:.
+    new      ..:.
+
+But shifting the second colon is an error:
+
+    ruler    12345678
+    active   ..:...:.
+    new      ..:.:.
+                ^
+                active prefix has a space here, not a colon
+
+Plain leading whitespace has no structural meaning unless after_dependency is
+true and get_line() accepts it as action indentation. It may therefore expose
+ordinary source text at an outer parser level instead of producing an
+alignment error. A newly exposed root ": " marker is also allowed: the old
+boundaries are popped first, then the same retained line produces PUSHCOLON.
+
+Blank physical lines and virtual lines are skipped internally.
+after_dependency remains in effect while blanks are skipped, so an action may
+follow its dependency after intervening blank lines.
+
+At EOF, get_line() returns one POP per active prefix entry. Once the stack is
+empty it returns "", nil. The supplied line reader must continue returning nil
+after its first EOF.
 ]]--
 
 local PUSH      = "PUSH"
