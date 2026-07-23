@@ -1,0 +1,5 @@
+-- expect: test0012.out
+-- -s suppresses action echoing without suppressing action output.
+
+all:
+    shell bash test/test0012.sh

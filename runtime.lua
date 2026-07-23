@@ -201,13 +201,21 @@ blud.just_print = function(scope)
 end
 
 
+blud.silent = function(scope)
+    return scope:get_boolean(".SILENT")
+end
+
+
 blud.execute = function(scope, text)
     -- util.print("blud.execute(text=%s)", util.dump(text))
     assert(type(text) == "string")
     local status
     if text then
-        print(text)
-        if blud.just_print(scope) then
+        local just_print = blud.just_print(scope)
+        if just_print or not blud.silent(scope) then
+            print(text)
+        end
+        if just_print then
             status = 0
         else
             -- Preserve the action text/status contract while shell.lua

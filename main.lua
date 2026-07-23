@@ -78,6 +78,8 @@ function blud.parse_command_line()
             options.always_make = true
         elseif arg == "-n" then
             options.commandline_booleans[".JUST_PRINT"] = true
+        elseif arg == "-s" or arg == "--silent" or arg == "--quiet" then
+            options.commandline_booleans[".SILENT"] = true
         elseif arg == "-W" then
             i = i + 1
             if i > #args then
