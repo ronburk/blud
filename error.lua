@@ -1,12 +1,12 @@
 -- Structured logical exits for bludfiles.
 --
--- BLUD_ASSERT_EXIT(code, text) records the one logical exit expected by the
--- current invocation. BLUD_EXIT(code, text) exits successfully only when that
--- pair matches; otherwise it reports the logical error or mismatch and fails.
+-- BLUD_ASSERT_EXIT(code, data) records the one logical exit expected by the
+-- current invocation. BLUD_EXIT(code, data) exits successfully only when that
+-- pair matches; BLUD_EXIT(0) records normal completion.
 local expected_code
-local expected_text
+local expected_data
 
-function BLUD_ASSERT_EXIT(code, text)
+function BLUD_ASSERT_EXIT(code, data)
     assert(
         type(code) == "number"
             and code > 0
@@ -15,7 +15,7 @@ function BLUD_ASSERT_EXIT(code, text)
         "BLUD_ASSERT_EXIT() requires a positive integer error code"
     )
     assert(
-        type(text) == "string",
+        type(data) == "string",
         "BLUD_ASSERT_EXIT() requires an error data string"
     )
     assert(
@@ -24,43 +24,48 @@ function BLUD_ASSERT_EXIT(code, text)
     )
 
     expected_code = code
-    expected_text = text
+    expected_data = data
 end
 
-function BLUD_EXIT(code, text)
+function BLUD_EXIT(code, data)
     assert(
         type(code) == "number"
-            and code > 0
+            and code >= 0
             and code < math.huge
             and code == math.floor(code),
-        "BLUD_EXIT() requires a positive integer error code"
+        "BLUD_EXIT() requires a nonnegative integer error code"
     )
-    assert(type(text) == "string", "BLUD_EXIT() requires an error data string")
+
+    if code == 0 then
+        assert(data == nil, "BLUD_EXIT(0) does not accept error data")
+
+        if expected_code ~= nil then
+            io.stderr:write(string.format(
+                "Expected BLUD_EXIT(%d, %q), but blud completed successfully\n",
+                expected_code,
+                expected_data
+            ))
+            os.exit(1)
+        end
+
+        os.exit(0)
+    end
+
+    assert(type(data) == "string", "BLUD_EXIT() requires an error data string")
 
     if expected_code == nil then
-        io.stderr:write(string.format("BLUD error %d: %s\n", code, text))
+        io.stderr:write(string.format("BLUD error %d: %s\n", code, data))
         os.exit(1)
     end
 
-    if code == expected_code and text == expected_text then
+    if code == expected_code and data == expected_data then
         os.exit(0)
     end
 
     io.stderr:write(
         "BLUD_ASSERT_EXIT() did not match BLUD_EXIT():\n",
-        string.format("  expected: %d, %q\n", expected_code, expected_text),
-        string.format("  actual:   %d, %q\n", code, text)
+        string.format("  expected: %d, %q\n", expected_code, expected_data),
+        string.format("  actual:   %d, %q\n", code, data)
     )
     os.exit(1)
-end
-
-return function()
-    if expected_code ~= nil then
-        io.stderr:write(string.format(
-            "Expected BLUD_EXIT(%d, %q), but blud completed successfully\n",
-            expected_code,
-            expected_text
-        ))
-        os.exit(1)
-    end
 end
