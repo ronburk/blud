@@ -42,7 +42,7 @@ Options:
   --lua FILE [ARG]...  Run FILE with embedded LuaJIT; pass remaining arguments.
   -d                    Start the interactive debugger.
   -B                    Rebuild targets regardless of timestamps.
-  --why TARGET          Explain why TARGET was or was not built.
+  --why TARGET          Build normally, then explain TARGET's build decision.
   -n                    Print actions without executing them.
   -s, --silent,
       --quiet           Do not print actions before executing them.
