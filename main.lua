@@ -34,6 +34,22 @@ end
 
 blud.require("error.lua")
 
+local function print_help()
+    print([[Usage: blud [OPTION]... [TARGET]...
+
+Options:
+  -f FILE              Read FILE instead of bludfile.
+  --lua FILE [ARG]...  Run FILE with embedded LuaJIT; pass remaining arguments.
+  -d                    Start the interactive debugger.
+  -B                    Rebuild targets regardless of timestamps.
+  --why TARGET          Explain why TARGET was or was not built.
+  -n                    Print actions without executing them.
+  -s, --silent,
+      --quiet           Do not print actions before executing them.
+  -W ATOM               Assume ATOM is newly changed.
+  -h, --help            Show this help and exit.]])
+end
+
 function blud.parse_command_line()
     local debugger
     local options = {
@@ -47,7 +63,10 @@ function blud.parse_command_line()
     while i <= #args do
         local arg = args[i]
 
-        if arg == "-f" then
+        if arg == "-h" or arg == "--help" then
+            print_help()
+            os.exit(0)
+        elseif arg == "-f" then
             i = i + 1
             if i <= #args then
                 options.bludfile_path = args[i]
