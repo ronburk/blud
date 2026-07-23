@@ -16,6 +16,18 @@ end
 blud.sources = {}
 blud.sources["[main.lua]"] = CSTRGet("main.lua")
 
+table.insert(package.loaders, 1, function(modname)
+    local filename = modname .. ".lua"
+    local source = CSTRGet(filename)
+    if source == nil then
+        return nil, "\n\tmodule '" .. modname .. "' not found in embedded strings"
+    end
+
+    local safe_name = "[" .. filename .. "]"
+    blud.sources[safe_name] = source
+    return assert(load(source, safe_name))
+end)
+
 -- .require now only handles error handling via xpcall
 function blud.require(name)
     local source = CSTRGet(name)

@@ -33,19 +33,6 @@ atom
     May also contain PREREQUISITES, ACTION, TYPE, BOUND_NAME, etc.
 --]]
 
--- Insert custom loader at the beginning of package.loaders
-table.insert(package.loaders, 1, function(modname)
-    local filename = modname .. ".lua"
-    local code = CSTRGet(filename)
-    if code then
-        -- Load the code and return the module function
-        return assert(loadstring(code, "@" .. filename))
-    else
-        -- Return nil and an error message to continue to the next loader
-        return nil, "\n\tmodule '" .. modname .. "' not found in embedded strings"
-    end
-end)
-
 local function dump(o, seen)
     seen = seen or {}  -- Initialize the seen table if it's not passed in
     if type(o) == 'table' then
