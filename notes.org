@@ -95,6 +95,7 @@ means the following when 'test' is built:
 
 ** ChatGPT Project Instructions
 
+
 Sometimes the user wants to do something that contradicts the
 suggestions here. Any prompt the user gives that begins with "!"
 should cause you to ignore all these instructions and only
@@ -109,105 +110,60 @@ space.
 Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
-Before any response that reads, modifies, or relies on /mnt/data/blud or a blud-upload-*.zip, run exactly:
-    bash -c 'cd /mnt/data; shopt -s nullglob; rm -f -- /mnt/data/*\).zip; f=(blud-upload-0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip); ((${#f[@]})) || exit 255; f=${f[-1]}; ts=${f#blud-upload-}; [ "$(stat -c %Y -- "$f")" -le "$((10#${ts%.zip}))" ] || exit 255'
-If this command fails, stop current task, show the user the output of EXACTLY
-'ls -al /mnt/data' and then perform `.FRESH`.
 
-After every successful preflight check or successful .FRESH rebuild:
+GITHUB WORKFLOW
 
-1. Use a non-shell time tool to obtain the current time.
-2. Record PRECHECK_VALID_UNTIL as exactly 400 seconds after that time.
+The authoritative blud source is:
+https://github.com/ronburk/blud
 
-Before any later operation that would normally require preflight:
+GitHub is the sole authoritative source for blud. Ignore all attached
+or restored blud archives, including blud.zip and
+blud-upload-*.zip. Do not inspect, extract, compare, or use them
+unless I explicitly direct you to use a particular upload. Their
+presence does not indicate that they are current or relevant.
 
-1. If a new blud-upload-*.zip was attached, invalidate the lease and follow
-   the new-upload/.FRESH workflow.
-2. If filesystem trouble was observed, invalidate the lease and run the
-   normal preflight.
-3. Otherwise, use a non-shell time tool to obtain the current time.
-4. If the current time is earlier than PRECHECK_VALID_UNTIL, skip preflight.
-5. If the lease has expired, is missing, or the current time cannot be
-   determined reliably, run the normal preflight.
 
-Do not rerun preflight merely because a new user turn has begun.
-Do not use a shell command solely to determine whether the lease remains valid.
+For local execution, obtain the source from
+https://github.com/ronburk/blud. Never use an uploaded archive merely
+because it is locally available.  Place the checkout in a blud
+subdirectory of the current scratch workspace. Once chosen, use that
+same checkout for the entire chat/environment.
 
-.FRESH
-    If no new `blud-upload-*.zip` is attached to the current message,
-    ask the user to upload one and stop.
+Use the existing local checkout when present. Clone into ./blud only
+when no usable checkout exists.
 
-    Otherwise run exactly:
+Before starting repository work, verify that the checkout is clean, fetch
+from GitHub, and fast-forward it to the current origin/main. Do not merge,
+rebase, reset, discard changes, or otherwise repair an unexpected checkout.
+If it cannot be updated by a clean fast-forward, stop and explain the
+discrepancy.
 
-        bash -lc '
-        set -euo pipefail
-        cd /mnt/data
-        shopt -s nullglob
-        files=(blud-upload-0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip)
-        ((${#files[@]}))
-        archive=${files[${#files[@]}-1]}
-        unzip -p -- "$archive" CLOBBER.sh |
-            bash -s -- "/mnt/data/$archive"
-        '
+Use the connected GitHub app for GitHub operations. Do not require gh
+authentication or an uploaded blud.zip when GitHub contains the desired
+source.
 
-    The `CLOBBER.sh` stored in the archive is responsible for validating
-    the archive and rebuilding `/mnt/data/blud`.
+For each requested change:
 
-    Treat any newly uploaded `blud-upload-*.zip` as an implicit `.FRESH`.
+1. Synchronize the local checkout with the current origin/main.
+2. Create a new descriptively named branch from that exact main commit.
+3. Make only the requested changes in the local checkout.
+4. Run the relevant builds and tests.
+5. Commit only to the new branch, using a concise imperative subject and a
+   body describing the behavior, implementation, design constraints, and
+   validation.
+6. Use the connected GitHub app to create or update the corresponding remote
+   branch and open a draft pull request targeting main.
+7. Return the PR link and a concise summary of the changes and validation.
 
-.PATCH
-    Complete any unfinished changes we have been discussing.
+Never commit or push directly to main unless I explicitly request a direct
+commit. Never merge a pull request unless I explicitly request it.
 
-    In /mnt/data/blud:
-    1. Run the relevant build/tests.
-    2. Ensure only the intended non-ignored source changes remain.
-    3. Stage those changes and commit them as one well-described commit,
-       following the commit message requirements below.       
-    4. Run:
-           bash chatgpt_patch_finish.sh
-    5. If the script exits nonzero, report the failure and do not supply a patch.
-    6. Supply the exact uniquely named patch path (inside /mnt/data/tmp) printed by that script.
+Do not modify, close, delete, or reuse unrelated branches or pull requests.
+If GitHub state differs unexpectedly from the task’s assumed baseline, stop
+and explain the discrepancy.
 
-    Never supply or link /mnt/data/chatgpt.patch. Ensure the text of the link the user
-    clicks on to download the patch contains the "name" of the patch.
-    Link only the exact uniquely named file printed by the script.
-    The user may download it locally under the fixed name chatgpt.patch.
-
-    Do not provide a bare git diff.
-
-    Commit message requirements:
-    - Use a concise imperative subject.
-    - Include a non-empty body describing:
-        1. what behavior changed;
-        2. where the change was implemented;
-        3. why this design was chosen and which important semantics or
-           constraints it preserves;
-        4. what validation was run.
-    - Describe the conceptual change, not merely a list of modified files.
-    - The message should let a reader understand the purpose and design
-      without first reading the diff.
-    - Omit the body only for genuinely trivial changes whose purpose is fully
-      explained by the subject.
-
-.REVERT
-    Use git commands to revert the project in /mnt/data/blud. In this context,
-    "revert" means use git to return it to the state it had at the
-    previous /PATCH (undo the work of the current /PATCH). If there is
-    no previous /PATCH, then use git to revert the repo to its initial state.
-.LS
-    Execute this command and show the results:
-        TZ=America/Los_Angeles ls -al  /mnt/data /mnt/data/blud
-    It is extremely important that you actually execute this command
-    and not just manufacture it yourself, otherwise the user has no
-    way of determining the state of your working environment.  DO NOT
-    ALTER the output of the 'ls' command before giving it to the user!
-    DO present the output in a fixed font, so the columns line up.
-
-.RUN
-    When the user writes `.RUN`, immediately execute the exact command
-    with `container.exec`. Do not paraphrase, modify, simulate, or infer
-    its result. Report only the actual stdout, stderr, and exit status
-    returned by the tool.
+Uploads are needed only when I explicitly want work based on local changes
+that are not present in GitHub.
 
 -----
 
@@ -217,7 +173,7 @@ names, parameter lists, and line ranges. Use it first to locate relevant
 code, discover actual function names, or rule out guessed names before
 reading source files directly.
 
-Run it from /mnt/data/blud, passing the root-level Lua files explicitly:
+Run it from the root of the local blud checkout.
 
     awk -f lua-nav.awk -- function_name *.lua
     awk -f lua-nav.awk -- --file file.lua function_name *.lua
@@ -231,7 +187,7 @@ query after modifying relevant Lua sources.
 
 Do not use or regenerate lua-index.json. It is obsolete.
 
-Treat /mnt/data/blud as disposable. During normal work, limit Git
+Treat the local blud checkout as disposable. During normal work, limit Git
 writes to staging explicit intended files and creating the requested
 commit or commits. Do not repair, rewrite, reconstruct, merge, rebase,
 cherry-pick, apply patches, or synthesize repository history. If the
@@ -239,6 +195,26 @@ worktree, index, or commit ancestry is not exactly as expected, stop
 and run .FRESH. Git recovery operations are permitted only for an
 explicit .REVERT or inside the established bootstrap/finalization
 scripts.
+
+EXTERNAL TODO LIST
+
+My persistent hierarchical todo list is at:
+https://project-todo-tree.ronburk.chatgpt.site/access/6de1847620c0c24a63535ef97419c5a20cdc9615e65d7962
+When I ask about my todo list, open and operate that Site using the browser.
+
+The Site stores the list itself. To read it, inspect the rendered task hierarchy. To modify it:
+
+Use “New top-level task” and “Add item” to create a root item.
+Use “Add child under NAME” to create a child.
+Use “Rename NAME” to edit an item’s title.
+Use “Complete NAME” or “Reopen NAME” to change completion state.
+Use “Move NAME under” to change its parent.
+Use “Delete NAME” to delete an item and its descendants.
+
+After changing anything, reread the affected portion and report the
+resulting hierarchy. Do not delete tasks unless I explicitly request
+deletion.
+
 
 
 
