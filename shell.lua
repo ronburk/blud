@@ -167,6 +167,53 @@ local function shell(text)
     return os.execute(text)
 end
 
+-- Implement `cp [-r|-R] [--] source destination`. argv[1] is "cp".
+local function cp(argv)
+    local recursive = false
+    local paths = {}
+    local options = true
+
+    for i = 2, #argv do
+        local arg = argv[i]
+        if options and arg == "--" then
+            options = false
+        elseif options and (arg == "-r" or arg == "-R") then
+            recursive = true
+        elseif options and arg:sub(1, 1) == "-" and arg ~= "-" then
+            return diagnostic("cp", "unsupported option '" .. arg .. "'")
+        else
+            options = false
+            paths[#paths + 1] = arg
+        end
+    end
+
+    if #paths == 0 then
+        return diagnostic("cp", "missing file operand")
+    elseif #paths == 1 then
+        return diagnostic("cp", "missing destination operand")
+    elseif #paths > 2 then
+        return diagnostic("cp", "too many operands")
+    end
+
+    local source_type = os_path_type(paths[1])
+    local result
+    if source_type == 2 then
+        if not recursive then
+            return diagnostic("cp", "cannot copy directory '" .. paths[1] .. "' without -r")
+        end
+        result = os_copy_dir(paths[1], paths[2])
+    else
+        result = os_copy_file(paths[1], paths[2])
+    end
+
+    if result ~= 0 then
+        return diagnostic("cp", "cannot copy '" .. paths[1] .. "' to '" .. paths[2] .. "'")
+    end
+
+    invalidate_directory_cache()
+    return 0
+end
+
 -- Implement `touch [-c|--no-create] [--] path...`. argv[1] is "touch";
 -- return 0 on success and 1 after emitting the first diagnostic.
 local function touch(argv)
@@ -503,6 +550,7 @@ end
 -- argv; `shell` is selected before parsing and receives the verbatim remainder.
 M.commands = {
     cd = cd,
+    cp = cp,
     echo = echo,
     mkdir = mkdir,
     rm = rm,
