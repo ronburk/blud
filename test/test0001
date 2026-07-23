@@ -3,7 +3,7 @@
 -- Simple test to make sure SOMETHING works
 
 do
-    BLUD_ASSERT_EXIT(1001, 'non_existent.o')
+    BLUD_ASSERT_EXIT(1000, 'non_existent.o')
     : prog: non_existent.o
     :     gcc -o prog $(CFLAGS) non_existent.o
 end
