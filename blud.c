@@ -339,6 +339,26 @@ static int lua_os_setcwd(lua_State *L) {
     return 1;
 }
 
+// Lua: status = os_copy_file(from, to)
+// status is 0 on success or -1 on failure.
+static int lua_os_copy_file(lua_State *L) {
+    const char* from = luaL_checkstring(L, 1);
+    const char* to = luaL_checkstring(L, 2);
+
+    lua_pushinteger(L, os_copy_file(from, to));
+    return 1;
+}
+
+// Lua: status = os_copy_dir(from, to)
+// status is 0 on success or -1 on failure.
+static int lua_os_copy_dir(lua_State *L) {
+    const char* from = luaL_checkstring(L, 1);
+    const char* to = luaL_checkstring(L, 2);
+
+    lua_pushinteger(L, os_copy_dir(from, to));
+    return 1;
+}
+
 static int lua_os_mkdir(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
 
@@ -537,6 +557,8 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_getcwd", lua_os_getcwd);
     lua_register(L, "os_setcwd", lua_os_setcwd);
     lua_register(L, "get_dir_cache", lua_get_dir_cache);
+    lua_register(L, "os_copy_file", lua_os_copy_file);
+    lua_register(L, "os_copy_dir", lua_os_copy_dir);
     lua_register(L, "os_mkdir", lua_os_mkdir);
     // Filesystem primitives used by shell.lua; wrapper comments above document
     // their exact global Lua signatures and return values.
