@@ -96,22 +96,131 @@ local function quoted(name)
     return string.format("%q", name)
 end
 
-local function goal_description(primary_targets)
-    if blud.command_line_options.target_names then
-        local names = {}
-        for _, target in ipairs(primary_targets) do
-            table.insert(names, quoted(target.NAME))
+local function add_unique(values, seen, value)
+    if not seen[value] then
+        seen[value] = true
+        table.insert(values, value)
+    end
+end
+
+local function build_reverse_rules()
+    local defined = {}
+    local reverse = {}
+    local reverse_seen = {}
+
+    for _, rule in ipairs(blud.rules) do
+        local prerequisites =
+            rule.operator:GLOB_PREREQUISITE_WORDS(rule.prereq_words or {})
+
+        for _, target in ipairs(rule.targets or {}) do
+            local target_name = target.NAME
+            defined[target_name] = true
+
+            for _, prerequisite_name in ipairs(prerequisites) do
+                local parents = reverse[prerequisite_name]
+                if not parents then
+                    parents = {}
+                    reverse[prerequisite_name] = parents
+                    reverse_seen[prerequisite_name] = {}
+                end
+                add_unique(
+                    parents,
+                    reverse_seen[prerequisite_name],
+                    target_name
+                )
+            end
         end
-        if #names == 1 then
-            return "the requested target " .. names[1]
-        end
-        return "the requested targets " .. table.concat(names, ", ")
     end
 
-    if blud.default_target then
-        return "the default target " .. quoted(blud.default_target.NAME)
+    return defined, reverse
+end
+
+local function find_roots(name, reverse)
+    local roots = {}
+    local root_seen = {}
+    local visiting = {}
+    local visited = {}
+
+    local function visit(current)
+        if visiting[current] or visited[current] then
+            return
+        end
+
+        visiting[current] = true
+
+        local parents = reverse[current]
+        if not parents or #parents == 0 then
+            add_unique(roots, root_seen, current)
+        else
+            for _, parent in ipairs(parents) do
+                visit(parent)
+            end
+        end
+
+        visiting[current] = nil
+        visited[current] = true
     end
-    return "the selected build"
+
+    visit(name)
+    return roots
+end
+
+local function selected_targets(primary_targets)
+    local selected = {}
+    for _, target in ipairs(primary_targets) do
+        selected[target.NAME] = true
+    end
+    return selected
+end
+
+local function report_unreached(name, primary_targets)
+    local defined, reverse = build_reverse_rules()
+    if not defined[name] then
+        print(string.format(
+            "%s was not built because no target with that name was defined.",
+            quoted(name)
+        ))
+        return
+    end
+
+    local roots = find_roots(name, reverse)
+    if #roots == 0 then
+        print(string.format(
+            "%s was not built, but no path to a root could be determined.",
+            quoted(name)
+        ))
+        return
+    end
+
+    local selected = selected_targets(primary_targets)
+    for _, root in ipairs(roots) do
+        if selected[root] then
+            if root == name then
+                print(string.format(
+                    "%s was not built even though it was a root target.",
+                    quoted(name)
+                ))
+            else
+                print(string.format(
+                    "%s was not built even though %s was a root target.",
+                    quoted(name),
+                    quoted(root)
+                ))
+            end
+        elseif root == name then
+            print(string.format(
+                "%s was not built because it was not a root target.",
+                quoted(name)
+            ))
+        else
+            print(string.format(
+                "%s was not built because %s was not built because " ..
+                "it was not a root target.",
+                quoted(name),
+                quoted(root)
+            ))
+        end
+    end
 end
 
 local function rebuild_reason(reason, prerequisite)
@@ -140,8 +249,6 @@ function M.report(primary_targets)
     end
 
     local current = state
-    local target = blud.TARGETS[name]
-
     if current and current.built then
         print(string.format(
             "%s was built because %s.",
@@ -166,17 +273,8 @@ function M.report(primary_targets)
             "%s was not built because it was up to date.",
             quoted(name)
         ))
-    elseif target then
-        print(string.format(
-            "%s was not built because it was not needed to build %s.",
-            quoted(name),
-            goal_description(primary_targets)
-        ))
     else
-        print(string.format(
-            "%s was not built because no target with that name was defined.",
-            quoted(name)
-        ))
+        report_unreached(name, primary_targets)
     end
 end
 
