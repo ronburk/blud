@@ -2,11 +2,10 @@
 --
 -- Simple test to make sure SOMETHING works
 
-TEST=foo
 do
-    assert($(TEST) == "foo")
+    BLUD_ASSERT_EXIT(1001, 'non_existent.o')
     : prog: prog.o
-    :     gcc -o prog $(CFLAGS) prog.o
+    :     gcc -o prog $(CFLAGS) non_existent.o
 end
 CFLAGS += -g
 all: prog
