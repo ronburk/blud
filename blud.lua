@@ -334,6 +334,7 @@ if blud.primary_targets == nil then
 else
     blud.build_init()
     blud.build_targets(blud.primary_targets)
+    blud.why.report(blud.primary_targets)
 end
 ]]
 
@@ -577,6 +578,7 @@ blud.build_init()
 -- util.print("%d targets %s", #blud.primary_targets, util.dump(blud.primary_targets))
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
+blud.why.report(blud.primary_targets)
 
 
 --[[

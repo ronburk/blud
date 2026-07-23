@@ -6,6 +6,12 @@
 local expected_code
 local expected_data
 
+local function report_why()
+    if blud.why then
+        blud.why.report(blud.primary_targets or {})
+    end
+end
+
 function BLUD_ASSERT_EXIT(code, data)
     assert(
         type(code) == "number"
@@ -48,6 +54,7 @@ function BLUD_EXIT(code, data)
             os.exit(1)
         end
 
+        report_why()
         os.exit(0)
     end
 
@@ -59,6 +66,7 @@ function BLUD_EXIT(code, data)
     end
 
     if code == expected_code and data == expected_data then
+        report_why()
         os.exit(0)
     end
 

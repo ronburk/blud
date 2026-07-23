@@ -76,6 +76,15 @@ function blud.parse_command_line()
             debugger.probe = debugger.real_probe
         elseif arg == "-B" then
             options.always_make = true
+        elseif arg == "--why" then
+            i = i + 1
+            if i > #args then
+                error("--why requires a target name")
+            end
+            if options.why_target_name then
+                error("--why may be specified only once")
+            end
+            options.why_target_name = args[i]
         elseif arg == "-n" then
             options.commandline_booleans[".JUST_PRINT"] = true
         elseif arg == "-s" or arg == "--silent" or arg == "--quiet" then

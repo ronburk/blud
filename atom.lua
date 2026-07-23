@@ -167,6 +167,8 @@ local super_atom = {
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
     BUILD = function(target_atom)
+        blud.why.reached(target_atom)
+
         if target_atom.PARENT then
             target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
         end
@@ -189,6 +191,7 @@ local super_atom = {
         if timestamp == 0 then
             BLUD_EXIT(1000, target_atom.NAME)
         end
+        blud.why.considered(target_atom, timestamp, 0, nil, false)
         return timestamp
     end,
     BUILD_PREREQUISITES = function(atom)
@@ -201,6 +204,7 @@ local super_atom = {
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
         local newest_time = 0
+        local newest_prerequisite
         if prerequisites and #prerequisites > 0 then
             -- util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
             for _, prereq_name in ipairs(prerequisites) do
@@ -209,11 +213,12 @@ local super_atom = {
                 local this_time = prerequisite.BUILD(prerequisite)
                 if this_time > newest_time then
                     newest_time = this_time
+                    newest_prerequisite = prerequisite
                 end
             end
         end
 --        print("newest time is ", newest_time)
-        return newest_time
+        return newest_time, newest_prerequisite
     end,
     DO_ACTION = function(target_atom)
         local action

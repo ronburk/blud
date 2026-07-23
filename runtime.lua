@@ -1457,6 +1457,7 @@ end
 ]=]
 
 blud.current_time = os.time()
+blud.why = require("why")
 blud.shallow_copy = function (original)
     local copy = {}
     for key, value in pairs(original) do

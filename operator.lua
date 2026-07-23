@@ -56,13 +56,25 @@ function M:BUILD(target_atom)
         end
         
         target_atom:PREPARE_PREREQUISITES()
-        local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
+        local newest_prerequisite_time, newest_prerequisite =
+            target_atom.BUILD_PREREQUISITES(target_atom)
         -- print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
-        -- print("    versus ", newest_prerequisite)
-        if target_needs_building(newest_prerequisite, timestamp) then
+        -- print("    versus ", newest_prerequisite_time)
+        local needs_building =
+            target_needs_building(newest_prerequisite_time, timestamp)
+        blud.why.considered(
+            target_atom,
+            timestamp,
+            newest_prerequisite_time,
+            newest_prerequisite,
+            needs_building
+        )
+        if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.why.action_started(target_atom)
                 target_atom:DO_ACTION()
+                blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
@@ -280,13 +292,25 @@ do  -- : operator
                 BLUD_EXIT(1000, target_atom.NAME)
         end
 
-        local newest_prerequisite = target_atom.BUILD_PREREQUISITES(target_atom)
+        local newest_prerequisite_time, newest_prerequisite =
+            target_atom.BUILD_PREREQUISITES(target_atom)
 --        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
---        print("    versus ", newest_prerequisite)
-        if target_needs_building(newest_prerequisite, timestamp) then
+--        print("    versus ", newest_prerequisite_time)
+        local needs_building =
+            target_needs_building(newest_prerequisite_time, timestamp)
+        blud.why.considered(
+            target_atom,
+            timestamp,
+            newest_prerequisite_time,
+            newest_prerequisite,
+            needs_building
+        )
+        if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.why.action_started(target_atom)
                 target_atom:DO_ACTION()
+                blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
@@ -379,6 +403,7 @@ do  -- :: operator
 
     local function build_prepared_prerequisites(target_atom)
         local newest_time = 0
+        local newest_prerequisite
         local prerequisites = target_atom.PREREQUISITES or {}
 
         for _, prerequisite in ipairs(prerequisites) do
@@ -387,10 +412,11 @@ do  -- :: operator
             local this_time = prerequisite:BUILD()
             if this_time > newest_time then
                 newest_time = this_time
+                newest_prerequisite = prerequisite
             end
         end
 
-        return newest_time
+        return newest_time, newest_prerequisite
     end
 
     function op:BUILD(target_atom)
@@ -414,11 +440,23 @@ do  -- :: operator
 
         local timestamp = target_atom:get_timestamp()
 
-        local newest_prerequisite = build_prepared_prerequisites(target_atom)
-        if target_needs_building(newest_prerequisite, timestamp) then
+        local newest_prerequisite_time, newest_prerequisite =
+            build_prepared_prerequisites(target_atom)
+        local needs_building =
+            target_needs_building(newest_prerequisite_time, timestamp)
+        blud.why.considered(
+            target_atom,
+            timestamp,
+            newest_prerequisite_time,
+            newest_prerequisite,
+            needs_building
+        )
+        if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.why.action_started(target_atom)
                 target_atom:DO_ACTION()
+                blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 then
