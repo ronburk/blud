@@ -8,6 +8,9 @@ do
     :     gcc -o prog $(CFLAGS) non_existent.o
 end
 CFLAGS += -g
-all: prog
+talk:
+    echo "echo 1"
+    echo "echo 2"
+all: talk prog
     echo "test001 worked"
     touch test0001.out
