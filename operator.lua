@@ -1,7 +1,7 @@
 local debugger = require("debugger")
 
-local M= {} -- super class for all operators
-M.__index = M  -- search super class for missing fields
+local M= {} -- default behavior inherited by concrete operators
+M.__index = M
 
 local function target_needs_building(newest_prerequisite, timestamp)
     return blud.command_line_options.always_make or
@@ -12,7 +12,8 @@ M.operator_new   = function(t)
     return setmetatable(t, M)
 end
 
-    -- BIND: associate an atom with an actual filename
+-- Generated targets bind under OWD; source-only targets bind under SWD.
+-- The presence of an action is what distinguishes the two.
 function M:BIND(atom)
     if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
     local action = atom:get_action()
@@ -33,6 +34,7 @@ function M:BIND(atom)
     return atom
 end
 
+-- Default timestamp-driven build used by aggregate-like operators.
 function M:BUILD(target_atom)
         -- util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
         
@@ -42,7 +44,7 @@ function M:BUILD(target_atom)
         end
         target_atom.BUILDING   = true
         if not target_atom.RULE then
-            -- must try implicit rules now
+            -- Resolve implicit rules lazily, when a target is actually requested.
             local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
             -- util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
             if implicit_rule then
@@ -55,6 +57,7 @@ function M:BUILD(target_atom)
                 BLUD_EXIT(1000, target_atom.NAME)
         end
         
+        -- Operators may materialize or rewrite prerequisites once build scope exists.
         target_atom:PREPARE_PREREQUISITES()
         local newest_prerequisite_time, newest_prerequisite =
             target_atom.BUILD_PREREQUISITES(target_atom)
@@ -75,6 +78,7 @@ function M:BUILD(target_atom)
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION()
                 blud.why.action_completed(target_atom)
+                -- Record successful actions even when they do not create a file.
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == 0 and not target_atom.RULE then
@@ -86,7 +90,7 @@ function M:BUILD(target_atom)
         return timestamp
     end
 
--- prepare prerequisites for this atom to be built
+-- Hook for operators that lazily materialize or rewrite prerequisites.
 function M:PREPARE_PREREQUISITES(atom)
 end
 
@@ -137,7 +141,7 @@ function M:GROUP_TARGETS(target_words, prereq_words, action)
     return false
 end
 
--- tokenized, but not yet atomized
+-- Parsed target words are normally independent rules; an operator can group them.
 function M:ADD_RULES(target_words, prereq_words, action)
 --[[
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
@@ -148,6 +152,7 @@ function M:ADD_RULES(target_words, prereq_words, action)
     
     for i=1, #targets do
         local target_atom = targets[i]
+        -- The first target accepted by its operator becomes the default.
         if not blud.default_target then
             local default_target = self:SET_PRIMARY_TARGETS(target_atom)
             if default_target then
@@ -201,6 +206,7 @@ end
 function M:ADD_RULE(target, prereq_words, action)
    -- util.array_append(target.PREREQUISITES, prereqs)
 --    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
+    -- Repeated declarations accumulate prerequisites until one supplies the action.
     local rule = target.RULE
     if not rule then
         rule              = {}
@@ -253,7 +259,7 @@ end
 
 --]]
 
-do  -- : operator
+do  -- Ordinary explicit dependency rules.
     local op = M.operator_new({})
     blud.operators[":"] = op
     function op:SET_PRIMARY_TARGETS(target_atom)
@@ -264,6 +270,7 @@ do  -- : operator
     function op:BUILD(target_atom)
         local parent_name = ''
         if target_atom.PARENT then
+            -- Prerequisites inherit target-specific variables from their parent.
             parent_name = target_atom.PARENT.NAME .. ' : '
             target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
         end
@@ -278,7 +285,7 @@ do  -- : operator
         end
         target_atom.BUILDING   = true
         if not target_atom.RULE then
-            -- must try implicit rules now
+            -- Resolve implicit rules lazily, when a target is actually requested.
             local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
 --            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
             if implicit_rule then
@@ -323,7 +330,7 @@ do  -- : operator
     end
 end
 
-do  -- %: operator
+do  -- Pattern rules are registered for later implicit-rule lookup.
     local op = M.operator_new({})
     blud.operators["%:"] = op
     function op:SET_PRIMARY_TARGETS(target_atom)
@@ -339,6 +346,7 @@ do  -- %: operator
             prereq_words[i] = prereq_words[i].NAME
         end
 --]]
+        -- Pattern rules live in the implicit-rule index, not on the pattern atom.
         local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_names, action)
         if errmsg then
             blud.error(errmsg)
@@ -346,7 +354,7 @@ do  -- %: operator
     end
 end
 
-do  -- :: operator
+do  -- Source lists: compile each source through a reverse rule, then link.
     local op = M.operator_new({})
     blud.operators["::"] = op
 
@@ -354,6 +362,7 @@ do  -- :: operator
         local source_rule = target_atom.RULE
         assert(source_rule)
 
+        -- Expansion is deferred until build scope is known, then cached.
         if source_rule.source_rule_prepared then
             return
         end
@@ -373,6 +382,7 @@ do  -- :: operator
                 blud.error("no reverse rule for %s", prereq_name)
             end
 
+            -- Any C++ source selects the C++ default linker.
             if util.match_or(prereq_name, "%.cpp$|%.cxx$|%.cc$") then
                 link_macro = "LINK.cxx.o"
             end
@@ -392,6 +402,7 @@ do  -- :: operator
 
         target_atom.PREREQUISITES = new_prereqs
 
+        -- An explicit action wins; otherwise use the selected link macro.
         if not source_rule.action or source_rule.action == blud.default_action then
             source_rule.action = function(scope, status)
                 return blud.execute(scope, scope:get_text(link_macro))
@@ -406,6 +417,7 @@ do  -- :: operator
         local newest_prerequisite
         local prerequisites = target_atom.PREREQUISITES or {}
 
+        -- These prerequisites are already atoms, so bypass word expansion.
         for _, prerequisite in ipairs(prerequisites) do
             prerequisite:BIND()
             prerequisite.PARENT = target_atom
@@ -470,7 +482,7 @@ do  -- :: operator
     end
 end
 
-do
+do  -- Test suites aggregate one generated success-log target per test.
     local op = M.operator_new({})
     blud.operators[":TEST:"] = op
 
@@ -479,6 +491,7 @@ do
     end
 
     local function suite_source_directory(suite_name)
+        -- Relative test atoms use SWD to bind back into the suite directory.
         if is_absolute_path(suite_name) or suite_name:match("^%./") then
             return suite_name
         end
@@ -486,6 +499,8 @@ do
     end
 
     local function expand_test_words(suite_name, prereq_words)
+        -- Glob relative patterns inside the suite while keeping atom names
+        -- suite-relative; SWD supplies the removed prefix when they bind.
         local tests = {}
         local suite_prefix = suite_name .. "/"
         local source_directory = suite_source_directory(suite_name)
@@ -513,6 +528,7 @@ do
     end
 
     local function test_log_name(basename)
+        -- Log names are relative to suite OWD and nested beside staged files.
         return basename .. "/" .. basename .. ".log"
     end
 
@@ -526,6 +542,9 @@ do
     end
 
     local function stage_test(test_info, scope)
+        -- Recreate the private test tree immediately before its action. Directory
+        -- tests copy directly to the destination; file tests become dest/basename.
+        -- Return shell status so a staging failure suppresses action and success log.
         if blud.just_print(scope) then
             return 0
         end
@@ -540,6 +559,7 @@ do
         end
         local source_type = os_path_type(source)
 
+        -- Reuse virtual-shell commands so staging shares their path semantics.
         local commands = blud.shell.commands
         local status = commands.rm({
             "rm", "-rf", "--", test_info.destination,
@@ -554,6 +574,7 @@ do
             })
         end
 
+        -- Make file destinations directories so cp preserves the source basename.
         status = commands.mkdir({
             "mkdir", "-p", "--", test_info.destination,
         })
@@ -588,6 +609,8 @@ do
         target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
         target.TESTS_BY_BASENAME = target.TESTS_BY_BASENAME or {}
 
+        -- Overlapping patterns may repeat a name, but basenames must stay unique
+        -- because both private destinations and logs are basename-derived.
         local tests = expand_test_words(target.NAME, prereq_words)
         for _, test in ipairs(tests) do
             local test_name = test.name
@@ -595,6 +618,7 @@ do
             local basename = test_basename(test_name)
 
             if test.source_directory then
+                -- Absolute tests bind directly; relative tests bind through suite SWD.
                 local existing = test_atom.SCOPE.variables.SWD
                 if existing and
                         test_atom.SCOPE:get_text("SWD") ~= test.source_directory then
@@ -627,8 +651,8 @@ do
                 table.insert(target.TESTS, test_info)
             end
 
-            -- Actions are associated with test atoms, not with the suite rule.
-            -- A later assertion deliberately replaces an earlier default.
+            -- A test atom may belong to several suites, each with its own action.
+            -- Repeating it in one suite deliberately replaces that suite's action.
             test_atom.TEST_ACTIONS = test_atom.TEST_ACTIONS or {}
             test_atom.TEST_ACTIONS[target] = action
         end
@@ -638,6 +662,7 @@ do
         local rule = target.RULE
         assert(rule)
 
+        -- Destinations depend on the selected :BUILD: OWD, so expand lazily.
         if rule.test_rule_prepared then
             return
         end
@@ -652,6 +677,7 @@ do
             error("could not create test directory: " .. test_dir)
         end
 
+        -- Each log is both a success stamp and an ordinary build prerequisite.
         local log_names = {}
         for _, test_info in ipairs(tests) do
             local test_atom = test_info.atom
@@ -670,6 +696,7 @@ do
             local function log_action(scope)
                 local log_path = scope:get_text("@")
                 local just_print = blud.just_print(scope)
+                -- A failed rerun must never leave an old success stamp behind.
                 if not just_print then
                     os.remove(log_path)
                 end
@@ -690,6 +717,7 @@ do
                 return 0
             end
 
+            -- Source changes make the corresponding success stamp out of date.
             blud.operators[":"]:ADD_RULE(
                 log_atom,
                 { test_atom.NAME },
@@ -698,11 +726,13 @@ do
             table.insert(log_names, log_name)
         end
 
+        -- The suite is now an ordinary aggregate over its success stamps.
         rule.prereq_words = log_names
         rule.test_rule_prepared = true
     end
 
     function op:BUILD(target)
+        -- PREPARE_PREREQUISITES supplies the graph expected by generic BUILD.
         return M.BUILD(self, target)
     end
 end
@@ -723,6 +753,7 @@ do
         -- util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
         --            util.dump(target), util.dump(prereqs))
 
+        -- A build declaration selects an output/variable context, not a target.
         if target.USED_AS_PREREQUISITE then
             blud.error("%s: build name was previously used as prerequisite.", target.NAME)
         end
@@ -752,6 +783,7 @@ do
                 error("could not create build directory: " .. owd)
             end
         end
+        -- Activate this context as the build-scope parent for ordinary targets.
         blud.Scope.build.variables = target.SCOPE.variables
         return 0
     end
