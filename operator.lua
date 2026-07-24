@@ -512,8 +512,8 @@ do
         return tests
     end
 
-    local function test_log_name(test_name)
-        return test_name .. ".log"
+    local function test_log_name(basename)
+        return basename .. "/" .. basename .. ".log"
     end
 
     local function test_basename(test_name)
@@ -660,7 +660,7 @@ do
             test_info.destination =
                 test_dir .. "/" .. test_info.basename
 
-            local log_name = test_log_name(test_atom.NAME)
+            local log_name = test_log_name(test_info.basename)
             local log_atom = blud.get_or_create_target(log_name)
             if log_atom.RULE then
                 blud.error("#1: test log target already has a rule.", log_name)
