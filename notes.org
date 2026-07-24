@@ -196,25 +196,7 @@ and run .FRESH. Git recovery operations are permitted only for an
 explicit .REVERT or inside the established bootstrap/finalization
 scripts.
 
-EXTERNAL TODO LIST
-
-My persistent hierarchical todo list is at:
-https://project-todo-tree.ronburk.chatgpt.site/access/6de1847620c0c24a63535ef97419c5a20cdc9615e65d7962
-When I ask about my todo list, open and operate that Site using the browser.
-
-The Site stores the list itself. To read it, inspect the rendered task hierarchy. To modify it:
-
-Use “New top-level task” and “Add item” to create a root item.
-Use “Add child under NAME” to create a child.
-Use “Rename NAME” to edit an item’s title.
-Use “Complete NAME” or “Reopen NAME” to change completion state.
-Use “Move NAME under” to change its parent.
-Use “Delete NAME” to delete an item and its descendants.
-
-After changing anything, reread the affected portion and report the
-resulting hierarchy. Do not delete tasks unless I explicitly request
-deletion.
-
+2026-07-24 13:02 PDT — GitHub connector PR creation repeatedly failed with `Mcp error: -32603: Internal error` when compatibility aliases or optional fields were supplied. Create the draft PR first using only the canonical `head`, `base`, `draft`, and `title` fields, then add its body through a separate PR-update operation; this successfully created PR #23.
 
 
 
