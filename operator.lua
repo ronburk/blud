@@ -525,6 +525,47 @@ do
         return basename
     end
 
+    local function stage_test(test_info, scope)
+        if blud.just_print(scope) then
+            return 0
+        end
+
+        local source = test_info.atom.BOUND_NAME
+        assert(source)
+        if source == test_info.destination then
+            blud.error(
+                "#1: test source and destination are the same.",
+                source
+            )
+        end
+        local source_type = os_path_type(source)
+
+        local commands = blud.shell.commands
+        local status = commands.rm({
+            "rm", "-rf", "--", test_info.destination,
+        })
+        if status ~= 0 then
+            return status
+        end
+
+        if source_type == 2 then
+            return commands.cp({
+                "cp", "-r", "--", source, test_info.destination,
+            })
+        end
+
+        status = commands.mkdir({
+            "mkdir", "-p", "--", test_info.destination,
+        })
+        if status ~= 0 then
+            return status
+        end
+
+        return commands.cp({
+            "cp", "--", source, test_info.destination,
+        })
+    end
+
     -- a :TEST: name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atom)
         return nil
@@ -552,9 +593,6 @@ do
             local test_name = test.name
             local test_atom = blud.get_or_create_target(test_name)
             local basename = test_basename(test_name)
-            local destination =
-                target.SCOPE:get_text("OWD") .. "/" ..
-                target.NAME .. "/" .. basename
 
             if test.source_directory then
                 local existing = test_atom.SCOPE.variables.SWD
@@ -583,7 +621,6 @@ do
                     atom = test_atom,
                     source_name = test_name,
                     basename = basename,
-                    destination = destination,
                 }
                 target.TESTS_BY_NAME[test_name] = test_info
                 target.TESTS_BY_BASENAME[basename] = test_info
@@ -620,6 +657,8 @@ do
             local test_atom = test_info.atom
             local test_action = test_atom.TEST_ACTIONS[target]
             assert(test_action)
+            test_info.destination =
+                test_dir .. "/" .. test_info.basename
 
             local log_name = test_log_name(test_atom.NAME)
             local log_atom = blud.get_or_create_target(log_name)
@@ -635,7 +674,12 @@ do
                     os.remove(log_path)
                 end
 
-                local status = test_action(scope)
+                local status = stage_test(test_info, scope)
+                if status ~= 0 then
+                    return status
+                end
+
+                status = test_action(scope)
                 if status and status ~= 0 then
                     return status
                 end
