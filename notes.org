@@ -113,57 +113,25 @@ fabricate, reconstruct, or alter command output.
 
 GITHUB WORKFLOW
 
-The authoritative blud source is:
-https://github.com/ronburk/blud
+The authoritative repository is [https://github.com/ronburk/blud](https://github.com/ronburk/blud). Ignore attached or restored archives unless I explicitly direct you to use one.
 
-GitHub is the sole authoritative source for blud. Ignore all attached
-or restored blud archives, including blud.zip and
-blud-upload-*.zip. Do not inspect, extract, compare, or use them
-unless I explicitly direct you to use a particular upload. Their
-presence does not indicate that they are current or relevant.
+Use the connected GitHub app for remote operations and a local checkout for editing and testing. Do not require `gh` authentication or uploads when GitHub has the source.
 
+For each task:
 
-For local execution, obtain the source from
-https://github.com/ronburk/blud. Never use an uploaded archive merely
-because it is locally available.  Place the checkout in a blud
-subdirectory of the current scratch workspace. Once chosen, use that
-same checkout for the entire chat/environment.
+1. Check current `origin/main` and any previously worked PR; merge notifications are not automatic.
+2. Use a clean ordinary clone—never `--single-branch`. Default to `./blud`; each concurrent task gets a separate checkout.
+3. For new work, update local `main` by fast-forward only, record its SHA, and create a unique descriptive branch from it. To revise an open PR, resume its dedicated branch and checkout.
+4. Make only the requested changes and run relevant builds and tests.
+5. Fetch `origin/main` again before publishing. Concurrent changes are normal; continue if they do not overlap or invalidate the work. Otherwise stop and explain. Never merge, rebase, reset, discard, or repair unexpected state.
+6. Commit only on the feature branch, with a concise imperative subject and a body covering behavior, implementation, constraints, and validation.
+7. Publish through the GitHub app and open a draft PR targeting `main`. Create it first using only `head`, `base`, `draft`, and `title`; add the body separately.
+8. Return the PR link and a concise summary of changes and validation.
 
-Use the existing local checkout when present. Clone into ./blud only
-when no usable checkout exists.
+Only the user works directly on `main`. LLMs must not commit or push to `main`, merge PRs, or alter unrelated branches or PRs.
 
-Before starting repository work, verify that the checkout is clean, fetch
-from GitHub, and fast-forward it to the current origin/main. Do not merge,
-rebase, reset, discard changes, or otherwise repair an unexpected checkout.
-If it cannot be updated by a clean fast-forward, stop and explain the
-discrepancy.
+After a PR merges, its branch is finished. Dependent work starts from the new `main`; independent work may begin earlier in a separate branch and checkout.
 
-Use the connected GitHub app for GitHub operations. Do not require gh
-authentication or an uploaded blud.zip when GitHub contains the desired
-source.
-
-For each requested change:
-
-1. Synchronize the local checkout with the current origin/main.
-2. Create a new descriptively named branch from that exact main commit.
-3. Make only the requested changes in the local checkout.
-4. Run the relevant builds and tests.
-5. Commit only to the new branch, using a concise imperative subject and a
-   body describing the behavior, implementation, design constraints, and
-   validation.
-6. Use the connected GitHub app to create or update the corresponding remote
-   branch and open a draft pull request targeting main.
-7. Return the PR link and a concise summary of the changes and validation.
-
-Never commit or push directly to main unless I explicitly request a direct
-commit. Never merge a pull request unless I explicitly request it.
-
-Do not modify, close, delete, or reuse unrelated branches or pull requests.
-If GitHub state differs unexpectedly from the task’s assumed baseline, stop
-and explain the discrepancy.
-
-Uploads are needed only when I explicitly want work based on local changes
-that are not present in GitHub.
 
 -----
 
