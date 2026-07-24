@@ -516,6 +516,15 @@ do
         return test_name .. ".log"
     end
 
+    local function test_basename(test_name)
+        local name = test_name:gsub("[/\\]+$", "")
+        local basename = name:match("([^/\\]+)$")
+        if not basename or basename == "." or basename == ".." then
+            blud.error("#1: invalid test name.", test_name)
+        end
+        return basename
+    end
+
     -- a :TEST: name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atom)
         return nil
@@ -536,11 +545,16 @@ do
 
         target.TESTS = target.TESTS or {}
         target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
+        target.TESTS_BY_BASENAME = target.TESTS_BY_BASENAME or {}
 
         local tests = expand_test_words(target.NAME, prereq_words)
         for _, test in ipairs(tests) do
             local test_name = test.name
             local test_atom = blud.get_or_create_target(test_name)
+            local basename = test_basename(test_name)
+            local destination =
+                target.SCOPE:get_text("OWD") .. "/" ..
+                target.NAME .. "/" .. basename
 
             if test.source_directory then
                 local existing = test_atom.SCOPE.variables.SWD
@@ -555,9 +569,25 @@ do
             end
 
             if not target.TESTS_BY_NAME[test_name] then
+                local existing = target.TESTS_BY_BASENAME[basename]
+                if existing then
+                    blud.error(
+                        "#1 and #2 have the same test basename.",
+                        existing.source_name,
+                        test_name
+                    )
+                end
+
                 -- Preserve the order in which tests first enter the suite.
-                target.TESTS_BY_NAME[test_name] = test_atom
-                table.insert(target.TESTS, test_atom)
+                local test_info = {
+                    atom = test_atom,
+                    source_name = test_name,
+                    basename = basename,
+                    destination = destination,
+                }
+                target.TESTS_BY_NAME[test_name] = test_info
+                target.TESTS_BY_BASENAME[basename] = test_info
+                table.insert(target.TESTS, test_info)
             end
 
             -- Actions are associated with test atoms, not with the suite rule.
@@ -586,7 +616,8 @@ do
         end
 
         local log_names = {}
-        for _, test_atom in ipairs(tests) do
+        for _, test_info in ipairs(tests) do
+            local test_atom = test_info.atom
             local test_action = test_atom.TEST_ACTIONS[target]
             assert(test_action)
 
