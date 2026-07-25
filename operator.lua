@@ -8,7 +8,6 @@ local function target_needs_building(newest_prerequisite, timestamp)
            newest_prerequisite > timestamp
 end
 M.operator_new   = function(t)
-    assert(type(t) == 'table')
     return setmetatable(t, M)
 end
 
@@ -16,6 +15,8 @@ end
 -- The presence of an action is what distinguishes the two.
 function M:BIND(atom)
     if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
+    assert(atom.SCOPE.target == atom,
+           "target has a scope owned by another atom: " .. tostring(atom.NAME))
     local action = atom:get_action()
     if action then
         local OWD = atom.SCOPE:get_text("OWD")
@@ -217,11 +218,15 @@ function M:ADD_RULE(target, prereq_words, action)
         rule.operator     = self
         target.RULE       = rule
     else
-        assert(not rule.action)
-        util.array_append(rule.prereq_words, prereq_words)
         if rule.operator ~= self then
-            error("target used with more than one operator!")
+            error(
+                "target used with more than one operator: " ..
+                tostring(target.NAME)
+            )
         end
+        assert(not rule.action,
+               "target already has an action: " .. tostring(target.NAME))
+        util.array_append(rule.prereq_words, prereq_words)
     end
     rule.action       = action
 
@@ -340,6 +345,9 @@ do  -- Pattern rules are registered for later implicit-rule lookup.
     end
     function op:ADD_RULE(target_atom, prereq_words, action)
         -- util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+        assert(target_atom.NAME:find("%", 1, true),
+               "pattern-rule target has no '%' wildcard: " ..
+               tostring(target_atom.NAME))
         local prereq_names = glob_words(prereq_words)
 --[[
         for i = 1, #prereq_names do
@@ -360,7 +368,9 @@ do  -- Source lists: compile each source through a reverse rule, then link.
 
     local function prepare_prerequisites(target_atom)
         local source_rule = target_atom.RULE
-        assert(source_rule)
+        assert(source_rule and source_rule.operator == op,
+               "'::' prerequisite preparation requires a '::' rule for: " ..
+               tostring(target_atom.NAME))
 
         -- Expansion is deferred until build scope is known, then cached.
         if source_rule.source_rule_prepared then
@@ -409,10 +419,17 @@ do  -- Source lists: compile each source through a reverse rule, then link.
             end
         end
 
+        assert(source_rule.action,
+               "'::' preparation produced no action for: " ..
+               tostring(target_atom.NAME))
         source_rule.source_rule_prepared = true
     end
 
     local function build_prepared_prerequisites(target_atom)
+        local source_rule = target_atom.RULE
+        assert(source_rule and source_rule.source_rule_prepared,
+               "attempted to build '::' prerequisites before preparing: " ..
+               tostring(target_atom.NAME))
         local newest_time = 0
         local newest_prerequisite
         local prerequisites = target_atom.PREREQUISITES or {}
@@ -515,7 +532,9 @@ do  -- Test suites aggregate one generated success-log target per test.
                         name = matched_path,
                     })
                 else
-                    assert(matched_path:sub(1, #suite_prefix) == suite_prefix)
+                    assert(matched_path:sub(1, #suite_prefix) == suite_prefix,
+                           "relative test glob escaped suite directory: " ..
+                           tostring(matched_path))
                     table.insert(tests, {
                         name = matched_path:sub(#suite_prefix + 1),
                         source_directory = source_directory,
@@ -550,7 +569,12 @@ do  -- Test suites aggregate one generated success-log target per test.
         end
 
         local source = test_info.atom.BOUND_NAME
-        assert(source)
+        assert(source,
+               "test source was not bound before staging: " ..
+               tostring(test_info.source_name))
+        assert(test_info.destination,
+               "test destination was not assigned before staging: " ..
+               tostring(test_info.source_name))
         if source == test_info.destination then
             blud.error(
                 "#1: test source and destination are the same.",
@@ -604,6 +628,8 @@ do  -- Test suites aggregate one generated success-log target per test.
         elseif target.RULE.operator ~= self then
             blud.error("#1: target used with more than one operator.", target.NAME)
         end
+        assert(not target.RULE.test_rule_prepared,
+               "cannot add tests after preparing suite: " .. tostring(target.NAME))
 
         target.TESTS = target.TESTS or {}
         target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
@@ -660,7 +686,9 @@ do  -- Test suites aggregate one generated success-log target per test.
 
     function op:PREPARE_PREREQUISITES(target)
         local rule = target.RULE
-        assert(rule)
+        assert(rule and rule.operator == self,
+               ":TEST: prerequisite preparation requires a :TEST: rule for: " ..
+               tostring(target.NAME))
 
         -- Destinations depend on the selected :BUILD: OWD, so expand lazily.
         if rule.test_rule_prepared then
@@ -672,7 +700,10 @@ do  -- Test suites aggregate one generated success-log target per test.
             blud.error("#1: :TEST: matched no tests.", target.NAME)
         end
 
-        local test_dir = target.SCOPE:get_text("OWD") .. "/" .. target.NAME
+        local owd = target.SCOPE:get_text("OWD")
+        assert(owd ~= "",
+               "test suite has an empty OWD: " .. tostring(target.NAME))
+        local test_dir = owd .. "/" .. target.NAME
         if not blud.just_print(target.SCOPE) and os_mkdir(test_dir) == 2 then
             error("could not create test directory: " .. test_dir)
         end
@@ -682,7 +713,9 @@ do  -- Test suites aggregate one generated success-log target per test.
         for _, test_info in ipairs(tests) do
             local test_atom = test_info.atom
             local test_action = test_atom.TEST_ACTIONS[target]
-            assert(test_action)
+            assert(test_action,
+                   "test has no action in suite " .. tostring(target.NAME) ..
+                   ": " .. tostring(test_info.source_name))
             test_info.destination =
                 test_dir .. "/" .. test_info.basename
 
@@ -694,6 +727,9 @@ do  -- Test suites aggregate one generated success-log target per test.
             log_atom.SCOPE:set("OWD", test_dir)
 
             local function log_action(scope)
+                assert(scope == log_atom.SCOPE,
+                       "test log action received the wrong target scope: " ..
+                       tostring(log_name))
                 local log_path = scope:get_text("@")
                 local just_print = blud.just_print(scope)
                 -- A failed rerun must never leave an old success stamp behind.
@@ -754,6 +790,12 @@ do
         --            util.dump(target), util.dump(prereqs))
 
         -- A build declaration selects an output/variable context, not a target.
+        assert(#prereqs == 0,
+               ":BUILD: prerequisites are not supported for: " ..
+               tostring(target.NAME))
+        assert(not action,
+               ":BUILD: actions are not supported for: " ..
+               tostring(target.NAME))
         if target.USED_AS_PREREQUISITE then
             blud.error("%s: build name was previously used as prerequisite.", target.NAME)
         end
@@ -775,7 +817,13 @@ do
 
     function op:BUILD(target)
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
-        assert(target.SCOPE)
+        assert(target.SCOPE and target.SCOPE.target == target,
+               "build has no owning target scope: " .. tostring(target.NAME))
+        assert(target.RULE and target.RULE.operator == self,
+               "build target does not belong to the :BUILD: operator: " ..
+               tostring(target.NAME))
+        assert(target.SCOPE.variables.OWD,
+               "build has no local OWD: " .. tostring(target.NAME))
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
             local mkdir_result = os_mkdir(owd)
