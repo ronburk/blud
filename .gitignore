@@ -3,14 +3,12 @@
 *~
 .\#*
 .emacs.desktop*
-./luajit
 foo.*
 test/*.luac
 debug/*
 release/*
 *.luac
 *.luad
-luajit
 cstr
 bludlua.c
 blud
@@ -27,6 +25,15 @@ out.bin
 src/
 tic.lua
 codex_auth_token.txt
+# handle luajit selective include
+luajit/**
+!luajit/
+!luajit/src
+!luajit/src/lua.h
+!luajit/src/luaconf.h
+!luajit/src/lauxlib.h
+!luajit/src/lualib.h
+!luajit/src/libluajit.a
 # meta-source info for ChatGPT
 lua-index.json
 
