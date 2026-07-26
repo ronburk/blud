@@ -93,8 +93,39 @@ means the following when 'test' is built:
     - blud will cd to $(OWD)/test/$< and execute the action
     - blud will update $(OWD)/test/$</$<.log with the success and output of running the action
 
+
+The problem we are solving only arises when
+
+a) a target X was given on the command line
+b) there is no rule to build that target so
+c) a normal make would report "don't know how to build X"
+
+We propose to alter the normal behavior on the grounds that if the
+user directly asked for it interactively, we can assign a possibly
+useful meaning to that: treat it as a prerequisite that is out of date
+and build the target it is a prerequisite of.
+
+The problem is deepened because not all valid atoms are always
+explicitly present in the bludfile description. A wildcard in a
+prerequisite list may represent valid atoms that must be discovered at
+runtime. A bludfile may generate rules on the fly that create valid
+atoms that did not explicitly appear in the bludfile. This can occur
+by way of implicit pattern rules (e.g., "prog.o" may induce implicit
+generation of a rule containing prerequisite "prog.c" even though the
+latter atom appears nowhere in the bludfile). It can also occur
+because an operator generates new rules, of which an example is the
+:TEST: operator which, given an atom named "testxxxx" may generate a
+rule that targets "testxxxx.log", even though that atom appears
+nowhere explicitly.
+
+Thus, the problem has more generality than focusing on the :TEST: operator alone may indicate.
+
 ** ChatGPT Project Instructions
 
+It is always better to ask the user a question than to make
+an assumption that may lead to lengthy thinking about the wrong
+topics. If you're forming a response and encounter a significant
+choice that the user has not discussed, stop and ask a question.
 
 Sometimes the user wants to do something that contradicts the
 suggestions here. Any prompt the user gives that begins with "!"
