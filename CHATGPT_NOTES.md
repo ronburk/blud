@@ -1,414 +1,202 @@
 # ChatGPT Notes for blud
 
-These notes are a handoff for future ChatGPT sessions working on Ron Burk's
-`blud` project.
+These are concise handoff notes for future ChatGPT sessions working on Ron
+Burk's `blud` project. They were refreshed on 2026-07-26 after prerequisite
+globs were moved into rule evaluation.
 
-## Start-of-chat checklist
+## Start of a chat
 
-1. Read the current Project Instructions first. They are authoritative and
-   override this file, old chats, and remembered workflow variants.
-2. Read this file for current technical context.
-3. Before reading Lua source, use root-level `lua-index.json` to locate actual
-   files, function names, parameters, and line ranges. It is a navigation aid,
-   not authoritative source.
-4. Follow the exact preflight/.FRESH/.PATCH procedures from the Project
-   Instructions. `CHATGPT_PREFLIGHT.sh` is obsolete and must not be recreated.
-5. Show Linux commands as they run and never fabricate, reconstruct, normalize,
-   or silently alter command output.
+1. Read the current Project Instructions. They are authoritative over this
+   file, old chats, and remembered workflow variants.
+2. Use the current GitHub `main` branch as the source of truth. Ignore uploaded
+   or restored archives unless Ron explicitly directs otherwise.
+3. Check `origin/main` and the status of any previously worked PR before
+   starting. Merge notifications are not automatic.
+4. Use a clean ordinary local clone and a separate feature branch for each
+   task. Do not commit to `main`.
+5. Read `README.md` for documented user-visible behavior.
+6. Use `lua-nav.awk` before reading Lua sources:
 
-## Preflight lease
+   ```
+   awk -f lua-nav.awk -- function_name *.lua
+   awk -f lua-nav.awk -- --regex 'pattern' *.lua
+   awk -f lua-nav.awk -- --source function_name *.lua
+   ```
 
-After a successful preflight or successful `.FRESH`, obtain time with a
-non-shell time tool and record a lease that expires exactly 300 seconds later.
+   Rerun it after changing relevant Lua sources. `lua-index.json` is obsolete
+   and must not be regenerated or used.
 
-Before later filesystem work:
+Show Linux commands and brief progress while working. Never fabricate,
+reconstruct, normalize, or silently alter command output.
 
-- a newly attached `blud-upload-*.zip` invalidates the lease and implies
-  `.FRESH`;
-- observed filesystem trouble invalidates the lease;
-- otherwise check current time with a non-shell time tool;
-- skip preflight while the lease remains valid;
-- do not rerun preflight merely because a new user turn began.
+## Current baseline
 
-If the lease is missing, expired, or cannot be checked reliably, run the exact
-preflight command.
+Current `main` includes the merged work through PR #29:
 
-## Repository and patch workflow
+- structured line parsing and structured logical exits;
+- `-h`, `--why`, and silent command execution;
+- Linux copy primitives and the virtual-shell `cp` command;
+- early installation of the embedded Lua module loader;
+- private target-specific variables;
+- per-test staging and nested success logs;
+- a first user README;
+- intelligent messages on operator assertions;
+- early prerequisite-glob expansion.
 
-- Normal work happens in `/mnt/data/blud`.
-- Treat that tree as disposable.
-- If worktree, index, or ancestry is unexpected, stop and use `.FRESH`; do not
-  repair Git history ad hoc.
-- Stage only intended files.
-- `.PATCH` requires one descriptive commit and then:
-  `bash chatgpt_patch_finish.sh`.
-- Link only the exact unique `/mnt/data/tmp/chatgpt-<commit>.patch` path printed
-  by that script. Never link `/mnt/data/chatgpt.patch`.
-- Do not provide a bare diff.
+There are 13 tests, `test0001` through `test0013`.
 
-`lua-index.json` is generated on Ron's machine before `build.sh` packages the
-project. Treat that uploaded index as accurate for the fresh baseline only.
-It may become stale as ChatGPT edits Lua sources, so use direct source
-inspection for modified files and newly added or renamed functions.
+`build.sh` embeds an explicit list of Lua modules into `bludlua.c`. Any new Lua
+module must be added to that list. The minimal LuaJIT headers and static library
+needed by the Linux build are tracked under `luajit/src/`; `luajit.zip` and a
+complete LuaJIT source tree are not required.
 
-`chatgpt_patch_finish.sh` deliberately does not regenerate the index and has no
-Python, tree-sitter, ctags, package-index, or network dependency. The index is
-resynchronized the next time Ron runs `build.sh` and uploads a fresh project
-archive.
+`runtime.lua` contains substantial obsolete commented-out implementations.
+Search results there may identify dead code, so verify the active definition
+and its callers before editing.
 
-## Current primary work: private variables
+## Important current semantics
 
-The current design task is to add a `private` attribute to variable definitions.
+### Prerequisite glob timing
 
-The user prefers using the existing macro-parts table itself as the definition
-object, for example:
+Ordinary prerequisite globs expand during `operator:EVAL_RULE()`, after macro
+expansion and before the rule is stored. They enumerate existing filesystem
+names only:
 
-```lua
-parts.private = true
+- virtual buildable names do not become glob matches;
+- later-created files do not enter an earlier rule;
+- unmatched patterns contribute nothing;
+- matches are sorted within each pattern.
+
+The base operator implements this through
+`GLOB_PREREQUISITE_WORDS()`. `:TEST:` intentionally bypasses the base expansion
+because its patterns are relative to the suite directory. `:BUILD:` validates
+its raw prerequisite tokens before generic globbing can discard an unmatched
+pattern. `test/test0013` protects these details.
+
+### Private target variables
+
+Private variables are implemented, not pending work. Variable definitions are
+macro-parts tables with an optional `parts.private` flag. Target-scope lookup
+tracks whether it has crossed a target-inheritance boundary; after crossing
+one, it skips private definitions but continues searching outer scopes.
+
+`-W` sets `.ASSUME_NEW` as a private Boolean in the named atom's scope.
+`.JUST_PRINT` and `.SILENT` remain ordinary inherited command-line Booleans.
+
+### Current explicit-rule representation
+
+Explicit rules are still shared raw tables created by
+`operator.lua:M:ADD_RULE()` and registered in `blud.rules`, initialized by
+`runtime.lua`. Their directly accessed fields are:
+
+```
+targets
+operator
+prereq_words
+action
+source_rule_prepared
+test_rule_prepared
 ```
 
-No private-variable behavior has been implemented yet.
+Every current explicit rule has exactly one target. `GROUP_TARGETS()` has never
+had an operator override, although the representation still carries a
+one-element `targets` array.
 
-### Scope-parts invariant already established
+Coupling is distributed as follows:
 
-Current active code now maintains this invariant:
+- `operator.lua` creates rules, enforces repeated-declaration invariants, and
+  mutates special-operator state;
+- `atom.lua` reads rule data and dispatches through `rule.operator`;
+- `why.lua` walks `blud.rules`, `rule.targets`, and `rule.prereq_words`;
+- `runtime.lua` recognizes `:BUILD:` by inspecting `rule.operator`;
+- `::` and `:TEST:` use separate one-time preparation flags.
 
-> Anything stored in `scope.variables` or returned by `scope:get_parts()` is
-> either `nil` or a macro-parts table.
+Implicit pattern rules in `implicit.lua` are a different data structure with a
+different identity and lifecycle. They should not be unified with concrete
+explicit rules merely because both are called rules.
 
-`scope:set()` remains the normalization boundary and intentionally accepts
-either a string or a parts table:
+Declared prerequisite names live in `rule.prereq_words`. During building they
+are materialized as atoms in `atom.PREREQUISITES`; `$<` and `$^` in `scope.lua`
+consume that atom list. The two representations serve different phases.
 
-```lua
-function M:set(name, value)
-    local parts
+## Current design question: an explicit Rule object
 
-    if type(value) == "string" then
-        parts = { value }
-    else
-        assert(type(value) == "table")
-        parts = value
-    end
+The next design under consideration is to make explicit rules objects that
+hide their representation. No implementation has been approved or started.
 
-    self.variables[name] = parts
-end
+The change appears worthwhile only if the object owns invariants and behavior,
+not if it merely replaces field reads with trivial getters. The proposed
+boundary is:
+
+- add `rule.lua` with private rule storage and a private registry;
+- use `Rule.add()` to attach one rule to one target, accumulate repeated
+  prerequisite declarations, and reject mixed operators or multiple actions;
+- copy prerequisite arrays on input and output so private storage cannot be
+  mutated indirectly;
+- remove dormant `GROUP_TARGETS()` support and the `targets` array;
+- let a rule own operator dispatch for bind, prepare, build prerequisites,
+  build, and action execution;
+- centralize one-time preparation, replacing `source_rule_prepared` and
+  `test_rule_prepared`, with an intelligent recursive-preparation assertion;
+- migrate `::`, `:TEST:`, `why.lua`, and the `:BUILD:` check to the Rule API;
+- keep implicit rules separate;
+- keep `atom.PREREQUISITES` on atoms in the first refactor.
+
+Likely affected files:
+
+```
+rule.lua
+build.sh
+runtime.lua
+operator.lua
+atom.lua
+why.lua
+test/test0013
+test/test0014
 ```
 
-Do not require callers to wrap every literal string manually.
+`test/test0014` was proposed to cover hidden fields, repeated-declaration
+accumulation and order, mixed-operator rejection, second-action rejection, and
+exactly-once preparation. `test/test0013` currently reads
+`rule.prereq_words` directly and would need to use the public Rule API.
 
-Current automatic variables `$<`, `$^`, and `$@` all return parts tables.
-Environment lookup also returns `{ value }`.
-Active `blud.Macro.expand_call()` treats `scope:get_parts()` as returning a
-table or nil and no longer has a raw-string variable-definition branch.
+One unresolved implementation detail is debugging private-storage objects:
+`util.dump()` does not currently provide a general custom-object protocol, and
+the existing ad hoc `rule.dump` field is not honored by it. Decide whether
+`rule:dump()` is sufficient or whether `util.dump()` needs a narrow extension.
 
-`blud.Macro.expand_tokens()` still accepts a plain string as a general
-convenience API. Do not remove that merely because scope values are now parts.
+Do not combine the first Rule refactor with moving `atom.PREREQUISITES` or
+unifying implicit rules; either would broaden the change substantially.
 
-### Current scope chain
+## Validation
 
-Defined in `scope.lua`:
+Use the smallest focused test while developing, then validate the integrated
+operators and diagnostics:
 
-```text
-base
-  -> environment
-    -> bludfile
-      -> commandline
-        -> build
-          -> target scope
 ```
-
-Target scopes are initially parented to `M.build`.
-
-During build traversal, prerequisite target scopes are reparented through the
-target dependency relation. Important active locations include:
-
-```text
-atom.lua:170
-operator.lua:256
-operator.lua:400
-```
-
-Each sets a target scope's parent to `target_atom.PARENT.SCOPE`.
-
-That target-to-prerequisite scope inheritance is the boundary private variables
-must not cross.
-
-### Intended private semantics
-
-The design discussion used GNU make's target-specific `private` behavior as the
-model:
-
-- a private target-specific definition is visible while evaluating that target;
-- it is not inherited by prerequisites through the target-parent scope link;
-- after crossing such a parent-target boundary, lookup should skip private
-  definitions but continue searching outward, so a public definition in an
-  outer scope can still be found;
-- ordinary lexical/non-target parent traversal should not by itself suppress
-  private definitions.
-
-A private flag on parts is not sufficient by itself. Lookup also needs to know
-whether it has crossed a target-inheritance boundary. GNU make conceptually has
-both a per-variable private bit and a scope-chain parent-boundary marker.
-
-Do not blanket-treat names beginning with `.` as private. `.JUST_PRINT` is
-currently intended to inherit globally, while `.ASSUME_NEW` is the motivating
-example of a value that should not leak from a target to its prerequisites.
-
-### Assignment path to inspect next
-
-Active target-specific assignment flow:
-
-```text
-runtime.lua:225  blud.eval_target_assign_rule()
-atom.lua:7       target:set_variable()
-runtime.lua:1072 blud.macro_assign_parts()
-scope.lua:45     scope:set()
-```
-
-`blud.macro_assign_parts()` deep-copies parts, implements `?=`, `=`, `+=`,
-rewrites self-references, and finally calls `scope:set()`.
-
-Before implementing privacy, decide and test how the attribute behaves under:
-
-- replacement with `=`;
-- no-op `?=`;
-- concatenation with `+=`;
-- self-reference preservation;
-- copying through `util.deep_copy()`.
-
-The user previously observed that GNU make does not retain simultaneous public
-and private definitions of the same variable in the same target scope; the
-later definition's value/privacy wins. Do not assume more complex parallel
-bindings are required unless the design changes.
-
-### Direct scope-table operations
-
-Most variable writes go through `scope:set()`. Important whole-table operations
-that intentionally bypass it are:
-
-```text
-runtime.lua:865
-    resets blud.Scope.build.variables
-
-operator.lua:642
-    aliases blud.Scope.build.variables = target.SCOPE.variables
-```
-
-Embedding metadata in each parts table naturally survives these whole-table
-operations.
-
-There are direct reads in `operator.lua` for `SWD` and `OWD`; inspect them when
-changing representation or lookup behavior.
-
-## Current command-line variable flags
-
-Command-line flags are being unified through scope variables.
-
-### `-n`
-
-Parsed in `main.lua` by setting:
-
-```lua
-options.commandline_booleans[".JUST_PRINT"] = true
-```
-
-It is a textual boolean scope variable and is intentionally inherited by
-actions.
-
-### `-W atom`
-
-Parsed in:
-
-```text
-main.lua:60-67
-```
-
-Applied after bludfile execution in:
-
-```text
-blud.lua:552-556
-```
-
-by:
-
-```lua
-atom.SCOPE:set_boolean(".ASSUME_NEW", true)
-```
-
-Consumed in:
-
-```text
-atom.lua:146-155
-```
-
-where `atom:get_timestamp()` substitutes `blud.current_time`.
-
-The current problem is that a variable placed in a target scope can inherit into
-prerequisite target scopes. Private-variable support is intended to solve that
-kind of leakage cleanly.
-
-### `-B`
-
-`main.lua` currently parses `-B` into `options.always_make`. Verify its current
-downstream behavior before changing it.
-
-## Timestamp design
-
-`runtime.lua` captures one invocation-wide logical timestamp:
-
-```lua
-blud.current_time = os.time()
-```
-
-`atom:get_timestamp()` in `atom.lua` is the authoritative atom timestamp
-accessor. It caches the filesystem timestamp in `atom.TIMESTAMP`, except that
-`.ASSUME_NEW` makes it use `blud.current_time`.
-
-Successful actions should leave the target with the invocation timestamp even
-when no file was created. Check current operator behavior before modifying this
-area.
-
-## Action parsing: current state
-
-Multiline action blocks are implemented.
-
-`compiler.lua:275` defines `compile_action()`.
-
-Current behavior:
-
-- the first indented action line establishes a strip prefix;
-- `compile_io.push_strip_prefix()` makes subsequent physical lines relative to
-  that prefix;
-- lines are consumed until `STRIP_END`;
-- each nonblank physical action line becomes a separate guarded
-  `blud.execute(scope, ...)`;
-- execution stops on the first nonzero status;
-- no action is represented by `nil`.
-
-This fixed the old single-action-line limitation and made tab indentation work.
-
-It does **not** yet implement the broader mixed Lua/shell/embedded-blud action
-language previously discussed. Do not restore the old notes claiming multiline
-actions are still unimplemented.
-
-## Paused test-target work
-
-A separate unfinished design concerns:
-
-```text
-./blud test0002
-```
-
-Desired behavior was to run only that test, where `test0002` binds to
-`./test/test0002`.
-
-The broader idea was:
-
-- when a command-line operand names a source atom with no action;
-- and that atom was explicitly requested;
-- reverse-resolve concrete targets that depend on it;
-- build those dependents, treating the source as assumed-new for this
-  invocation.
-
-This was paused while fixing variable inheritance/private semantics. Resume it
-only after the private-variable work unless the user redirects priorities.
-
-## Useful current source locations
-
-### Environment variables
-
-Process environment variables are read lazily in:
-
-```text
-scope.lua:77-83
-```
-
-through `os.getenv(name)`. Blud does not copy all environment variables into a
-scope and does not currently call `setenv()`.
-
-### C `stat()` calls
-
-Only two literal source calls were found:
-
-```text
-blud.c:418
-    get_high_res_timestamp()
-
-oslinux.c:18
-    dir_exists()
-```
-
-Generated `bludlua.c` was excluded from that search.
-
-### `blud.Macro.expand_tokens()` callers
-
-Active calls currently include:
-
-```text
-scope.lua:23
-compiler.lua:344       commented-out target-assignment code; not active
-runtime.lua:229
-runtime.lua:271
-runtime.lua:272
-runtime.lua:660
-runtime.lua:674
-runtime.lua:706
-```
-
-`atom.lua:110` is dead because the containing function is immediately
-overwritten.
-`runtime.lua:577` is inside obsolete commented-out scope code.
-
-The active definition is at `runtime.lua:679`.
-
-### LuaJIT headers actually used by the current C build
-
-The compiler dependency scan showed:
-
-```text
-luajit/src/lua.h
-luajit/src/luaconf.h
-luajit/src/lauxlib.h
-luajit/src/lualib.h
-```
-
-`lua.hpp` appears in old C++ wrapper sources but is not part of either current
-build path.
-
-## Source archaeology cautions
-
-`runtime.lua` still contains substantial obsolete commented-out implementations,
-including an old scope implementation and old phase parser. Do not edit those
-merely because searches find similar function names.
-
-Use `lua-index.json`, then verify surrounding source and whether code is active.
-
-## Validation style
-
-Prefer focused validation while designs are changing:
-
-```sh
 bash build.sh
-```
-
-plus targeted tests for the behavior changed.
-
-Before committing:
-
-```sh
-bash -n <changed-shell-script>       # when applicable
+(cd test && ../blud -f test0013)
+./blud
+./blud -B test
+./blud -f test/test0001 --why talk
 git diff --check
 git status --short
 ```
 
-For private-variable work, add focused tests that distinguish:
+After changing Lua sources, rerun the relevant `lua-nav.awk` query before
+committing.
 
-1. visibility on the target itself;
-2. non-inheritance into prerequisites;
-3. fallback to an outer public definition after a private definition is skipped;
-4. ordinary public target-specific inheritance remaining unchanged;
-5. `.JUST_PRINT` continuing to inherit;
-6. `.ASSUME_NEW` no longer leaking when marked private.
+## Do not resurrect
 
-Keep changes small and behavior-preserving except for the explicitly introduced
-private semantics.
+The following belong to retired workflows or completed work:
+
+- `/mnt/data` archive selection, `.FRESH`, `.PATCH`, preflight leases, and
+  `chatgpt_patch_finish.sh` as the normal collaboration workflow;
+- `CHATGPT_PREFLIGHT.sh`;
+- `lua-index.json` and its Python/tree-sitter generator;
+- the private-variable implementation plan;
+- the old claim that multiline actions are unimplemented;
+- the paused `test0002` design as the current priority;
+- `luajit.zip`.
+
+Use GitHub branches and draft PRs under the current Project Instructions.
