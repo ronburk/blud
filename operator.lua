@@ -98,10 +98,10 @@ end
 function M:EVAL_RULE(left_tokens, right_tokens, action)
     -- util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
 --    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
---    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
+    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
 --    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
 --    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
-    self:ADD_RULES(left_tokens, right_tokens, action)
+    self:ADD_RULES(left_tokens, prerequisite_words, action)
 --    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
 --[[
     if not blud.primary_targets and #target_atoms > 0 then
@@ -348,14 +348,8 @@ do  -- Pattern rules are registered for later implicit-rule lookup.
         assert(target_atom.NAME:find("%", 1, true),
                "pattern-rule target has no '%' wildcard: " ..
                tostring(target_atom.NAME))
-        local prereq_names = glob_words(prereq_words)
---[[
-        for i = 1, #prereq_names do
-            prereq_words[i] = prereq_words[i].NAME
-        end
---]]
         -- Pattern rules live in the implicit-rule index, not on the pattern atom.
-        local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_names, action)
+        local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_words, action)
         if errmsg then
             blud.error(errmsg)
         end
@@ -372,20 +366,19 @@ do  -- Source lists: compile each source through a reverse rule, then link.
                "'::' prerequisite preparation requires a '::' rule for: " ..
                tostring(target_atom.NAME))
 
-        -- Expansion is deferred until build scope is known, then cached.
+        -- Reverse-rule materialization remains deferred until build scope is known.
         if source_rule.source_rule_prepared then
             return
         end
 
         debugger.probe({func="PREPARE_PREREQUISITES", target=target_atom})
-        local prereq_words = glob_words(source_rule.prereq_words)
         local new_prereqs  = {}
         local link_macro   = "LINK.o"
 
         -- Each source prerequisite becomes an object prerequisite, using
         -- the reverse implicit-rule lookup to materialize rules like:
         --     foo.o : foo.c
-        for _, prereq_name in ipairs(prereq_words) do
+        for _, prereq_name in ipairs(source_rule.prereq_words) do
             local implicit_rule, file_stem, dir_stem =
                 blud.implicit.find_reverse(prereq_name)
             if not implicit_rule then
@@ -616,6 +609,12 @@ do  -- Test suites aggregate one generated success-log target per test.
         return nil
     end
 
+    -- Test patterns are suite-relative, so ADD_RULE expands them after the
+    -- suite target is known instead of using ordinary prerequisite globbing.
+    function op:EVAL_RULE(left_tokens, right_tokens, action)
+        self:ADD_RULES(left_tokens, right_tokens, action)
+    end
+
     function op:ADD_RULE(target, prereq_words, action)
         if not action or action == blud.default_action then
             blud.error("#1: :TEST: requires an action.", target.NAME)
@@ -783,6 +782,15 @@ do
     function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
+    end
+
+    function op:EVAL_RULE(left_tokens, right_tokens, action)
+        -- Validate the written prerequisite list before ordinary globbing can
+        -- discard an unmatched pattern.
+        assert(#right_tokens == 0,
+               ":BUILD: prerequisites are not supported for: " ..
+               table.concat(left_tokens, ", "))
+        return M.EVAL_RULE(self, left_tokens, right_tokens, action)
     end
 
     function op:ADD_RULE(target, prereqs, action)
