@@ -37,6 +37,8 @@ g++ -o cstr cstr.cpp $CFLAGS
 gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS -DBUILD_ID=$BUILD_ID
 #gcc -MMD -MP -o blud blud.c bludlua.c oslinux.c $LUAJIT_FLAGS $CFLAGS
 
+exit 0
+
 if ! $LLM ; then
     # Refresh ChatGPT navigation metadata before packaging it.
     PYTHON="$HOME/.venvs/blud-lua-index/bin/python"

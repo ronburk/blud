@@ -155,14 +155,7 @@ query after modifying relevant Lua sources.
 
 Do not use or regenerate lua-index.json. It is obsolete.
 
-Treat the local blud checkout as disposable. During normal work, limit Git
-writes to staging explicit intended files and creating the requested
-commit or commits. Do not repair, rewrite, reconstruct, merge, rebase,
-cherry-pick, apply patches, or synthesize repository history. If the
-worktree, index, or commit ancestry is not exactly as expected, stop
-and run .FRESH. Git recovery operations are permitted only for an
-explicit .REVERT or inside the established bootstrap/finalization
-scripts.
+Treat the local ./blud checkout as disposable. Normally reuse it and update main with git pull --ff-only. If the checkout is missing, damaged, inconsistent, or unexpectedly modified, delete the entire local checkout and make a fresh ordinary clone from GitHub. Do not attempt to repair or preserve a suspect checkout unless I explicitly request it.
 
 2026-07-24 13:02 PDT — GitHub connector PR creation repeatedly failed with `Mcp error: -32603: Internal error` when compatibility aliases or optional fields were supplied. Create the draft PR first using only the canonical `head`, `base`, `draft`, and `title` fields, then add its body through a separate PR-update operation; this successfully created PR #23.
 
