@@ -197,9 +197,7 @@ local super_atom = {
     BUILD_PREREQUISITES = function(atom)
         if atom.RULE and atom.RULE.prereq_words then
             -- util.print("RULE.prereq_words = %s", util.dump(atom.RULE.prereq_words))
-            local prereq_names = glob_words(atom.RULE.prereq_words)
-            -- util.print("names=%s", util.dump(prereq_names))
-            atom.PREREQUISITES = atomize_words(prereq_names)
+            atom.PREREQUISITES = atomize_words(atom.RULE.prereq_words)
         end
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))

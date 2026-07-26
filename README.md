@@ -85,6 +85,11 @@ output: input1 input2
 Blud builds prerequisites before their target. A circular dependency is an
 error.
 
+Glob patterns in prerequisite lists expand when their rule declaration
+executes, after variable expansion. They enumerate existing filesystem names,
+not virtual buildable names. An unmatched pattern contributes no prerequisite,
+and files created later in the same invocation do not enter an earlier rule.
+
 Actions do not implicitly run through the operating-system shell. Blud
 currently implements these commands itself:
 

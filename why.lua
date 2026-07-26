@@ -109,8 +109,7 @@ local function build_reverse_rules()
     local reverse_seen = {}
 
     for _, rule in ipairs(blud.rules) do
-        local prerequisites =
-            rule.operator:GLOB_PREREQUISITE_WORDS(rule.prereq_words or {})
+        local prerequisites = rule.prereq_words or {}
 
         for _, target in ipairs(rule.targets or {}) do
             local target_name = target.NAME

@@ -1,0 +1,66 @@
+-- expect: test0013.out
+-- Prerequisite globs expand when their rule declaration executes.
+
+all:
+
+do
+    local fixture_names = {
+        "test0013-glob-a.input",
+        "test0013-glob-b.input",
+        "test0013-glob-c.input",
+    }
+
+    local function remove_fixtures()
+        for _, name in ipairs(fixture_names) do
+            os.remove(name)
+        end
+    end
+
+    local function create_fixture(name)
+        local file, error_message = io.open(name, "w")
+        assert(file,
+               "could not create early-glob fixture " .. name ..
+               ": " .. tostring(error_message))
+        file:close()
+    end
+
+    remove_fixtures()
+    os.remove("test0013.out")
+    create_fixture(fixture_names[2])
+    create_fixture(fixture_names[1])
+
+    : snapshot: test0013-glob-*.input test0013-missing-*.input
+
+    create_fixture(fixture_names[3])
+
+    local rule = blud.get_or_create_target("snapshot").RULE
+    assert(rule, "early-glob test rule was not stored")
+    assert(#rule.prereq_words == 2,
+           "early-glob rule stored " .. #rule.prereq_words ..
+           " prerequisites instead of 2")
+    assert(rule.prereq_words[1] == fixture_names[1],
+           "early-glob first prerequisite was " ..
+           tostring(rule.prereq_words[1]) ..
+           " instead of " .. fixture_names[1])
+    assert(rule.prereq_words[2] == fixture_names[2],
+           "early-glob second prerequisite was " ..
+           tostring(rule.prereq_words[2]) ..
+           " instead of " .. fixture_names[2])
+
+    local accepted, error_message = pcall(function()
+        blud.operators[":BUILD:"]:EVAL_RULE(
+            { "invalid-build" },
+            { "test0013-missing-*.input" },
+            nil
+        )
+    end)
+    assert(not accepted,
+           ":BUILD: accepted an unmatched prerequisite glob")
+    assert(tostring(error_message):find(
+               ":BUILD: prerequisites are not supported", 1, true),
+           ":BUILD: prerequisite rejection had an unexpected message: " ..
+           tostring(error_message))
+
+    remove_fixtures()
+    create_fixture("test0013.out")
+end
