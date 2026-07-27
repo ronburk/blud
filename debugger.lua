@@ -131,6 +131,149 @@ local function custom_handler(command, arg)
     print("unknown debugger command: " .. tostring(command) .. " " .. tostring(arg))
 end
 
+local function collect_entries(value)
+    local entries = {}
+
+    for key, child in next, value do
+        table.insert(entries, {
+            key = key,
+            value = child,
+            order = #entries + 1,
+        })
+    end
+
+    local function key_group(key)
+        local key_type = type(key)
+
+        if key_type == "number" then
+            return 1
+        elseif key_type == "string" then
+            return 2
+        elseif key_type == "boolean" then
+            return 3
+        end
+
+        return 4
+    end
+
+    table.sort(entries, function(a, b)
+        local a_group = key_group(a.key)
+        local b_group = key_group(b.key)
+
+        if a_group ~= b_group then
+            return a_group < b_group
+        elseif a_group == 1 or a_group == 2 then
+            return a.key < b.key
+        elseif a_group == 3 then
+            return not a.key and b.key
+        end
+
+        return a.order < b.order
+    end)
+
+    return entries
+end
+
+local function format_value(value)
+    local value_type = type(value)
+
+    if value_type == "string" then
+        return string.format("%q", value)
+    elseif value_type == "number" or value_type == "boolean" or value_type == "nil" then
+        return tostring(value)
+    elseif value_type == "table" then
+        local count = 0
+        for _ in next, value do
+            count = count + 1
+        end
+
+        return string.format("table (%d %s)", count, count == 1 and "item" or "items")
+    end
+
+    return "<" .. value_type .. ">"
+end
+
+local function format_key(key)
+    local key_type = type(key)
+
+    if key_type == "string" and key:match("^[%a_][%w_]*$") then
+        return key
+    elseif key_type == "string" then
+        return "[" .. string.format("%q", key) .. "]"
+    elseif key_type == "number" or key_type == "boolean" then
+        return "[" .. tostring(key) .. "]"
+    end
+
+    return "[<" .. key_type .. " key>]"
+end
+
+local function child_path(parent_path, key)
+    local key_type = type(key)
+
+    if key_type == "string" and key:match("^[%a_][%w_]*$") then
+        return parent_path .. "." .. key
+    elseif key_type == "string" then
+        return parent_path .. "[" .. string.format("%q", key) .. "]"
+    elseif key_type == "number" or key_type == "boolean" then
+        return parent_path .. "[" .. tostring(key) .. "]"
+    end
+
+    return parent_path .. "[<" .. key_type .. " key>]"
+end
+
+local function explorer_frame(value, path)
+    return {
+        value = value,
+        path = path,
+        entries = type(value) == "table" and collect_entries(value) or nil,
+    }
+end
+
+local function explore(root_value, root_expression)
+    local stack = {explorer_frame(root_value, root_expression)}
+
+    while true do
+        local frame = stack[#stack]
+
+        print(frame.path .. " = " .. format_value(frame.value))
+        print()
+
+        if frame.entries then
+            for index, entry in ipairs(frame.entries) do
+                print(string.format("  %d  %s = %s", index, format_key(entry.key), format_value(entry.value)))
+            end
+
+            print()
+            io.write("Select an item; Enter returns; q quits: ")
+        else
+            io.write("This value cannot be expanded; press Enter to return or q to quit: ")
+        end
+
+        local input = io.read()
+        if not input then
+            os.exit()
+        elseif input == "" then
+            if #stack == 1 then
+                return
+            end
+            table.remove(stack)
+        elseif input == "q" or input == "quit" then
+            return
+        elseif input == "?" or input == "help" then
+            print("number descend | Enter return | q quit | ? help")
+        elseif frame.entries and input:match("^%d+$") then
+            local entry = frame.entries[tonumber(input)]
+            if entry then
+                table.insert(stack, explorer_frame(entry.value, child_path(frame.path, entry.key)))
+            else
+                print("no such item: " .. input)
+            end
+        else
+            print("invalid explorer command: " .. input)
+        end
+    end
+end
+
 function debugger.probe()
     return true
 end
@@ -157,7 +300,7 @@ function debugger.interactive(prompt, handler)
         arg = arg or ""
 
         if command == "?" or command == "help" then
-            print("q quit | c continue | s step | n next | bt backtrace | e <lua> eval | ? help")
+            print("q quit | c continue | s step | n next | bt backtrace | e <lua> eval | x <lua> explore | ? help")
         elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
@@ -187,6 +330,22 @@ function debugger.interactive(prompt, handler)
                 end
             else
                 print("Compilation error: " .. err)
+            end
+        elseif command == "x" or command == "explore" then
+            if arg == "" then
+                print("explore requires a Lua expression")
+            else
+                local chunk, err = load("return " .. arg)
+                if chunk then
+                    local status, result = pcall(chunk)
+                    if status then
+                        explore(result, arg)
+                    else
+                        print("Error during evaluation: " .. result)
+                    end
+                else
+                    print("Compilation error: " .. err)
+                end
             end
         else
             handler(command, arg)
