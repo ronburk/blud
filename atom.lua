@@ -192,7 +192,7 @@ local super_atom = {
             BLUD_EXIT(1000, target_atom.NAME)
         end
         blud.why.considered(target_atom, timestamp, 0, nil, false)
-        return timestamp
+        return timestamp, false
     end,
     BUILD_PREREQUISITES = function(atom)
         if atom.RULE and atom.RULE.prereq_words then

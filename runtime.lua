@@ -885,7 +885,10 @@ blud.build_targets = function(targets)
         if previous_was_build and is_build then
             build_default_target()
         end
-        target:BUILD()
+        local _, needs_building = target:BUILD()
+        if needs_building == false then
+            print(target.NAME .. " is up to date")
+        end
         previous_was_build = is_build
     end
 
