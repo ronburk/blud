@@ -575,6 +575,7 @@ if blud.primary_targets == nil then
     error("no targets to build")
 end
 blud.build_init()
+blud.debugger.probe({func="<update>"})
 -- util.print("%d targets %s", #blud.primary_targets, util.dump(blud.primary_targets))
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
