@@ -5,6 +5,7 @@ M.__index = M
 
 local function target_needs_building(newest_prerequisite, timestamp)
     return blud.command_line_options.always_make or
+           timestamp == 0 or
            newest_prerequisite > timestamp
 end
 M.operator_new   = function(t)

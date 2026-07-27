@@ -124,4 +124,31 @@ touch -t 202001030000 "$program"
 printf '%s is up to date\n' "$program" >"$expected"
 cmp "$expected" "$output"
 
+action_only_bludfile=$tmp/action-only.bludfile
+action_only_target=$tmp/action-only
+action_only_marker=$tmp/action-only-ran
+
+cat >"$action_only_bludfile" <<EOF_BLUD
+$action_only_target:
+    touch $action_only_marker
+EOF_BLUD
+
+for _ in 1 2; do
+    rm -f "$action_only_marker" "$action_only_bludfile.luac"
+    "$root/blud" -s -f "$action_only_bludfile" "$action_only_target" >"$output"
+    : >"$expected"
+    cmp "$expected" "$output"
+    [[ -f "$action_only_marker" ]]
+    [[ ! -e "$action_only_target" ]]
+done
+
+rm -f "$action_only_marker" "$action_only_bludfile.luac"
+"$root/blud" -s --why "$action_only_target" \
+    -f "$action_only_bludfile" "$action_only_target" >"$output"
+printf '"%s" was built because the target file did not exist.\n' \
+    "$action_only_target" >"$expected"
+cmp "$expected" "$output"
+[[ -f "$action_only_marker" ]]
+[[ ! -e "$action_only_target" ]]
+
 touch test0012.out

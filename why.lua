@@ -30,10 +30,9 @@ end
 local function decision_reason(timestamp, newest_prerequisite_time)
     if blud.command_line_options.always_make then
         return "always_make"
+    elseif timestamp == 0 then
+        return "missing"
     elseif newest_prerequisite_time > timestamp then
-        if timestamp == 0 then
-            return "missing"
-        end
         return "newer_prerequisite"
     end
     return "up_to_date"
