@@ -26,3 +26,6 @@ bludlua.c :  cstr $(STRFILES)
 
 -- build cstr utility (writen in C++)
 cstr :: cstr.cpp
+
+testsource:
+    source foo.src
