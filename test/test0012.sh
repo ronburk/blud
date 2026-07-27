@@ -72,6 +72,14 @@ rm -f "$status_bludfile.luac"
 "$root/blud" -f "$status_bludfile" >"$output"
 cmp "$expected" "$output"
 
+rm -f "$status_bludfile.luac"
+"$root/blud" -s --why "$target" \
+    -f "$status_bludfile" "$target" >"$output"
+printf '%s is up to date\n' "$target" >"$expected"
+printf '"%s" was not built because it was up to date.\n' \
+    "$target" >>"$expected"
+cmp "$expected" "$output"
+
 rm "$target"
 rm -f "$status_bludfile.luac"
 "$root/blud" -s -f "$status_bludfile" "$target" >"$output"
@@ -150,5 +158,43 @@ printf '"%s" was built because the target file did not exist.\n' \
 cmp "$expected" "$output"
 [[ -f "$action_only_marker" ]]
 [[ ! -e "$action_only_target" ]]
+
+action_started_bludfile=$tmp/action-started.bludfile
+action_started_target=$tmp/action-started
+
+cat >"$action_started_bludfile" <<EOF_BLUD
+do
+    local function stop_action()
+        BLUD_EXIT(0)
+    end
+    blud.eval_rule(":", {"$action_started_target"}, {}, stop_action)
+end
+EOF_BLUD
+
+"$root/blud" --why "$action_started_target" \
+    -f "$action_started_bludfile" "$action_started_target" >"$output"
+printf '"%s" was not built: it needed rebuilding because the target file ' \
+    "$action_started_target" >"$expected"
+printf 'did not exist, and its action started but did not complete.\n' \
+    >>"$expected"
+cmp "$expected" "$output"
+
+reached_bludfile=$tmp/reached.bludfile
+reached_target=$tmp/reached
+missing_prerequisite=$tmp/missing-prerequisite
+
+cat >"$reached_bludfile" <<EOF_BLUD
+do
+    BLUD_ASSERT_EXIT(1000, "$missing_prerequisite")
+    : $reached_target: $missing_prerequisite
+end
+EOF_BLUD
+
+"$root/blud" --why "$reached_target" \
+    -f "$reached_bludfile" "$reached_target" >"$output"
+printf '"%s" was not built: it was reached, but its build status was not ' \
+    "$reached_target" >"$expected"
+printf 'determined.\n' >>"$expected"
+cmp "$expected" "$output"
 
 touch test0012.out
