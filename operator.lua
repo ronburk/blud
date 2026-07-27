@@ -73,6 +73,14 @@ function M:BUILD(target_atom)
             newest_prerequisite,
             needs_building
         )
+        if not needs_building then
+            for _, primary_target in ipairs(blud.primary_targets or {}) do
+                if primary_target == target_atom then
+                    print(target_atom.NAME .. " is up to date")
+                    break
+                end
+            end
+        end
         if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
