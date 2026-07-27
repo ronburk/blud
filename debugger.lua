@@ -174,11 +174,22 @@ local function collect_entries(value)
     return entries
 end
 
+local string_preview_length = 80
+
+local function format_string(value)
+    if #value <= string_preview_length then
+        return string.format("%q", value)
+    end
+
+    return string.format("%q", value:sub(1, string_preview_length))
+        .. string.format("... (%d bytes)", #value)
+end
+
 local function format_value(value)
     local value_type = type(value)
 
     if value_type == "string" then
-        return string.format("%q", value)
+        return format_string(value)
     elseif value_type == "number" or value_type == "boolean" or value_type == "nil" then
         return tostring(value)
     elseif value_type == "table" then
@@ -196,10 +207,11 @@ end
 local function format_key(key)
     local key_type = type(key)
 
-    if key_type == "string" and key:match("^[%a_][%w_]*$") then
+    if key_type == "string" and #key <= string_preview_length
+            and key:match("^[%a_][%w_]*$") then
         return key
     elseif key_type == "string" then
-        return "[" .. string.format("%q", key) .. "]"
+        return "[" .. format_string(key) .. "]"
     elseif key_type == "number" or key_type == "boolean" then
         return "[" .. tostring(key) .. "]"
     end
@@ -210,10 +222,11 @@ end
 local function child_path(parent_path, key)
     local key_type = type(key)
 
-    if key_type == "string" and key:match("^[%a_][%w_]*$") then
+    if key_type == "string" and #key <= string_preview_length
+            and key:match("^[%a_][%w_]*$") then
         return parent_path .. "." .. key
     elseif key_type == "string" then
-        return parent_path .. "[" .. string.format("%q", key) .. "]"
+        return parent_path .. "[" .. format_string(key) .. "]"
     elseif key_type == "number" or key_type == "boolean" then
         return parent_path .. "[" .. tostring(key) .. "]"
     end
