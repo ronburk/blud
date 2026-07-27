@@ -266,9 +266,35 @@ function M.report(primary_targets)
                 current.newest_prerequisite
             )
         ))
-    elseif current and current.considered then
+    elseif current and current.considered and not current.needs_building then
         print(string.format(
             "%s was not built because it was up to date.",
+            quoted(name)
+        ))
+    elseif current and current.action_started then
+        print(string.format(
+            "%s was not built: it needed rebuilding because %s, " ..
+            "and its action started but did not complete.",
+            quoted(name),
+            rebuild_reason(
+                current.reason,
+                current.newest_prerequisite
+            )
+        ))
+    elseif current and current.considered and current.needs_building then
+        print(string.format(
+            "%s was not built: it needed rebuilding because %s, " ..
+            "but its action was not started.",
+            quoted(name),
+            rebuild_reason(
+                current.reason,
+                current.newest_prerequisite
+            )
+        ))
+    elseif current and current.reached then
+        print(string.format(
+            "%s was not built: it was reached, but its build status " ..
+            "was not determined.",
             quoted(name)
         ))
     else
