@@ -176,12 +176,44 @@ end
 
 local string_preview_length = 80
 
-local function format_string(value)
-    if #value <= string_preview_length then
-        return string.format("%q", value)
+local escaped_bytes = {
+    [7] = "\\a",
+    [8] = "\\b",
+    [9] = "\\t",
+    [10] = "\\n",
+    [11] = "\\v",
+    [12] = "\\f",
+    [13] = "\\r",
+    [34] = "\\\"",
+    [92] = "\\\\",
+}
+
+local function quote_string(value)
+    local parts = {"\""}
+
+    for index = 1, #value do
+        local byte = value:byte(index)
+        local escaped = escaped_bytes[byte]
+
+        if escaped then
+            table.insert(parts, escaped)
+        elseif byte >= 32 and byte <= 126 then
+            table.insert(parts, value:sub(index, index))
+        else
+            table.insert(parts, string.format("\\%03d", byte))
+        end
     end
 
-    return string.format("%q", value:sub(1, string_preview_length))
+    table.insert(parts, "\"")
+    return table.concat(parts)
+end
+
+local function format_string(value)
+    if #value <= string_preview_length then
+        return quote_string(value)
+    end
+
+    return quote_string(value:sub(1, string_preview_length))
         .. string.format("... (%d bytes)", #value)
 end
 
@@ -208,7 +240,7 @@ local function format_key(key)
     local key_type = type(key)
 
     if key_type == "string" and #key <= string_preview_length
-            and key:match("^[%a_][%w_]*$") then
+            and key:match("^[A-Za-z_][A-Za-z0-9_]*$") then
         return key
     elseif key_type == "string" then
         return "[" .. format_string(key) .. "]"
@@ -223,7 +255,7 @@ local function child_path(parent_path, key)
     local key_type = type(key)
 
     if key_type == "string" and #key <= string_preview_length
-            and key:match("^[%a_][%w_]*$") then
+            and key:match("^[A-Za-z_][A-Za-z0-9_]*$") then
         return parent_path .. "." .. key
     elseif key_type == "string" then
         return parent_path .. "[" .. format_string(key) .. "]"
