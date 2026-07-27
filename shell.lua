@@ -546,6 +546,117 @@ local function cd(argv)
     return 0
 end
 
+-- Return the text between the first pair of boundary lines. The text before
+-- the opening boundary is a prefix that must begin every enclosed line and is
+-- stripped from the resulting script.
+local function extract_source_script(text, boundary)
+    local pos = 1
+    local line_number = 1
+    local prefix
+
+    while pos <= #text do
+        local newline = text:find("\n", pos, true)
+        local next_pos = newline and newline + 1 or #text + 1
+        local line = text:sub(pos, newline or #text)
+        local boundary_pos = line:find(boundary, 1, true)
+
+        if boundary_pos then
+            prefix = line:sub(1, boundary_pos - 1)
+            pos = next_pos
+            line_number = line_number + 1
+            break
+        end
+
+        pos = next_pos
+        line_number = line_number + 1
+    end
+
+    if not prefix then
+        return nil, "opening boundary " .. string.format("%q", boundary) .. " not found"
+    end
+
+    local script = {}
+    while pos <= #text do
+        local newline = text:find("\n", pos, true)
+        local next_pos = newline and newline + 1 or #text + 1
+        local line = text:sub(pos, newline or #text)
+
+        if line:sub(1, #prefix) ~= prefix then
+            return nil, "line " .. line_number .. " does not begin with prefix " ..
+                string.format("%q", prefix)
+        end
+
+        local stripped = line:sub(#prefix + 1)
+        if stripped:sub(1, #boundary) == boundary then
+            return table.concat(script)
+        end
+
+        script[#script + 1] = stripped
+        pos = next_pos
+        line_number = line_number + 1
+    end
+
+    return nil, "closing boundary " .. string.format("%q", boundary) .. " not found"
+end
+
+-- Implement `source [--boundary string] [--] file`. This first draft only
+-- displays the action text that a later implementation will execute.
+local function source(argv)
+    local boundary
+    local filename
+    local options = true
+    local pos = 2
+
+    while pos <= #argv do
+        local arg = argv[pos]
+        if options and arg == "--" then
+            options = false
+        elseif options and arg == "--boundary" then
+            pos = pos + 1
+            boundary = argv[pos]
+            if not boundary then
+                return diagnostic("source", "option '--boundary' requires an argument")
+            elseif boundary == "" then
+                return diagnostic("source", "boundary must not be empty")
+            end
+        elseif options and arg:sub(1, 1) == "-" and arg ~= "-" then
+            return diagnostic("source", "unsupported option '" .. arg .. "'")
+        elseif filename then
+            return diagnostic("source", "too many operands")
+        else
+            filename = arg
+            options = false
+        end
+        pos = pos + 1
+    end
+
+    if not filename then
+        return diagnostic("source", "missing file operand")
+    end
+
+    local file, open_error = io.open(filename, "rb")
+    if not file then
+        return diagnostic("source", "cannot open '" .. filename .. "': " .. open_error)
+    end
+
+    local script, read_error = file:read("*a")
+    file:close()
+    if not script then
+        return diagnostic("source", "cannot read '" .. filename .. "': " .. read_error)
+    end
+
+    if boundary then
+        local extract_error
+        script, extract_error = extract_source_script(script, boundary)
+        if not script then
+            return diagnostic("source", filename .. ": " .. extract_error)
+        end
+    end
+
+    print("source: would execute " .. string.format("%q", script))
+    return 0
+end
+
 -- Public registry of commands understood by blud. Ordinary handlers receive
 -- argv; `shell` is selected before parsing and receives the verbatim remainder.
 M.commands = {
@@ -555,6 +666,7 @@ M.commands = {
     mkdir = mkdir,
     rm = rm,
     shell = shell,
+    source = source,
     touch = touch,
 }
 
