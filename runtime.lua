@@ -207,7 +207,7 @@ blud.execute = function(scope, text)
         else
             -- Preserve the action text/status contract while shell.lua
             -- enforces explicit selection of the platform shell.
-            status = blud.shell.execute(text)
+            status = blud.shell.execute(text, scope)
         end
         -- print("    status = ", status)
     else

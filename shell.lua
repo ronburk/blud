@@ -601,7 +601,7 @@ end
 
 -- Implement `source [--boundary string] [--] file`. This first draft only
 -- displays the action text that a later implementation will execute.
-local function source(argv)
+local function source(argv, scope)
     local boundary
     local filename
     local options = true
@@ -658,7 +658,8 @@ local function source(argv)
 end
 
 -- Public registry of commands understood by blud. Ordinary handlers receive
--- argv; `shell` is selected before parsing and receives the verbatim remainder.
+-- argv and scope; `shell` is selected before parsing and receives the verbatim
+-- remainder.
 M.commands = {
     cd = cd,
     cp = cp,
@@ -670,11 +671,11 @@ M.commands = {
     touch = touch,
 }
 
--- Called from Lua as `status = require("shell").execute(command)` (normally
--- through blud.shell.execute()). `command` must be one line. A literal leading
--- `shell` delegates its remainder to the OS shell; every other command must use
--- blud's parser and one of the handlers above.
-function M.execute(command)
+-- Called from Lua as `status = require("shell").execute(command, scope)`
+-- (normally through blud.shell.execute()). `command` must be one line. A
+-- literal leading `shell` delegates its remainder to the OS shell; every other
+-- command must use blud's parser and one of the handlers above.
+function M.execute(command, scope)
     assert(type(command) == "string")
     assert(not command:find("[\r\n]"))
 
@@ -697,7 +698,7 @@ function M.execute(command)
         return diagnostic(argv[1], "command not implemented")
     end
 
-    return command_function(argv)
+    return command_function(argv, scope)
 end
 
 return M
