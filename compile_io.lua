@@ -2,13 +2,25 @@
 
 local M = {}
 
-local pre_sourcemap  = ""
-local sourcemap_gap  = nil
-local post_sourcemap = nil
-local sourcemap      = {}  -- [{filename, source_ln, dest_ln}]
-local next_output_ln = 1
-local input_stack    = {}
-local current_input  = nil   -- physical input plus current virtual line
+local pre_sourcemap
+local sourcemap_gap
+local post_sourcemap
+local sourcemap
+local next_output_ln
+local input_stack
+local current_input
+
+local function reset_state()
+    pre_sourcemap  = ""
+    sourcemap_gap  = nil
+    post_sourcemap = nil
+    sourcemap      = {}  -- [{filename, source_ln, dest_ln}]
+    next_output_ln = 1
+    input_stack    = {}
+    current_input  = nil  -- physical input plus current virtual line
+end
+
+reset_state()
 
 local function count_nl(text)  -- return count of newlines in a string
     return select(2, text:gsub("\n", "\n"))
@@ -705,7 +717,7 @@ function M.error(fmt, ...)
     error("BLUD_COMPILE_ERROR:" .. message, 0)
 end
 
--- close(): insert sourcemap in the gap, fix up the line numbers that follow, return text
+-- close(): insert sourcemap, return the generated text, and begin a new session
 function M.close()
     assert(sourcemap_gap ~= nil, "Did you forget to call emit_sourcemap()?")
     local sourcemap_lua = sourcemap_to_lua(sourcemap)
@@ -717,7 +729,9 @@ function M.close()
         sourcemap[i].dest_ln = sourcemap[i].dest_ln + line_count
     end
     sourcemap_lua = sourcemap_to_lua(sourcemap)
-    return pre_sourcemap .. sourcemap_lua .. post_sourcemap
+    local result = pre_sourcemap .. sourcemap_lua .. post_sourcemap
+    reset_state()
+    return result
 end
 
 ---[=[UNIT_TESTS
