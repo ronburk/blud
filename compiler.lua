@@ -348,12 +348,18 @@ end
 
 -- Compile a complete standalone action input without rule indentation.
 function M.compile_action(compile_io)
+    compile_io.emit_line("return function(scope, status)")
     local action, lookahead = compile_action_body(compile_io, nil)
     assert(
         lookahead and lookahead.change == nil and lookahead.text == "",
         "Standalone action compiler did not consume its complete input"
     )
-    return action
+    compile_io.emit_line("    local action = %s", action)
+    compile_io.emit_line("    if action then")
+    compile_io.emit_line("        return action(scope, status) or 0")
+    compile_io.emit_line("    end")
+    compile_io.emit_line("    return 0")
+    compile_io.emit_line("end")
 end
 
 local function compile_rule_or_target_assignment(compile_io)

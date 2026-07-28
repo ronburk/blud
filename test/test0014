@@ -10,17 +10,23 @@ do
     local function compile_action(name, text)
         compile_io.push_input(name, text)
         compile_io.emit_sourcemap()
-        local action = compiler.compile_action(compile_io)
-        compile_io.emit_line("return %s", action)
+        compiler.compile_action(compile_io)
         local generated = compile_io.close()
         local chunk, error_message = loadstring(generated, name)
         assert(chunk, "could not load compiled action: " .. tostring(error_message))
-        assert(type(chunk()) == "function",
+        local action = chunk()
+        assert(type(action) == "function",
                "compiled action did not produce a function")
-        return generated
+        return generated, action
     end
 
-    local first = compile_action("first.action", "echo first\n")
+    local first, first_action = compile_action(
+        "first.action",
+        ": do\n" ..
+        ":     scope.directive_ran = true\n" ..
+        ": end\n" ..
+        "echo first\n"
+    )
     local second = compile_action("second.action", "echo second\n")
 
     assert(first:find("echo first", 1, true),
@@ -29,6 +35,24 @@ do
            "second compilation omitted its action")
     assert(not second:find("echo first", 1, true),
            "second compilation retained first-session output")
+
+    local first_scope = {}
+    local saved_execute = blud.execute
+    local function execute(scope, command)
+        assert(scope == first_scope,
+               "compiled action did not pass its scope to blud.execute")
+        assert(command == "echo first",
+               "compiled action passed unexpected command " .. tostring(command))
+        return 0
+    end
+    blud.execute = execute
+    local status = first_action(first_scope, 0)
+    blud.execute = saved_execute
+
+    assert(first_scope.directive_ran,
+           "compiled directive did not run inside the action")
+    assert(status == 0,
+           "successful compiled action returned " .. tostring(status))
 
     local output, error_message = io.open("test0014.out", "w")
     assert(output,
