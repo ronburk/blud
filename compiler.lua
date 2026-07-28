@@ -155,6 +155,7 @@ end
 
 local TC_WORD = {
     LUASTART = true,
+    LUAONELINE = true,
     LUAEND = true,
     LUA_ELSE = true,
     LUA_ELSEIF = true,
@@ -388,7 +389,7 @@ local function lua_opener(token_text)
 end
 
 local function update_lua_blocks(compile_io, blocks, token_type, token_text)
-    if token_type == "LUASTART" then
+    if token_type == "LUASTART" or token_type == "LUAONELINE" then
         table.insert(blocks, lua_opener(token_text))
     elseif token_type == "LUA_ELSEIF" or token_type == "LUA_ELSE" then
         local block = blocks[#blocks]
@@ -440,6 +441,14 @@ local function compile_lua(compile_io, first_record,
             update_lua_blocks(compile_io, blocks, token_type, token_text)
             emit_lua_line(compile_io, compile_io.get_current_line())
 
+            if token_type == "LUAONELINE" then
+                assert(
+                    blocks[#blocks] == lua_opener(token_text),
+                    "One-line Lua block is not at top of compiler stack"
+                )
+                table.remove(blocks)
+            end
+
             if #blocks == 0 then
                 return nil
             end
@@ -481,7 +490,8 @@ compile_directives = function(compile_io, first_record, nested)
             elseif TC_WORD[token_type] and compile_io.peek_assign() then
                 compile_macro_assign(compile_io, token_text)
                 record = nil
-            elseif token_type == "LUASTART" then
+            elseif token_type == "LUASTART"
+                    or token_type == "LUAONELINE" then
                 record = compile_lua(
                     compile_io,
                     record,

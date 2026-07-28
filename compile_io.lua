@@ -464,12 +464,27 @@ local lua_block_start_words = {
     ["function"] = true,
 }
 
+local lua_one_line_start_words = {
+    ["assert"] = true,
+}
+
 local lua_line_words = {
     ["end"]     = "LUAEND",
     ["else"]    = "LUA_ELSE",
     ["elseif"]  = "LUA_ELSEIF",
     ["until"]   = "LUA_UNTIL",
 }
+
+local function match_lua_one_line_start(text, pos)
+    local word, stop = text:match("^([%a_][%w_]*)()", pos)
+    if not word or not lua_one_line_start_words[word] then
+        return nil
+    end
+    if not text:match("^[ \t]*%(", stop) then
+        return nil
+    end
+    return word
+end
 
 local function remainder_starts_function(text, pos)
     local stop = text:match("^[ \t]*function()", pos)
@@ -537,17 +552,25 @@ M.get_token = function()
         token_type = "COLON_OP"
         token_text = match_colon_operator(text, pos)
     else
-        token_text = char .. scan_dependency_word(text, pos + 1)
+        if at_word_start then
+            token_text = match_lua_one_line_start(text, pos)
+        end
 
-        if at_word_start and lua_block_start_words[token_text] then
-            token_type = "LUASTART"
-        elseif at_word_start and token_text == "local"
-                and remainder_starts_function(text, pos + #token_text) then
-            token_type = "LUASTART"
-        elseif at_word_start and lua_line_words[token_text] then
-            token_type = lua_line_words[token_text]
+        if token_text then
+            token_type = "LUAONELINE"
         else
-            token_type = "WORD"
+            token_text = char .. scan_dependency_word(text, pos + 1)
+
+            if at_word_start and lua_block_start_words[token_text] then
+                token_type = "LUASTART"
+            elseif at_word_start and token_text == "local"
+                    and remainder_starts_function(text, pos + #token_text) then
+                token_type = "LUASTART"
+            elseif at_word_start and lua_line_words[token_text] then
+                token_type = lua_line_words[token_text]
+            else
+                token_type = "WORD"
+            end
         end
     end
 
@@ -778,6 +801,17 @@ do
     assert_first_token("local function f()", "LUASTART", "local", " function f()")
     assert_first_token("    do", "LEADWHITE", "    ", "do")
 
+    assert_first_token("assert(true)", "LUAONELINE", "assert", "(true)")
+    assert_first_token(
+        "assert ($(A) == \"first\")",
+        "LUAONELINE",
+        "assert",
+        " ($(A) == \"first\")"
+    )
+    assert_first_token("assertion(true)", "WORD", "assertion(true)", "")
+    assert_first_token("assert = value", "WORD", "assert", " = value")
+    assert_first_token("assert: prerequisite", "WORD", "assert", ": prerequisite")
+
     assert_first_token("end", "LUAEND", "end", "")
     assert_first_token("else", "LUA_ELSE", "else", "")
     assert_first_token("elseif ready then", "LUA_ELSEIF", "elseif", " ready then")
@@ -794,6 +828,12 @@ do
     assert(M.get_token() == "LEADWHITE")
     local token_type, token_text = M.get_token()
     assert(token_type == "LUASTART" and token_text == "do")
+
+    reset_input("    assert(true)")
+    assert(M.get_token() == "LEADWHITE")
+    token_type, token_text = M.get_token()
+    assert(token_type == "LUAONELINE" and token_text == "assert")
+    assert(M.get_line_remainder() == "(true)")
 
     current_input = nil
     input_stack = {}
