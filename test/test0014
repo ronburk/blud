@@ -1,0 +1,37 @@
+-- expect: test0014.out
+-- Standalone action compilation can reuse the cached compiler I/O module.
+
+all:
+
+do
+    local compiler = require("compiler")
+    local compile_io = require("compile_io")
+
+    local function compile_action(name, text)
+        compile_io.push_input(name, text)
+        compile_io.emit_sourcemap()
+        local action = compiler.compile_action(compile_io)
+        compile_io.emit_line("return %s", action)
+        local generated = compile_io.close()
+        local chunk, error_message = loadstring(generated, name)
+        assert(chunk, "could not load compiled action: " .. tostring(error_message))
+        assert(type(chunk()) == "function",
+               "compiled action did not produce a function")
+        return generated
+    end
+
+    local first = compile_action("first.action", "echo first\n")
+    local second = compile_action("second.action", "echo second\n")
+
+    assert(first:find("echo first", 1, true),
+           "first compilation omitted its action")
+    assert(second:find("echo second", 1, true),
+           "second compilation omitted its action")
+    assert(not second:find("echo first", 1, true),
+           "second compilation retained first-session output")
+
+    local output, error_message = io.open("test0014.out", "w")
+    assert(output,
+           "could not create test0014.out: " .. tostring(error_message))
+    output:close()
+end

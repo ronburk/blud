@@ -306,18 +306,7 @@ local function pop_lookahead(compile_io, record)
     return record
 end
 
-local function compile_action(compile_io)
-    local record = get_line_record(compile_io, true)
-
-    if record.change ~= compile_io.PUSH then
-        return "nil", record
-    end
-
-    record.change = nil
-    if record.text == nil then
-        record = nil
-    end
-
+local function compile_action_body(compile_io, record)
     local statements = {}
 
     while true do
@@ -342,6 +331,31 @@ local function compile_action(compile_io)
     end
 end
 
+local function compile_rule_action(compile_io)
+    local record = get_line_record(compile_io, true)
+
+    if record.change ~= compile_io.PUSH then
+        return "nil", record
+    end
+
+    record.change = nil
+    if record.text == nil then
+        record = nil
+    end
+
+    return compile_action_body(compile_io, record)
+end
+
+-- Compile a complete standalone action input without rule indentation.
+function M.compile_action(compile_io)
+    local action, lookahead = compile_action_body(compile_io, nil)
+    assert(
+        lookahead and lookahead.change == nil and lookahead.text == "",
+        "Standalone action compiler did not consume its complete input"
+    )
+    return action
+end
+
 local function compile_rule_or_target_assignment(compile_io)
     local parts = m.parts_from_text(compile_io.get_current_line())
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
@@ -351,7 +365,7 @@ local function compile_rule_or_target_assignment(compile_io)
     end
 
     assert(compile_io.get_token() == "EOL")
-    local action, lookahead = compile_action(compile_io)
+    local action, lookahead = compile_rule_action(compile_io)
 
     compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
                          operator,
