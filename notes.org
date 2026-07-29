@@ -926,6 +926,11 @@ main lib :EVAL:
 When does the macro "value" get evaluated? Do we understand the behavior?
 
 * Open Problems TODO
+** test targets
+targets that exist but have no rule.
+    ./blud -B test0001
+should run test0001
+
 ** multiple outputs from one action
 See the '&:' operator in Gnu Make.
 

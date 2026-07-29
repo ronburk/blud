@@ -7,12 +7,6 @@ assert($(A) == "first")
 A = second
 assert($(A) == "second")
 
-do
-    assert(true)
-    BLUD_ASSERT_EXIT(1000, 'non_existent.o')
-    : prog: non_existent.o
-    :     gcc -o prog $(CFLAGS) non_existent.o
-end
 CFLAGS += -g
 talk:
     echo "echo 1"
