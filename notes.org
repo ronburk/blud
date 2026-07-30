@@ -931,6 +931,125 @@ targets that exist but have no rule.
     ./blud -B test0001
 should run test0001
 
+User types "./blud test0001"
+normal bludfile processing commences, 'debug' is noted as default build
+now we are asked to update 'test0001' and we detect
+    - it has no rule
+    - it was a command-line target
+Now we search
+
+'test0001'
+
+----
+The genuinely dangerous meaning of “late” is “expanded after build actions may already have run.” Deferring expansion to a read-only planning phase is much less problematic.
+
+1. **Reverse dependencies are invisible.**
+   With `app: src/*.c`, `target_from_prerequisites(src/main.c)` cannot
+   find `app` until that rule’s wildcard has expanded. This breaks
+   `./blud src/main.c`, `-W` propagation, and parts of `--why`.
+
+> asked to build "src/main.c", note that it is not an atom, ask each rule if it will "claim" this name.
+
+2. **Root-directed lazy expansion becomes circular.**
+   We would like to expand only rules needed by the requested
+   roots. But when the command is `./blud src/main.c`, expanding
+   `app`’s wildcard is how we discover that `app` should be a root.
+
+> the rule "app: src/*.c"  will claim 'src/main.c'
+
+3. **Graph validation happens after side effects.**
+   Suppose `all` first builds `stamp`, then reaches a wildcard that
+   reveals a dependency cycle. The build may create `stamp` before
+   reporting a cycle that could have been detected during planning.
+
+> yes: logical cost of late binding is giving up early error detection
+
+4. **Build order changes wildcard membership.**
+   Given `package: generated/*`, if another root creates
+   `generated/a.dat` before `package` is prepared, it is included. If
+   `package` is visited first, it is not. Reordering
+   otherwise-independent roots changes the graph.
+
+> yes: another cost of late binding is obscuring the order of
+things. Of course, a constraint language like any 'make' already
+obscures the order of things. Acceptable cost.
+
+5. **Parallel builds make membership nondeterministic.**
+   If workers are creating `obj/*.o` while an archive target
+   enumerates `obj/*`, it may see all, some, or none of them. Files
+   disappearing between directory enumeration and `stat` can also
+   produce spurious errors.
+
+> yes. Parallel builds is its own can of worms.
+
+6. **Dry runs can disagree with real builds.**
+   If an earlier action normally creates `generated/a.dat`, a real
+   build may include it in a later glob. Under `-n`, the action does
+   not create it, so the later glob expands differently.
+
+  > known limitation of dry runs anyway 
+
+7. **Partial outputs can leak into later targets.**
+   A generator writes `generated/a.dat` and then fails. With
+   keep-going behavior, a later `package: generated/*` may consume
+   that incomplete output. Early freezing would prevent the failed
+   action from changing membership.
+
+> Yes. all part of a general category of pitfalls of using
+wildcards. but this particular member of the category may not fail
+because we snapshot the filesystem early.
+
+8. **Deleting a file can silently erase a dependency.**
+   If an earlier action removes `generated/schema.c`, a later
+   `program: generated/*.c` simply omits it. A frozen graph would
+   retain the prerequisite and report it missing or rebuild it.
+
+> Yes but. Keep in mind the notion that the wildcard expansion,
+however late, is still frozen if it operates on a filesystem snapshot
+taken at the start of the build.
+
+9. **Errors are discovered late.**
+   A typo such as `srcc/*.c`, or an unreadable directory, may not be
+   diagnosed until after unrelated actions have modified the
+   filesystem. Root-aware planning could still avoid checking
+   genuinely unused rules while catching errors before execution.
+
+> Yes but. Same category as [3]
+
+10. **Graph-derived data becomes stale.**
+    Reverse maps, dependency explanations, cycle information, cache
+    keys, and exported build plans must all be rebuilt whenever
+    another wildcard materializes. The answer to a graph query can
+    depend on which targets have already been considered.
+
+> No concrete example
+
+11. **Nonexistent but buildable matches have no clean meaning.**
+    With `app: obj/*.o` and `obj/%.o: src/%.c`, a clean tree contains
+    no matching `.o` files, so the glob cannot discover them. Matching
+    against possible rule outputs instead makes `*` cease to mean
+    “filesystem entries” and introduces potentially unbounded implicit
+    chains, collisions, and surprises. Late expansion only discovers
+    such files accidentally if something else happened to build them
+    first.
+
+app: obj/*.o
+obj/%.o: src/%.c
+
+This idea doesn't really work in GNU make either. It's more of a poster child
+example of how NOT to use wildcards.
+
+Two qualifications:
+
+* Stale files present before Blud starts can affect either early or late filesystem expansion; early expansion does not cure that.
+
+* The current invisible `test0001.log : test0001` edge is not itself a wildcard problem. It is the separate, analogous problem of `:TEST:` creating a rule during build preparation.
+
+So the essential invariant is probably not “expand during parsing.” It is: **freeze every relevant wildcard before the first build action executes.**
+
+
+
+
 ** multiple outputs from one action
 See the '&:' operator in Gnu Make.
 
