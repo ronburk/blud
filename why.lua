@@ -1,5 +1,27 @@
+--[[
+The --why option is an observer, not part of the update algorithm. During
+normal traversal, the build code reports four milestones for the one target
+name being explained: reached, considered, action started, and action
+completed. Their partial ordering lets report() distinguish a successful
+build, an up-to-date decision, a missing action, and the point where an
+interrupted build stopped. Decision inputs are captured before an action runs
+because the action can change the target's timestamp.
+
+If traversal never reaches the requested target, there is no runtime decision
+to report. In that case, the module constructs a prerequisite-to-dependent
+view of the declared rules, walks outward to possible top-level roots, and
+checks whether those roots were selected for this invocation. This explains
+exclusion from the selected update graph; it does not replay binding,
+implicit-rule discovery, or operator behavior.
+
+report() can be called by both normal completion and error handling, so it
+emits at most once.
+]]
+
 local M = {}
 
+-- Matching visits fold into one record. Completion fields remain sticky,
+-- while the decision fields describe the most recent consideration.
 local state
 local reported = false
 
@@ -7,6 +29,8 @@ local function requested_name()
     return blud.command_line_options.why_target_name
 end
 
+-- These hooks sit on the normal build path, so ignore unrelated targets
+-- before allocating or updating any diagnostic state.
 local function matches(target)
     local name = requested_name()
     return name and target.NAME == name
@@ -27,6 +51,7 @@ local function has_action(target)
     return target.RULE and target.RULE.action ~= nil
 end
 
+-- Preserve the cause of the timestamp decision before an action changes files.
 local function decision_reason(timestamp, newest_prerequisite_time)
     if blud.command_line_options.always_make then
         return "always_make"
@@ -38,6 +63,8 @@ local function decision_reason(timestamp, newest_prerequisite_time)
     return "up_to_date"
 end
 
+-- This hook precedes binding and implicit-rule discovery. It distinguishes a
+-- target selected for traversal from one excluded from the update graph.
 function M.reached(target)
     if not matches(target) then
         return
@@ -49,6 +76,9 @@ function M.reached(target)
     current.visits = current.visits + 1
 end
 
+-- By this milestone, prerequisite updates and the target's freshness decision
+-- are complete. Record their inputs rather than trying to reconstruct them
+-- from the filesystem after the build.
 function M.considered(
     target,
     timestamp,
@@ -72,6 +102,8 @@ function M.considered(
     current.reason = decision_reason(timestamp, newest_prerequisite_time)
 end
 
+-- Bracketing the action makes an error or other early exit distinguishable
+-- from a target whose action was never entered.
 function M.action_started(target)
     if not matches(target) then
         return
@@ -87,6 +119,8 @@ function M.action_completed(target)
 
     local current = get_state()
     current.built = true
+    -- A later visit may replace the current decision, so preserve the one
+    -- which actually led to the completed action.
     current.built_reason = current.reason
     current.built_prerequisite = current.newest_prerequisite
 end
@@ -102,6 +136,8 @@ local function add_unique(values, seen, value)
     end
 end
 
+-- A never-reached target has no event trace. Reverse the declared dependency
+-- edges so the search can start at that target and climb toward build roots.
 local function build_reverse_rules()
     local defined = {}
     local reverse = {}
@@ -133,6 +169,8 @@ local function build_reverse_rules()
     return defined, reverse
 end
 
+-- "Root" here means a highest-level target with no declared dependent, not a
+-- source leaf with no prerequisites. A closed dependency cycle has no root.
 local function find_roots(name, reverse)
     local roots = {}
     local root_seen = {}
@@ -171,6 +209,9 @@ local function selected_targets(primary_targets)
     return selected
 end
 
+-- This fallback explains graph selection, not timestamp decisions. A selected
+-- possible root rules out simple nonselection, so report the unexplained state
+-- instead of inventing a build decision.
 local function report_unreached(name, primary_targets)
     local defined, reverse = build_reverse_rules()
     if not defined[name] then
@@ -247,6 +288,9 @@ function M.report(primary_targets)
     end
 
     local current = state
+    -- Prefer the strongest completed milestone. In particular, "considered"
+    -- alone does not mean up to date: the target may have needed an action
+    -- which never started or never completed.
     if current and current.built then
         print(string.format(
             "%s was built because %s.",
