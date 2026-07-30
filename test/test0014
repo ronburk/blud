@@ -11,23 +11,47 @@ do
         compile_io.push_input(name, text)
         compile_io.emit_sourcemap()
         compiler.compile_action(compile_io)
-        local generated = compile_io.close()
+        local generated, sourcemap = compile_io.close()
         local chunk, error_message = loadstring(generated, name)
         assert(chunk, "could not load compiled action: " .. tostring(error_message))
         local action = chunk()
         assert(type(action) == "function",
                "compiled action did not produce a function")
-        return generated, action
+        return generated, action, sourcemap, blud.sourcemap
     end
 
-    local first, first_action = compile_action(
-        "first.action",
-        ": do\n" ..
-        ":     scope.directive_ran = true\n" ..
-        ": end\n" ..
-        "echo first\n"
-    )
-    local second = compile_action("second.action", "echo second\n")
+    local function assert_sourcemaps_equal(returned, embedded)
+        assert(type(returned) == "table",
+               "compile_io.close() did not return a sourcemap table")
+        assert(type(embedded) == "table",
+               "generated code did not install a sourcemap table")
+        assert(#returned == #embedded,
+               "returned and embedded sourcemaps have different lengths")
+        for i = 1, #returned do
+            for _, field in ipairs({"filename", "source_ln", "dest_ln"}) do
+                assert(returned[i][field] == embedded[i][field],
+                       string.format(
+                           "returned sourcemap entry %d has a different %s",
+                           i, field))
+            end
+        end
+    end
+
+    local first, first_action, first_sourcemap, first_embedded_sourcemap =
+        compile_action(
+            "first.action",
+            ": do\n" ..
+            ":     scope.directive_ran = true\n" ..
+            ": end\n" ..
+            "echo first\n"
+        )
+    local second, _, second_sourcemap, second_embedded_sourcemap =
+        compile_action("second.action", "echo second\n")
+
+    assert(first_sourcemap ~= second_sourcemap,
+           "compile_io.close() reused its previous sourcemap table")
+    assert_sourcemaps_equal(first_sourcemap, first_embedded_sourcemap)
+    assert_sourcemaps_equal(second_sourcemap, second_embedded_sourcemap)
 
     assert(first:find("echo first", 1, true),
            "first compilation omitted its action")

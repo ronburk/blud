@@ -428,7 +428,8 @@ if luac_needs_building then
     blud_user_code = blud_user_code .. "\nblud.run_build(\"" .. blud_primary_target_name .. "\")\n"
 
     -- Compile the source code to bytecode
-    local code_to_compile = compile_io.close()
+    local code_to_compile, sourcemap = compile_io.close()
+    print("compile_io.close() returned sourcemap: " .. util.dump(sourcemap))
     if blud.command_line_options.debug == true then
         util.string_to_file("bludfile.luad", code_to_compile)
     end

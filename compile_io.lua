@@ -753,8 +753,9 @@ function M.close()
     end
     sourcemap_lua = sourcemap_to_lua(sourcemap)
     local result = pre_sourcemap .. sourcemap_lua .. post_sourcemap
+    local completed_sourcemap = sourcemap
     reset_state()
-    return result
+    return result, completed_sourcemap
 end
 
 ---[=[UNIT_TESTS
