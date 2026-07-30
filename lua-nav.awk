@@ -19,6 +19,8 @@ BEGIN {
 }
 
 FNR == 1 {
+    if (current_file != "")
+        finish_file(current_file)
     begin_file(FILENAME)
 }
 
@@ -30,6 +32,11 @@ FNR == 1 {
 END {
     if (showed_help || argument_error)
         exit argument_status
+
+    if (current_file != "")
+        finish_file(current_file)
+    if (source_errors)
+        exit 2
 
     parse_functions()
     exit output_matches()
@@ -133,6 +140,7 @@ function parse_arguments(    i, arg, input_count) {
 }
 
 function begin_file(file,    i) {
+    current_file = file
     file_order[++file_count] = file
     file_token_first[file] = token_count + 1
 
@@ -144,6 +152,20 @@ function begin_file(file,    i) {
 
     for (i in block_stack)
         delete block_stack[i]
+}
+
+function report_source_error(file, line, message) {
+    printf "lua-nav.awk: %s:%d: %s\n", file, line, message > "/dev/stderr"
+    ++source_errors
+}
+
+function finish_file(file) {
+    if (lexer_state == "short_string")
+        report_source_error(file, short_start_line, "unfinished string")
+    else if (lexer_state == "long_string")
+        report_source_error(file, long_start_line, "unfinished long string")
+    else if (lexer_state == "long_comment")
+        report_source_error(file, long_start_line, "unfinished long comment")
 }
 
 function add_token(text, type, line, file) {
@@ -246,6 +268,7 @@ function tokenize_line(text, line, file,    pos, length_, c, c2, c3, previous, l
             if (level >= 0) {
                 lexer_state = "long_comment"
                 long_level = level
+                long_start_line = line
                 pos += level + 4
                 continue
             }
@@ -318,8 +341,14 @@ function tokenize_line(text, line, file,    pos, length_, c, c2, c3, previous, l
 
     if (lexer_state == "short_string") {
         short_text = short_text "\n"
-        if (short_escaped)
+        if (short_escaped) {
             short_escaped = 0
+        } else {
+            report_source_error(file, short_start_line, "unfinished string")
+            lexer_state = "normal"
+            short_quote = ""
+            short_text = ""
+        }
     }
 }
 
@@ -369,56 +398,62 @@ function render_parameters(open, close_pos,    result, i, text) {
     return result ")"
 }
 
-function is_lhs_delimiter(text) {
-    return text == "local" || text == "return" || text == ";" || text == "," || \
-           text == "{" || text == "}" || text == "then" || text == "do" || \
-           text == "end" || text == "else" || text == "elseif" || text == "until"
-}
-
-function assignment_name(eq, first,    i, start, square, paren, brace, text, candidate) {
-    i = eq - 1
-    square = paren = brace = 0
-
-    for (; i >= first; --i) {
+function find_open_square(close_pos, first,    depth, i, text) {
+    depth = 0
+    for (i = close_pos; i >= first; --i) {
         text = token_text[i]
-
-        if (text == "]")
-            ++square
-        else if (text == "[") {
-            if (square)
-                --square
-            else
-                break
-        } else if (text == ")") {
-            if (!square && !paren && !brace)
-                break
-            ++paren
-        } else if (text == "(") {
-            if (paren)
-                --paren
-            else
-                break
-        } else if (text == "}") {
-            if (!square && !paren && !brace)
-                break
-            ++brace
-        } else if (text == "{") {
-            if (brace)
-                --brace
-            else
-                break
-        } else if (!square && !paren && !brace && is_lhs_delimiter(text)) {
-            break
+        if (text == "]") {
+            ++depth
+        } else if (text == "[") {
+            --depth
+            if (!depth) {
+                parsed_open_square = i
+                return 1
+            }
         }
     }
+    return 0
+}
 
-    start = i + 1
-    candidate = ""
-    for (i = start; i < eq; ++i)
-        candidate = candidate token_text[i]
+# Parse only the assignable expression immediately before "=" so tokens from a
+# preceding statement cannot become part of the function name.
+function assignment_name(eq, first,    i, start, need_receiver, candidate, n) {
+    i = eq - 1
+    start = 0
 
-    if (candidate !~ /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|:[A-Za-z_][A-Za-z0-9_]*|\[[^][]+\])*$/)
+    while (i >= first) {
+        if (token_type[i] == "identifier") {
+            start = i
+            --i
+            need_receiver = 0
+        } else if (token_text[i] == "]") {
+            if (!find_open_square(i, first))
+                return ""
+            start = parsed_open_square
+            i = start - 1
+            need_receiver = 1
+        } else {
+            return ""
+        }
+
+        if (need_receiver)
+            continue
+
+        if (i >= first && (token_text[i] == "." || token_text[i] == ":")) {
+            --i
+            need_receiver = 1
+            continue
+        }
+
+        break
+    }
+
+    if (need_receiver || !start)
         return ""
+
+    candidate = ""
+    for (n = start; n < eq; ++n)
+        candidate = candidate token_text[n]
 
     assignment_start = start
     return candidate
