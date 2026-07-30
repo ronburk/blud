@@ -1,31 +1,37 @@
 --[[
     --why TARGET
 
-Build normally, then explain why TARGET was or was not built. TARGET is only
-the subject of the explanation; naming it after --why does not request that it
-be built. Positional targets, or the default target when none are given, still
-select the build.
+Run the build selected by the positional arguments, or by the default target
+when no positional argument is present. Afterward, explain why the target named
+TARGET was or was not built. TARGET selects only the subject of the
+explanation; it does not add that target to the build.
 
-As blud works, this module records what happens to the named target: whether
-blud reaches it, whether it needs rebuilding, and whether its action starts
-and finishes. report() uses those facts after the build. Facts needed for the
-explanation are saved before an action can change the target file.
+In this file, TARGET in a comment means the string following --why. A parameter
+named target is an atom representing a target. primary_targets contains the
+atoms selected by the positional arguments or the default target; diagnostic
+messages call these "root targets." "Reached" means that atom.BUILD() was
+called for the atom.
 
-If blud never reaches TARGET, there is no timestamp comparison or action to
-report. The module then follows declared rules upward from TARGET to find the
-top-level targets that depend on it and checks whether they were selected.
-This fallback cannot account for binding, implicit rules, or custom operator
-behavior.
+atom.BUILD() calls reached() before it tries to bind the target or find an
+implicit rule. Once the target's rebuild status is known, considered() saves
+the timestamps and result. action_started() and action_completed() surround
+the action. report() turns these saved facts into the explanation.
 
-Normal completion and error handling can both call report(), so it prints only
-once.
+If reached() was never called for TARGET, no build event explains its absence.
+report_unreached() instead reads the rules already present in blud.rules. It
+does not bind names, discover an implicit rule for TARGET, or ask an operator
+to prepare prerequisites.
+
+Normal completion and error handling can both call report(). reported prevents
+the second call from printing the explanation again.
 ]]
 
 local M = {}
 
--- Repeated visits to TARGET share one record. Once an action starts or
--- finishes, that fact is kept; a later visit may replace the saved timestamp
--- comparison.
+-- Every hook call for an atom whose NAME equals TARGET updates state.
+-- considered() replaces the saved timestamp data on each call.
+-- state.action_started and state.built are never cleared, so a later call
+-- cannot erase evidence that an action began or completed.
 local state
 local reported = false
 
@@ -33,7 +39,8 @@ local function requested_name()
     return blud.command_line_options.why_target_name
 end
 
--- --why explains only one name, so ignore every other target.
+-- Hook parameters are atoms. Match the atom's NAME exactly to TARGET;
+-- BOUND_NAME is not considered here.
 local function matches(target)
     local name = requested_name()
     return name and target.NAME == name
@@ -54,8 +61,8 @@ local function has_action(target)
     return target.RULE and target.RULE.action ~= nil
 end
 
--- Save why this visit did or did not require rebuilding. An action may change
--- the target's timestamp, making this impossible to determine afterward.
+-- Classify the pre-action timestamps for report(). considered() stores the
+-- result now because an action may change the target file's timestamp.
 local function decision_reason(timestamp, newest_prerequisite_time)
     if blud.command_line_options.always_make then
         return "always_make"
@@ -67,8 +74,9 @@ local function decision_reason(timestamp, newest_prerequisite_time)
     return "up_to_date"
 end
 
--- Called when blud starts updating this target, before binding and
--- implicit-rule discovery.
+-- atom.BUILD() calls this first, before that call sets the parent scope, looks
+-- for an implicit rule, or binds the target. reached therefore means that the
+-- update traversal attempted this atom, not that its rebuild status is known.
 function M.reached(target)
     if not matches(target) then
         return
@@ -80,8 +88,10 @@ function M.reached(target)
     current.visits = current.visits + 1
 end
 
--- Called after prerequisites have been updated and their timestamps compared
--- with the target. Save enough to explain the result after the build.
+-- Record one call's needs_building result. For an atom with a rule, its
+-- operator calls this after binding it, building its prerequisites, and
+-- computing needs_building from the timestamps. atom.BUILD() also calls this
+-- for an existing atom with no rule, passing false for needs_building.
 function M.considered(
     target,
     timestamp,
@@ -105,9 +115,10 @@ function M.considered(
     current.reason = decision_reason(timestamp, newest_prerequisite_time)
 end
 
--- action_started() is called immediately before the action;
--- action_completed() only after it returns. The difference reveals when the
--- build stopped inside an action.
+-- Operators call action_started() immediately before target:DO_ACTION(), and
+-- action_completed() only after it returns normally. If only action_started()
+-- was called, target:DO_ACTION() did not return normally. "Completed" means
+-- that the action returned; it does not mean that a target file exists.
 function M.action_started(target)
     if not matches(target) then
         return
@@ -123,8 +134,8 @@ function M.action_completed(target)
 
     local current = get_state()
     current.built = true
-    -- A later visit may replace the saved timestamp comparison, so keep the
-    -- reason for the action that actually finished.
+    -- A later considered() call may replace reason and newest_prerequisite.
+    -- Preserve the values associated with the action that just returned.
     current.built_reason = current.reason
     current.built_prerequisite = current.newest_prerequisite
 end
@@ -133,6 +144,10 @@ local function quoted(name)
     return string.format("%q", name)
 end
 
+-- Keep an ordered list without duplicates. seen records the values already in
+-- values. build_reverse_rules() uses this to list each target name once for a
+-- prerequisite; find_roots() uses it to return each result name once when
+-- several paths end at that name.
 local function add_unique(values, seen, value)
     if not seen[value] then
         seen[value] = true
@@ -140,8 +155,11 @@ local function add_unique(values, seen, value)
     end
 end
 
--- When TARGET was never reached, map each prerequisite to the targets that
--- name it. This lets report_unreached() follow the dependency chain upward.
+-- For every target/prerequisite pair in blud.rules, add target.NAME to
+-- reverse[prerequisite_name]. For the rule "output: input", reverse["input"]
+-- contains "output". report_unreached() can therefore start with TARGET and
+-- repeatedly find target names whose rules list the current name as a
+-- prerequisite. defined records every name that appears as a rule target.
 local function build_reverse_rules()
     local defined = {}
     local reverse = {}
@@ -173,9 +191,11 @@ local function build_reverse_rules()
     return defined, reverse
 end
 
--- Here, a "root" is a target that no declared rule uses as a prerequisite. It
--- is the top of a dependency chain, not a source file at the bottom. A closed
--- dependency cycle has no root.
+-- Follow reverse until a name has no entry in reverse. find_roots() calls such
+-- a name a root: it appears as a rule target, but no declared rule lists it as
+-- a prerequisite. This is a property of all declared rules, independent of
+-- whether the name is one of this invocation's primary_targets. A closed cycle
+-- with no path out of the cycle produces no root.
 local function find_roots(name, reverse)
     local roots = {}
     local root_seen = {}
@@ -207,6 +227,8 @@ local function find_roots(name, reverse)
 end
 
 local function selected_targets(primary_targets)
+    -- Convert the atoms selected by the command line or default target into a
+    -- set of NAME values for comparison with the roots from find_roots().
     local selected = {}
     for _, target in ipairs(primary_targets) do
         selected[target.NAME] = true
@@ -214,9 +236,11 @@ local function selected_targets(primary_targets)
     return selected
 end
 
--- This can explain one common reason TARGET was skipped: none of the top-level
--- targets that depend on it was selected. If one was selected, the declared
--- rules alone cannot explain the skip, so say that instead of guessing.
+-- This function is called only when no atom whose NAME equals TARGET called
+-- reached(). For each root found through the declared rules, report whether it
+-- was selected as one of primary_targets. A selected root should ordinarily
+-- have caused traversal to reach TARGET; if it did not, the declared rules do
+-- not supply a cause, so report that fact instead of inventing one.
 local function report_unreached(name, primary_targets)
     local defined, reverse = build_reverse_rules()
     if not defined[name] then
@@ -267,6 +291,9 @@ local function report_unreached(name, primary_targets)
     end
 end
 
+-- Turn decision_reason()'s code into the clause printed after "because".
+-- prerequisite is the atom that had the greatest prerequisite timestamp when
+-- reason is "newer_prerequisite".
 local function rebuild_reason(reason, prerequisite)
     if reason == "always_make" then
         return "-B was specified"
@@ -293,9 +320,10 @@ function M.report(primary_targets)
     end
 
     local current = state
-    -- Check for a finished action first. Merely comparing timestamps does not
-    -- mean the target was up to date: it may have needed an action that never
-    -- started or never finished.
+    -- considered means only that needs_building was calculated. If it is true,
+    -- the other fields distinguish no action, an action not started, an action
+    -- started, and an action completed. Check built first because a later
+    -- considered() call can replace the timestamp data saved for that action.
     if current and current.built then
         print(string.format(
             "%s was built because %s.",
