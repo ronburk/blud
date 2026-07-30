@@ -862,6 +862,14 @@ blud.build_init = function()
     }
 end
 
+--[[
+
+    blud.default_target is the first "buildable" target encountered in
+    the bludfile, if any. If there are no command-line arguments, we just
+    build that. 
+
+
+--]]
 blud.build_targets = function(targets)
     local function is_build_target(target)
         return target.RULE and
