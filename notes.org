@@ -182,6 +182,11 @@ Keep startup work minimal:
    Create it first using only `head`, `base`, `draft`, and `title`; add
    the body separately.
 10. Return the PR link and a concise summary of changes and validation.
+11. If ./blud contains any unintended change, treat it as
+    environment-corrupted. Remove the entire checkout and make a fresh
+    ordinary clone. If deletion is blocked, move the checkout intact
+    to a fresh disposable /tmp directory. Do not inspect, repair, or
+    reuse it.
 
 Only the user works directly on `main`. LLMs must not commit or push to
 `main`, merge PRs, or alter unrelated branches or PRs.
