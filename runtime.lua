@@ -870,38 +870,43 @@ end
 
 
 --]]
-blud.build_targets = function(targets)
-    local function is_build_target(target)
-        return target.RULE and
-               target.RULE.operator == blud.operators[":BUILD:"]
+local function is_build_operator(target)
+    return target.RULE and
+           target.RULE.operator == blud.operators[":BUILD:"]
+end
+
+local function infer_targets(default_target, targets)
+    assert(default_target, "no default target to build")
+
+    if not targets[1] then
+        return { default_target }
     end
 
-    local function build_default_target()
-        if not blud.default_target then
-            error("no default target to build")
+    local concrete_targets = {}
+
+    for index, target in ipairs(targets) do
+        table.insert(concrete_targets, target)
+        if is_build_operator(target) and
+           (not targets[index + 1] or is_build_operator(targets[index + 1])) then
+            table.insert(concrete_targets, default_target)
         end
-        blud.default_target:BUILD()
     end
 
-    if targets[1] and not is_build_target(targets[1]) and blud.default_build then
+    return concrete_targets
+end
+
+blud.build_targets = function(targets)
+    local concrete_targets = infer_targets(blud.default_target, targets)
+
+    if not is_build_operator(concrete_targets[1]) and blud.default_build then
         blud.default_build:BUILD()
     end
 
-    local previous_was_build = false
-    for _, target in ipairs(targets) do
-        local is_build = is_build_target(target)
-        if previous_was_build and is_build then
-            build_default_target()
-        end
+    for _, target in ipairs(concrete_targets) do
         local _, needs_building = target:BUILD()
         if needs_building == false then
             print(target.NAME .. " is up to date")
         end
-        previous_was_build = is_build
-    end
-
-    if previous_was_build then
-        build_default_target()
     end
 end
 
