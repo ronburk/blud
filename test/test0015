@@ -48,6 +48,41 @@ do
            "sourcemap replacement had an unexpected error: " ..
            tostring(error_message))
 
+    local function assert_location(
+        chunk, generated_ln, expected_filename, expected_source_ln)
+        local filename, source_ln =
+            blud.resolve_lua_location(chunk, generated_ln)
+        assert(filename == expected_filename and
+               source_ln == expected_source_ln,
+               string.format(
+                   "%s:%d resolved to %s:%d instead of %s:%d",
+                   chunk,
+                   generated_ln,
+                   tostring(filename),
+                   source_ln,
+                   expected_filename,
+                   expected_source_ln))
+    end
+
+    local location_name = "[registry-location-test]"
+    local location_map = {
+        { dest_ln = 3, filename = "first.blud", source_ln = 10 },
+        { dest_ln = 7, filename = "second.blud", source_ln = 20 },
+        { dest_ln = 9, filename = "third.blud", source_ln = 30 },
+    }
+    blud.register_lua_source(location_name, "", location_map)
+
+    assert_location(location_name, 3, "first.blud", 10)
+    assert_location(location_name, 5, "first.blud", 12)
+    assert_location(location_name, 6, "first.blud", 13)
+    assert_location(location_name, 7, "second.blud", 20)
+    assert_location(location_name, 12, "third.blud", 33)
+    assert_location(location_name, 2, location_name, 2)
+    assert_location("[unregistered-location-test]", 4,
+                    "[unregistered-location-test]", 4)
+    assert_location(chunk_name, 2, chunk_name, 2)
+    assert_location(mapped_name, 5, mapped_name, 5)
+
     local failing_name = "[registry-error-test]"
     local failing_source =
         "local marker = true\n" ..
