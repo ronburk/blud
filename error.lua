@@ -8,7 +8,7 @@ local expected_data
 
 local function report_why()
     if blud.why then
-        blud.why.report(blud.primary_targets or {})
+        blud.why.report()
     end
 end
 
