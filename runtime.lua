@@ -304,6 +304,7 @@ blud.build_name      = nil
 blud.default_build   = nil
 blud.default_target  = nil
 blud.primary_targets = nil
+blud.roots           = {}
 blud.array_append    = function(array, more)
     if not (type(array) == "table" and type(more) == "table") then
         blud.error("Bad call to array_append")
@@ -899,10 +900,12 @@ blud.build_targets = function(targets)
     local concrete_targets = infer_targets(blud.default_target, targets)
 
     if not is_build_operator(concrete_targets[1]) and blud.default_build then
-        blud.default_build:BUILD()
+        table.insert(concrete_targets, 1, blud.default_build)
     end
 
-    for _, target in ipairs(concrete_targets) do
+    blud.roots = concrete_targets
+
+    for _, target in ipairs(blud.roots) do
         local _, needs_building = target:BUILD()
         if needs_building == false then
             print(target.NAME .. " is up to date")

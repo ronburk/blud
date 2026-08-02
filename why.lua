@@ -7,10 +7,11 @@ TARGET was or was not built. TARGET selects only the subject of the
 explanation; it does not add that target to the build.
 
 In this file, TARGET in a comment means the string following --why. A parameter
-named target is an atom representing a target. primary_targets contains the
-atoms selected by the positional arguments or the default target; diagnostic
-messages call these "root targets." "Reached" means that atom.BUILD() was
-called for the atom.
+named target is an atom representing a target. blud.roots contains every atom
+that build_targets() selects for a direct BUILD() call, in planned call order.
+It is populated before the first call, so it also contains later roots skipped
+after an error. Diagnostic messages call these "root targets." "Reached" means
+that atom.BUILD() was called for the atom.
 
 atom.BUILD() calls reached() before it tries to bind the target or find an
 implicit rule. Once the target's rebuild status is known, considered() saves
@@ -146,8 +147,7 @@ end
 
 -- Keep an ordered list without duplicates. seen records the values already in
 -- values. build_reverse_rules() uses this to list each target name once for a
--- prerequisite; find_roots() uses it to return each result name once when
--- several paths end at that name.
+-- prerequisite.
 local function add_unique(values, seen, value)
     if not seen[value] then
         seen[value] = true
@@ -191,57 +191,54 @@ local function build_reverse_rules()
     return defined, reverse
 end
 
--- Follow reverse until a name has no entry in reverse. find_roots() calls such
--- a name a root: it appears as a rule target, but no declared rule lists it as
--- a prerequisite. This is a property of all declared rules, independent of
--- whether the name is one of this invocation's primary_targets. A closed cycle
--- with no path out of the cycle produces no root.
-local function find_roots(name, reverse)
-    local roots = {}
-    local root_seen = {}
-    local visiting = {}
+-- Follow every reverse-rule path and record any name that is one of this
+-- invocation's concrete roots. Iterate blud.roots afterward so results retain
+-- invocation order, including repeated root selections.
+local function find_invocation_roots(name, reverse)
+    local root_names = {}
+    for _, root in ipairs(blud.roots) do
+        root_names[root.NAME] = true
+    end
+
+    local found = {}
     local visited = {}
 
     local function visit(current)
-        if visiting[current] or visited[current] then
+        if visited[current] then
             return
         end
 
-        visiting[current] = true
+        visited[current] = true
+
+        if root_names[current] then
+            found[current] = true
+        end
 
         local parents = reverse[current]
-        if not parents or #parents == 0 then
-            add_unique(roots, root_seen, current)
-        else
+        if parents then
             for _, parent in ipairs(parents) do
                 visit(parent)
             end
         end
-
-        visiting[current] = nil
-        visited[current] = true
     end
 
     visit(name)
+
+    local roots = {}
+    for _, root in ipairs(blud.roots) do
+        if found[root.NAME] then
+            table.insert(roots, root.NAME)
+        end
+    end
     return roots
 end
 
-local function selected_targets(primary_targets)
-    -- Convert the atoms selected by the command line or default target into a
-    -- set of NAME values for comparison with the roots from find_roots().
-    local selected = {}
-    for _, target in ipairs(primary_targets) do
-        selected[target.NAME] = true
-    end
-    return selected
-end
-
 -- This function is called only when no atom whose NAME equals TARGET called
--- reached(). For each root found through the declared rules, report whether it
--- was selected as one of primary_targets. A selected root should ordinarily
--- have caused traversal to reach TARGET; if it did not, the declared rules do
--- not supply a cause, so report that fact instead of inventing one.
-local function report_unreached(name, primary_targets)
+-- reached(). Find every concrete invocation root connected to TARGET through
+-- the declared rules. Such a root should ordinarily have caused traversal to
+-- reach TARGET; if it did not, the declared rules do not supply a cause, so
+-- report that fact instead of inventing one.
+local function report_unreached(name)
     local defined, reverse = build_reverse_rules()
     if not defined[name] then
         print(string.format(
@@ -251,39 +248,25 @@ local function report_unreached(name, primary_targets)
         return
     end
 
-    local roots = find_roots(name, reverse)
+    local roots = find_invocation_roots(name, reverse)
     if #roots == 0 then
         print(string.format(
-            "%s was not built, but no path to a root could be determined.",
+            "%s was not built, but no declared path from a root target " ..
+            "could be determined.",
             quoted(name)
         ))
         return
     end
 
-    local selected = selected_targets(primary_targets)
     for _, root in ipairs(roots) do
-        if selected[root] then
-            if root == name then
-                print(string.format(
-                    "%s was not built even though it was a root target.",
-                    quoted(name)
-                ))
-            else
-                print(string.format(
-                    "%s was not built even though %s was a root target.",
-                    quoted(name),
-                    quoted(root)
-                ))
-            end
-        elseif root == name then
+        if root == name then
             print(string.format(
-                "%s was not built because it was not a root target.",
+                "%s was not built even though it was a root target.",
                 quoted(name)
             ))
         else
             print(string.format(
-                "%s was not built because %s was not built because " ..
-                "it was not a root target.",
+                "%s was not built even though %s was a root target.",
                 quoted(name),
                 quoted(root)
             ))
@@ -308,7 +291,7 @@ local function rebuild_reason(reason, prerequisite)
     return "it was out of date"
 end
 
-function M.report(primary_targets)
+function M.report()
     if reported then
         return
     end
@@ -375,7 +358,7 @@ function M.report(primary_targets)
             quoted(name)
         ))
     else
-        report_unreached(name, primary_targets)
+        report_unreached(name)
     end
 end
 
