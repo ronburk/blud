@@ -35,6 +35,23 @@ function blud.load_lua_source(text, chunk_name, sourcemap)
     return load(text, chunk_name)
 end
 
+function blud.resolve_lua_location(chunk_name, generated_ln)
+    local source_entry = lua_sources[chunk_name]
+    local sourcemap = source_entry and source_entry.sourcemap
+
+    if sourcemap then
+        for i = #sourcemap, 1, -1 do
+            local entry = sourcemap[i]
+            if entry.dest_ln <= generated_ln then
+                return entry.filename,
+                       entry.source_ln + generated_ln - entry.dest_ln
+            end
+        end
+    end
+
+    return chunk_name, generated_ln
+end
+
 -- Helper function to return the text of a specific line from a string
 -- @param source: The entire source string
 -- @param line_number: The desired line number (1-based index)
