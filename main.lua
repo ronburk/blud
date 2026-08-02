@@ -1,3 +1,5 @@
+blud.register_lua_source("[main.lua]", CSTRGet("main.lua"))
+
 -- let's catch bad global references
 setmetatable(_G, {
     __index = function(_, key)
@@ -13,9 +15,6 @@ end
 
 
 
-blud.sources = {}
-blud.sources["[main.lua]"] = CSTRGet("main.lua")
-
 table.insert(package.loaders, 1, function(modname)
     local filename = modname .. ".lua"
     local source = CSTRGet(filename)
@@ -24,8 +23,7 @@ table.insert(package.loaders, 1, function(modname)
     end
 
     local safe_name = "[" .. filename .. "]"
-    blud.sources[safe_name] = source
-    return assert(load(source, safe_name))
+    return assert(blud.load_lua_source(source, safe_name))
 end)
 
 -- .require now only handles error handling via xpcall
@@ -34,9 +32,7 @@ function blud.require(name)
     if source == nil then error("no such internal file: " .. name) end
 
     local safe_name = "[" .. name .. "]"
-    blud.sources[safe_name] = source
-
-    local chunk, load_err = load(source, safe_name)
+    local chunk, load_err = blud.load_lua_source(source, safe_name)
     if not chunk then
         error(load_err)  -- Raise the syntax error to be caught by xpcall
     end
