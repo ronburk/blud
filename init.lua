@@ -1,5 +1,40 @@
 -- init.lua: initial bootstrap code
 --     need to get error handler set up before much else happens
+
+local lua_sources = {}
+
+function blud.register_lua_source(chunk_name, text, sourcemap)
+    assert(type(chunk_name) == "string",
+           "Lua source chunk name must be a string")
+    assert(type(text) == "string",
+           "Lua source text must be a string")
+    assert(sourcemap == nil or type(sourcemap) == "table",
+           "Lua source sourcemap must be a table or nil")
+
+    local existing = lua_sources[chunk_name]
+    if existing then
+        assert(existing.text == text,
+               string.format(
+                   "Lua chunk %q is already registered with different text",
+                   chunk_name))
+        assert(existing.sourcemap == sourcemap,
+               string.format(
+                   "Lua chunk %q is already registered with a different sourcemap",
+                   chunk_name))
+        return
+    end
+
+    lua_sources[chunk_name] = {
+        text = text,
+        sourcemap = sourcemap,
+    }
+end
+
+function blud.load_lua_source(text, chunk_name, sourcemap)
+    blud.register_lua_source(chunk_name, text, sourcemap)
+    return load(text, chunk_name)
+end
+
 -- Helper function to return the text of a specific line from a string
 -- @param source: The entire source string
 -- @param line_number: The desired line number (1-based index)
@@ -44,15 +79,17 @@ function blud.error_handler(err)
                 local info = debug.getinfo(level, "Sln")
                 if not info then break end  -- Stop when no more frames
 
-                -- Check if the source is in blud.sources (i.e., it's a dynamically loaded chunk)
                 local file_name = info.source
                 local line_number = info.currentline
                 local func_name = info.name or "[C function]"  -- Get the function name or indicate C function
+                local source_entry = file_name and lua_sources[file_name]
 
-                if file_name and blud.sources[file_name] and line_number > 0 then
+                if source_entry and line_number > 0 then
                     -- Get the specific line from the source code
-                    local source = blud.sources[file_name]
-                    local src_line = get_line_from_source(source, line_number)
+                    local src_line = get_line_from_source(
+                        source_entry.text,
+                        line_number
+                    )
 
                     -- Add the stack frame information along with the source line
                     if src_line then
@@ -64,7 +101,7 @@ function blud.error_handler(err)
                     -- Add C function name and indicate it
                     table.insert(lines, string.format("  C function '%s'", func_name))
                 else
-                    -- Add the stack frame info without source code if not in blud.sources
+                    -- Add the stack frame info without registered source code
                     table.insert(lines, string.format("  %s:%d in function '%s'", info.source, info.currentline, func_name))
                 end
 
@@ -80,4 +117,3 @@ function blud.error_handler(err)
         2
     )
 end
-

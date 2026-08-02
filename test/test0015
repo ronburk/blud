@@ -1,0 +1,71 @@
+-- expect: test0015.out
+-- Loaded Lua sources have a private, write-once registry.
+
+all:
+
+do
+    assert(rawget(blud, "sources") == nil,
+           "Lua source registry is publicly exposed")
+
+    local chunk_name = "[registry-test]"
+    local source = "local value = 40\nreturn value + 2\n"
+    local chunk, load_error = blud.load_lua_source(source, chunk_name)
+    assert(chunk,
+           "could not load registered Lua source: " .. tostring(load_error))
+    assert(chunk() == 42,
+           "registered Lua source returned the wrong value")
+
+    blud.register_lua_source(chunk_name, source)
+
+    local accepted, error_message = pcall(
+        blud.register_lua_source,
+        chunk_name,
+        "return 43\n"
+    )
+    assert(not accepted,
+           "Lua source registry allowed replacement text")
+    assert(tostring(error_message):find(
+               "already registered with different text", 1, true),
+           "source replacement had an unexpected error: " ..
+           tostring(error_message))
+
+    local mapped_name = "[registry-map-test]"
+    local mapped_source = "return true\n"
+    local sourcemap = {}
+    blud.register_lua_source(mapped_name, mapped_source, sourcemap)
+    blud.register_lua_source(mapped_name, mapped_source, sourcemap)
+
+    accepted, error_message = pcall(
+        blud.register_lua_source,
+        mapped_name,
+        mapped_source,
+        {}
+    )
+    assert(not accepted,
+           "Lua source registry allowed sourcemap replacement")
+    assert(tostring(error_message):find(
+               "already registered with a different sourcemap", 1, true),
+           "sourcemap replacement had an unexpected error: " ..
+           tostring(error_message))
+
+    local failing_name = "[registry-error-test]"
+    local failing_source =
+        "local marker = true\n" ..
+        "error(\"registry failure\")\n"
+    local failing_chunk = assert(
+        blud.load_lua_source(failing_source, failing_name))
+    local succeeded, diagnostic = xpcall(failing_chunk, blud.error_handler)
+    assert(not succeeded,
+           "registered failing source unexpectedly succeeded")
+    assert(diagnostic:find(
+               failing_name .. ":2 --> error(\"registry failure\")",
+               1,
+               true),
+           "error handler did not show the registered source line: " ..
+           tostring(diagnostic))
+
+    local output, output_error = io.open("test0015.out", "w")
+    assert(output,
+           "could not create test0015.out: " .. tostring(output_error))
+    output:close()
+end
