@@ -872,7 +872,7 @@ end
 --]]
 local function is_build_operator(target)
     return target.RULE and
-           target.RULE.operator == blud.operators[":BUILD:"]
+           target.RULE.operator.name == ":BUILD:"
 end
 
 local function infer_targets(default_target, targets)
