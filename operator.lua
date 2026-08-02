@@ -12,6 +12,15 @@ M.operator_new   = function(t)
     return setmetatable(t, M)
 end
 
+local function register_operator(name)
+    assert(type(name) == "string", "operator name must be a string")
+    assert(not blud.operators[name], "operator already registered: " .. name)
+
+    local operator = M.operator_new({ name = name })
+    blud.operators[name] = operator
+    return operator
+end
+
 -- Generated targets bind under OWD; source-only targets bind under SWD.
 -- The presence of an action is what distinguishes the two.
 function M:BIND(atom)
@@ -192,7 +201,7 @@ local function rule_dump(rule)
     table.insert(lines, string.format(
         "%s %s %s",
         targets_dump(rule.targets),
-        rule.operator.name or rule.operator.NAME or "?",
+        rule.operator.name,
         words_dump(rule.prereq_words)
     ))
 
@@ -266,8 +275,7 @@ end
 --]]
 
 do  -- Ordinary explicit dependency rules.
-    local op = M.operator_new({})
-    blud.operators[":"] = op
+    local op = register_operator(":")
     function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atom))
         return target_atom
@@ -337,8 +345,7 @@ do  -- Ordinary explicit dependency rules.
 end
 
 do  -- Pattern rules are registered for later implicit-rule lookup.
-    local op = M.operator_new({})
-    blud.operators["%:"] = op
+    local op = register_operator("%:")
     function op:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[%%:]:SET_PRIMARY_TARGETS()")
         -- implicit rules are not candidates for primary targets
@@ -358,8 +365,7 @@ do  -- Pattern rules are registered for later implicit-rule lookup.
 end
 
 do  -- Source lists: compile each source through a reverse rule, then link.
-    local op = M.operator_new({})
-    blud.operators["::"] = op
+    local op = register_operator("::")
 
     local function prepare_prerequisites(target_atom)
         local source_rule = target_atom.RULE
@@ -494,8 +500,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
 end
 
 do  -- Test suites aggregate one generated success-log target per test.
-    local op = M.operator_new({})
-    blud.operators[":TEST:"] = op
+    local op = register_operator(":TEST:")
 
     local function is_absolute_path(path)
         return path:match("^/") or path:match("^[A-Za-z]:[/\\]")
@@ -776,8 +781,7 @@ end
 
 -- :BUILD: operator
 do
-    local op = M.operator_new({})
-    blud.operators[":BUILD:"] = op
+    local op = register_operator(":BUILD:")
 
     -- a build name cannot be a primary target
     function op:SET_PRIMARY_TARGETS(target_atom)
