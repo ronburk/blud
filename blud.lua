@@ -339,38 +339,6 @@ end
 ]]
 
 
-function phase1_report_compile_error(err, code_to_compile)
-    local generated_line, message = err:match(":(%d+):%s*(.*)$")
-    generated_line = tonumber(generated_line)
-    if not generated_line then
-        error("Compilation Error: " .. err)
-    end
-
-    local lines = {}
-    for line in (code_to_compile .. "\n"):gmatch("([^\n]*)\n") do
-        table.insert(lines, line)
-    end
-
-    local source_line, source_name
-    for i = generated_line, 1, -1 do
-        source_line, source_name =
-            lines[i]:match("^--BLUDLINE%s+(%d+)%s+(.+)$")
-        if source_line then
-            source_line = generated_line - i
-            break
-        end
-    end
-
-    if source_line then
-        io.stderr:write(string.format("%s:%d: %s\n",
-            source_name, source_line, message))
-        io.stderr:write((lines[generated_line] or "") .. "\n")
-        os.exit(1)
-    end
-
-    error("Compilation Error: " .. err)
-end
-
 if luac_needs_building then
     --rlb
     local compiler = require("compiler")
@@ -438,7 +406,7 @@ if luac_needs_building then
         blud.load_lua_source(code_to_compile, source_path, sourcemap)
     
     if not compiled_function then
-        phase1_report_compile_error(err, code_to_compile)
+        error("Compilation Error: " .. err, 0)
     end
 
     local bytecode = string.dump(compiled_function, false) -- true to strip debugging info

@@ -30,11 +30,6 @@ function blud.register_lua_source(chunk_name, text, sourcemap)
     }
 end
 
-function blud.load_lua_source(text, chunk_name, sourcemap)
-    blud.register_lua_source(chunk_name, text, sourcemap)
-    return load(text, chunk_name)
-end
-
 local function get_lua_sourcemap(chunk_name)
     local source_entry = lua_sources[chunk_name]
     if source_entry and source_entry.sourcemap then
@@ -61,6 +56,46 @@ function blud.resolve_lua_location(chunk_name, generated_ln)
     end
 
     return chunk_name, generated_ln, false
+end
+
+local function split_lua_error(err)
+    if type(err) ~= "string" then
+        return
+    end
+
+    local chunk_name, line_number, message =
+        err:match('^%[string "(.-)"%]:(%d+):%s*(.*)$')
+    if not chunk_name then
+        chunk_name, line_number, message =
+            err:match("^(.-):(%d+):%s*(.*)$")
+    end
+
+    if chunk_name then
+        return chunk_name, tonumber(line_number), message
+    end
+end
+
+function blud.format_lua_error(err, chunk_name)
+    local reported_chunk_name, generated_ln, message = split_lua_error(err)
+    if not reported_chunk_name then
+        return tostring(err)
+    end
+
+    local filename, source_ln = blud.resolve_lua_location(
+        chunk_name or reported_chunk_name,
+        generated_ln
+    )
+    return string.format("%s:%d: %s", filename, source_ln, message)
+end
+
+function blud.load_lua_source(text, chunk_name, sourcemap)
+    blud.register_lua_source(chunk_name, text, sourcemap)
+
+    local chunk, err = load(text, chunk_name)
+    if not chunk then
+        err = blud.format_lua_error(err, chunk_name)
+    end
+    return chunk, err
 end
 
 -- Helper function to return the text of a specific line from a string
@@ -112,7 +147,7 @@ function blud.error_handler(err)
             local lines = {}
 
             -- Add the error message itself
-            table.insert(lines, "Error: " .. tostring(err))
+            table.insert(lines, "Error: " .. blud.format_lua_error(err))
 
             -- Iterate over the stack frames starting from the 3rd frame
             -- (skip error handler frame)
