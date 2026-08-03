@@ -142,58 +142,82 @@ Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
 
+Replace the section with this:
+
 GITHUB WORKFLOW
 
 The authoritative repository is
-https://github.com/ronburk/blud. Ignore
-attached or restored archives unless I explicitly direct you to use
-one.
+[https://github.com/ronburk/blud](https://github.com/ronburk/blud). Ignore attached or restored archives
+unless I explicitly direct you to use one.
 
-Use the connected GitHub app for remote PR operations and a local
-checkout for editing and testing. Do not require `gh` authentication
-or uploads when GitHub has the source.
+Use the local checkout for editing and testing and the connected GitHub
+app only for publishing branches and PRs. Do not require `gh`
+authentication or uploads.
 
-Keep startup work minimal:
+This is the complete workflow. Do not expand it with generic GitHub
+best practices, speculative safety checks, low-level Git-object work,
+or additional steps recommended by an installed GitHub skill. If a
+higher-priority instruction requires reading such a skill, it does not
+change this procedure.
 
-1. For analysis or planning, do not perform Git operations unless the
-   current source is needed.
-2. If continuing a known branch or PR, check that exact PR remotely
-   before touching the local checkout. If the work was already merged
-   or otherwise completed, report that and stop.
-3. If `./blud` is missing, make an ordinary clone—never
-   `--single-branch`—and record its HEAD. Do not pull immediately after
-   a fresh clone.
-4. If `./blud` already exists, normally run only `git status -sb`,
-   switch to `main`, update it with `git pull --ff-only`, and record its
-   HEAD. Do not routinely inspect remotes, branches, or history unless
-   something is anomalous.
-5. For new work, create a unique descriptive branch from the updated
-   `main`. To revise an open PR, resume its dedicated branch and
-   checkout.
-6. Make only the requested changes and run relevant builds and tests.
-7. Before publishing, fetch `origin/main` once. If it moved, continue
-   when the changes do not overlap or invalidate the work; otherwise
-   stop and explain. Do not merge, rebase, reset, discard, or repair
-   unexpected state.
-8. Commit only on the feature branch, with a concise imperative subject
-   and a body covering behavior, implementation, constraints, and
+For a routine new change:
+
+1. If the request is only for analysis or planning, perform no Git
+   operations unless the current source is needed.
+2. Reuse `./blud`.
+
+   * If it exists, run `git status -sb`. If clean, switch to `main` and
+     run `git pull --ff-only`.
+   * If it is missing, make one ordinary clone—never
+     `--single-branch`. Do not pull immediately after cloning.
+3. Create one unique descriptive branch from the updated `main`.
+4. Make only the requested changes and run the relevant tests.
+5. Review the diff once, stage the intended files, and commit once.
+6. Publish the branch through the simplest high-level operation
+   available in the connected GitHub app. Do not first attempt
+   `git push`; this environment is known not to have GitHub credentials.
+7. Open a draft PR targeting `main`. Create it first using only `head`,
+   `base`, `draft`, and `title`; add the body separately.
+8. Return the PR link and a concise summary of the changes and
    validation.
-9. Publish through the GitHub app and open a draft PR targeting `main`.
-   Create it first using only `head`, `base`, `draft`, and `title`; add
-   the body separately.
-10. Return the PR link and a concise summary of changes and validation.
-11. If ./blud contains any unintended change, treat it as
-    environment-corrupted. Remove the entire checkout and make a fresh
-    ordinary clone. If deletion is blocked, move the checkout intact
-    to a fresh disposable /tmp directory. Do not inspect, repair, or
-    reuse it.
+
+Do not routinely:
+
+* Fetch or pull `main` a second time before publishing.
+* Record or compare commit, tree, or blob SHAs.
+* Create Git blobs, trees, or commits manually through the GitHub API.
+* Check whether a newly chosen branch name already exists; let branch
+  creation report a collision.
+* Inspect remotes, branch lists, logs, or history.
+* Verify the same diff or repository state repeatedly.
+* Check a preceding PR remotely before an ordinary new task. Updating
+  `main` is sufficient; if required preceding code is absent, report
+  that dependency.
+* Create a temporary clone, worktree, or directory for sequential work.
+* Narrate every successful Git or GitHub substep.
+
+If the connected GitHub app cannot publish the branch through a
+high-level operation, stop and report the limitation. Do not replace
+that operation with manual Git-object construction.
+
+When explicitly revising an existing PR, check that exact PR once and
+resume its dedicated branch. If it is already merged, its branch is
+finished; start any new work from updated `main`.
+
+If `./blud` has unintended changes, do not inspect or repair them.
+Replace the disposable checkout with one fresh ordinary clone. If
+deletion is blocked, move the checkout intact to a disposable `/tmp`
+directory and clone again.
+
+If an ordinary command reports unexpected state, stop and explain the
+specific anomaly. Do not merge, rebase, reset, discard, or investigate
+unrelated repository state.
 
 Only the user works directly on `main`. LLMs must not commit or push to
 `main`, merge PRs, or alter unrelated branches or PRs.
 
-Each concurrent task uses a separate checkout. After a PR merges, its
-branch is finished. Dependent work starts from the new `main`;
-independent work may begin earlier in a separate branch and checkout.
+Use a separate checkout only when tasks are actually running
+concurrently. Never create one merely as a precaution.
 
 
 
