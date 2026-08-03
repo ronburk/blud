@@ -14,7 +14,7 @@ local function reset_state()
     pre_sourcemap  = ""
     sourcemap_gap  = nil
     post_sourcemap = nil
-    sourcemap      = {}  -- [{filename, source_ln, dest_ln}]
+    sourcemap      = {sources={}}
     next_output_ln = 1
     input_stack    = {}
     current_input  = nil  -- physical input plus current virtual line
@@ -34,10 +34,20 @@ local function append_output_text(text)
     end
 end
 
+local function add_sourcemap_source(text)
+    table.insert(sourcemap.sources, text)
+    return #sourcemap.sources
+end
+
 
 -- emit an entire file (possibly virtual) verbatim
 function M.emit_file(name, text)
-    local entry = {filename=name, source_ln=1, dest_ln=next_output_ln}
+    local entry = {
+        filename=name,
+        source_ln=1,
+        dest_ln=next_output_ln,
+        source_index=add_sourcemap_source(text),
+    }
     table.insert(sourcemap, entry);
     next_output_ln = next_output_ln + count_nl(text)
     append_output_text(text)
@@ -53,6 +63,7 @@ M.push_input = function(name, text)
         physical_pos = 1,
         next_source_ln = 1,
         source_ln = 1,
+        source_index = add_sourcemap_source(text),
         line_state = nil,
         current_line = nil,
     }
@@ -631,6 +642,8 @@ local function need_new_sourcemap_entry(previous_entry, current_input)
         need_entry = true
     elseif current_input.name ~= previous_entry.filename then
         need_entry = true
+    elseif current_input.source_index ~= previous_entry.source_index then
+        need_entry = true
     elseif previous_entry.source_ln ~= current_input.source_ln then
         need_entry = true
     end
@@ -664,7 +677,8 @@ function M.emit_line(fmt, ...)
             local entry = {
                 filename=current_input.name,
                 source_ln=current_input.source_ln,
-                dest_ln=next_output_ln
+                dest_ln=next_output_ln,
+                source_index=current_input.source_index,
             }
             table.insert(sourcemap, entry)
             next_output_ln = next_output_ln + 1
@@ -677,11 +691,24 @@ end
 
 local function sourcemap_to_lua(map)
     local result = "blud.sourcemap = {\n"
-    for i = 1, #sourcemap do
-        local entry = sourcemap[i]
+    result = result .. "    sources = {\n"
+    for _, source in ipairs(map.sources) do
+        result = result .. string.format("        %q,\n", source)
+    end
+    result = result .. "    },\n"
+    for i = 1, #map do
+        local entry = map[i]
+        local source_index = ""
+        if entry.source_index then
+            source_index = string.format(
+                ", source_index=%d", entry.source_index)
+        end
         result = result .. string.format(
-            "    {filename=%q, source_ln=%d, dest_ln=%d},\n",
-            entry.filename, entry.source_ln, entry.dest_ln)
+            "    {filename=%q, source_ln=%d, dest_ln=%d%s},\n",
+            entry.filename,
+            entry.source_ln,
+            entry.dest_ln,
+            source_index)
     end
     result = result .. "    }\n"
     return result
@@ -762,6 +789,8 @@ end
 do
     local saved_current_input = current_input
     local saved_input_stack = input_stack
+    local saved_sourcemap = sourcemap
+    sourcemap = {sources={}}
 
     local function reset_input(text)
         current_input = nil
@@ -878,6 +907,7 @@ do
 
     current_input = saved_current_input
     input_stack = saved_input_stack
+    sourcemap = saved_sourcemap
 end
 
 local ERROR = "ERROR"
