@@ -453,9 +453,6 @@ if luac_needs_building then
     else
         print("Failed to open file for writing")
     end
-else
-    -- print("using pre-compiled bludfile!")
-    error("done")
 end
 
 local function source_from_generated_line(map, generated_ln)
@@ -533,6 +530,7 @@ function execute_bytecode(file_path)
         return
     end
 
+    blud.sourcemap_chunk_name = debug.getinfo(func, "S").source
     func()
 return
 --[[

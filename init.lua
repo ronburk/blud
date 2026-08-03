@@ -35,21 +35,32 @@ function blud.load_lua_source(text, chunk_name, sourcemap)
     return load(text, chunk_name)
 end
 
-function blud.resolve_lua_location(chunk_name, generated_ln)
+local function get_lua_sourcemap(chunk_name)
     local source_entry = lua_sources[chunk_name]
-    local sourcemap = source_entry and source_entry.sourcemap
+    if source_entry and source_entry.sourcemap then
+        return source_entry.sourcemap
+    end
+
+    if chunk_name == blud.sourcemap_chunk_name then
+        return blud.sourcemap
+    end
+end
+
+function blud.resolve_lua_location(chunk_name, generated_ln)
+    local sourcemap = get_lua_sourcemap(chunk_name)
 
     if sourcemap then
         for i = #sourcemap, 1, -1 do
             local entry = sourcemap[i]
             if entry.dest_ln <= generated_ln then
                 return entry.filename,
-                       entry.source_ln + generated_ln - entry.dest_ln
+                       entry.source_ln + generated_ln - entry.dest_ln,
+                       true
             end
         end
     end
 
-    return chunk_name, generated_ln
+    return chunk_name, generated_ln, false
 end
 
 -- Helper function to return the text of a specific line from a string
@@ -70,6 +81,17 @@ local function get_line_from_source(source, line_number)
     -- Now find the end of the line
     local line_end = source:find("\n", pos, true) or #source + 1  -- Either find next newline or the end of string
     return source:sub(pos, line_end - 1)  -- Return the line, without the newline character
+end
+
+local function get_line_from_file(file_name, line_number)
+    local file = io.open(file_name, "r")
+    if not file then
+        return nil
+    end
+
+    local source = file:read("*a")
+    file:close()
+    return get_line_from_source(source, line_number)
 end
 
 -- Custom error handler for xpcall that iterates over the stack frames
@@ -104,13 +126,22 @@ function blud.error_handler(err)
                 local line_number = info.currentline
                 local func_name = info.name or "[C function]"  -- Get the function name or indicate C function
                 local source_entry = file_name and lua_sources[file_name]
+                local sourcemap = file_name and get_lua_sourcemap(file_name)
 
-                if source_entry and line_number > 0 then
-                    -- Get the specific line from the source code
-                    local src_line = get_line_from_source(
-                        source_entry.text,
-                        line_number
-                    )
+                if (source_entry or sourcemap) and line_number > 0 then
+                    local mapped
+                    file_name, line_number, mapped =
+                        blud.resolve_lua_location(file_name, line_number)
+
+                    local src_line
+                    if mapped then
+                        src_line = get_line_from_file(file_name, line_number)
+                    elseif source_entry then
+                        src_line = get_line_from_source(
+                            source_entry.text,
+                            line_number
+                        )
+                    end
 
                     -- Add the stack frame information along with the source line
                     if src_line then
