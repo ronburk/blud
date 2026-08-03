@@ -575,7 +575,10 @@ local function extract_source_script(text, boundary)
         return nil, "opening boundary " .. string.format("%q", boundary) .. " not found"
     end
 
-    local script = {}
+    -- Keep extracted lines at their physical file line numbers. The stripped
+    -- text is also retained in the sourcemap, so padding keeps displayed lines
+    -- aligned without retaining text outside the selected boundary.
+    local script = {string.rep("\n", line_number - 1)}
     while pos <= #text do
         local newline = text:find("\n", pos, true)
         local next_pos = newline and newline + 1 or #text + 1
@@ -599,8 +602,34 @@ local function extract_source_script(text, boundary)
     return nil, "closing boundary " .. string.format("%q", boundary) .. " not found"
 end
 
--- Implement `source [--boundary string] [--] file`. This first draft only
--- displays the action text that a later implementation will execute.
+local source_chunk_number = 0
+
+local function compile_source_action(filename, script)
+    local compiler = require("compiler")
+    local compile_io = require("compile_io")
+
+    compile_io.push_input(filename, script)
+    compile_io.emit_sourcemap()
+    compiler.compile_action(compile_io)
+    local generated, sourcemap = compile_io.close(false)
+
+    source_chunk_number = source_chunk_number + 1
+    local chunk_name = string.format(
+        "[source %d: %s]", source_chunk_number, filename)
+    local chunk, load_error = blud.load_lua_source(
+        generated, chunk_name, sourcemap)
+    if not chunk then
+        error("Compilation Error: " .. load_error, 0)
+    end
+
+    local action = chunk()
+    assert(type(action) == "function",
+           "compiled source did not produce an action")
+    return action
+end
+
+-- Implement `source [--boundary string] [--] file` by compiling the selected
+-- text as an action body and executing it in the caller's scope.
 local function source(argv, scope)
     local boundary
     local filename
@@ -653,8 +682,8 @@ local function source(argv, scope)
         end
     end
 
-    print("source: would execute " .. string.format("%q", script))
-    return 0
+    local action = compile_source_action(filename, script)
+    return action(scope, 0)
 end
 
 -- Public registry of commands understood by blud. Ordinary handlers receive
