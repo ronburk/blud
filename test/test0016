@@ -1,0 +1,83 @@
+-- expect: test0016.out
+-- source compiles and executes action files without replacing the main map.
+
+all:
+    source "--boundary" __SOURCE__ test0016.action
+    test0016_check_scope
+    rm "--" test0016.action
+
+do
+    local action_filename = "test0016.action"
+    local commands = blud.shell.commands
+    local original_sourcemap = blud.sourcemap
+
+    local function write_action(text)
+        local file, error_message = io.open(action_filename, "w")
+        assert(file,
+               "could not create source fixture: " ..
+               tostring(error_message))
+        assert(file:write(text))
+        file:close()
+    end
+
+    local function return_test_status(_, received_scope)
+        assert(received_scope == scope,
+               "source did not pass its caller scope")
+        return 7
+    end
+    commands.test0016_status = return_test_status
+    write_action("test0016_status\n")
+    assert(commands.source({"source", action_filename}, scope) == 7,
+           "source did not return its action status")
+    commands.test0016_status = nil
+    assert(blud.sourcemap == original_sourcemap,
+           "source replaced the main sourcemap")
+
+    write_action([[ignored prefix
+#__SOURCE__
+#: do
+#:     error("test0016 source failure")
+#: end
+#__SOURCE__
+ignored suffix
+]])
+    local function run_failing_source()
+        commands.source(
+            {"source", "--boundary", "__SOURCE__", action_filename},
+            scope
+        )
+    end
+    local succeeded, diagnostic = xpcall(
+        run_failing_source,
+        blud.error_handler
+    )
+    assert(not succeeded, "sourced Lua error did not propagate")
+    assert(diagnostic:find(action_filename .. ":4", 1, true),
+           "sourced Lua error used the wrong line: " .. diagnostic)
+    assert(diagnostic:find("test0016 source failure", 1, true),
+           "sourced Lua error lost its message: " .. diagnostic)
+    assert(blud.sourcemap == original_sourcemap,
+           "failed source replaced the main sourcemap")
+
+    blud.test0016_sourcemap = original_sourcemap
+    local function check_source_scope(_, received_scope)
+        assert(received_scope.test0016_scope_seen,
+               "sourced action did not use its caller scope")
+        assert(blud.sourcemap == original_sourcemap,
+               "successful source replaced the main sourcemap")
+        blud.test0016_sourcemap = nil
+        commands.test0016_check_scope = nil
+        return 0
+    end
+    commands.test0016_check_scope = check_source_scope
+    write_action([[ignored prefix
+#__SOURCE__
+#: do
+#:     assert(blud.sourcemap == blud.test0016_sourcemap)
+#:     scope.test0016_scope_seen = true
+#: end
+#touch test0016.out
+#__SOURCE__
+ignored suffix
+]])
+end
