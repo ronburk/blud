@@ -80,6 +80,10 @@ function blud.error_handler(err)
         return err
     end
 
+    if blud.roots and blud.roots[1] and blud.why then
+        pcall(blud.why.report)
+    end
+
     -- must never die, so wrap it
     local ok, result = pcall(function()
 
