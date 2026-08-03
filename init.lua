@@ -48,14 +48,23 @@ function blud.resolve_lua_location(chunk_name, generated_ln)
         for i = #sourcemap, 1, -1 do
             local entry = sourcemap[i]
             if entry.dest_ln <= generated_ln then
+                local source_text
+                if sourcemap.sources and entry.source_index then
+                    source_text = sourcemap.sources[entry.source_index]
+                end
                 return entry.filename,
                        entry.source_ln + generated_ln - entry.dest_ln,
-                       true
+                       true,
+                       source_text
             end
         end
     end
 
-    return chunk_name, generated_ln, false
+    local source_entry = lua_sources[chunk_name]
+    return chunk_name,
+           generated_ln,
+           false,
+           source_entry and source_entry.text
 end
 
 local function split_lua_error(err)
@@ -118,17 +127,6 @@ local function get_line_from_source(source, line_number)
     return source:sub(pos, line_end - 1)  -- Return the line, without the newline character
 end
 
-local function get_line_from_file(file_name, line_number)
-    local file = io.open(file_name, "r")
-    if not file then
-        return nil
-    end
-
-    local source = file:read("*a")
-    file:close()
-    return get_line_from_source(source, line_number)
-end
-
 -- Custom error handler for xpcall that iterates over the stack frames
 function blud.error_handler(err)
     local compile_error_prefix = "BLUD_COMPILE_ERROR:"
@@ -164,19 +162,14 @@ function blud.error_handler(err)
                 local sourcemap = file_name and get_lua_sourcemap(file_name)
 
                 if (source_entry or sourcemap) and line_number > 0 then
-                    local mapped
-                    file_name, line_number, mapped =
+                    local source_text
+                    file_name, line_number, _, source_text =
                         blud.resolve_lua_location(file_name, line_number)
 
-                    local src_line
-                    if mapped then
-                        src_line = get_line_from_file(file_name, line_number)
-                    elseif source_entry then
-                        src_line = get_line_from_source(
-                            source_entry.text,
-                            line_number
-                        )
-                    end
+                    local src_line = source_text and get_line_from_source(
+                        source_text,
+                        line_number
+                    )
 
                     -- Add the stack frame information along with the source line
                     if src_line then
