@@ -4,9 +4,11 @@
 -- Simple build directive
 
 release :BUILD: 
+release: BUILD_VALUE = release
 
 CMD = touch $@
 
 all: test0004.out
 test0004.out : 
+    shell test x$(BUILD_VALUE) = xrelease
     $(CMD)

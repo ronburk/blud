@@ -15,13 +15,14 @@ second:
     touch $@
 
 
-PRIVATE_FALLBACK = outer
+TARGET_FALLBACK = outer
+TARGET_APPEND = outer
 
-private_parent: private PRIVATE_ONLY = parent
-private_parent: private PRIVATE_FALLBACK = parent
-private_parent: PUBLIC_INHERIT = parent
-private_parent: private_child
-    echo parent:$(PRIVATE_ONLY):$(PRIVATE_FALLBACK):$(PUBLIC_INHERIT)
+target_parent: TARGET_ONLY = parent
+target_parent: TARGET_FALLBACK = parent
+target_parent: TARGET_APPEND += parent
+target_parent: target_child
+    echo parent:$(TARGET_ONLY):$(TARGET_FALLBACK):$(TARGET_APPEND)
 
-private_child:
-    echo child:$(PRIVATE_ONLY):$(PRIVATE_FALLBACK):$(PUBLIC_INHERIT)
+target_child:
+    echo child:$(TARGET_ONLY):$(TARGET_FALLBACK):$(TARGET_APPEND)

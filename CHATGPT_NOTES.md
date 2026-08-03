@@ -73,14 +73,16 @@ because its patterns are relative to the suite directory. `:BUILD:` validates
 its raw prerequisite tokens before generic globbing can discard an unmatched
 pattern. `test/test0013` protects these details.
 
-### Private target variables
+### Target-specific variables
 
-Private variables are implemented, not pending work. Variable definitions are
-macro-parts tables with an optional `parts.private` flag. Target-scope lookup
-tracks whether it has crossed a target-inheritance boundary; after crossing
-one, it skips private definitions but continues searching outer scopes.
+Target-specific variables apply only to the named target. Every target scope
+has the fixed parent chain
+`build -> commandline -> bludfile -> environment -> base`; prerequisite
+traversal never inserts another target scope into that chain. Use `:BUILD:`
+assignments for values that should reach an entire build configuration.
 
-`-W` sets `.ASSUME_NEW` as a private Boolean in the named atom's scope.
+`-W` sets `.ASSUME_NEW` in the named atom's target scope, so it affects only
+that atom.
 `.JUST_PRINT` and `.SILENT` remain ordinary inherited command-line Booleans.
 
 ### Current explicit-rule representation

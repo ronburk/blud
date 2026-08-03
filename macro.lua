@@ -12,16 +12,26 @@ do
         ["+="]  = true,
         ["?="]  = true,
     }
+    local obsolete_modifiers = { "private", "public" }
+
     function M.match_macro_assign(line, skip_leading_white)
         -- print("match_macro_assign(\"" .. util.dump(line) .. "\")")
         local anchor = "^"
         if skip_leading_white then anchor = "^%s*" end
-        local private, macro_name, operator, remainder
-        local pattern = anchor .. "(private)%s+" .. macro_name_pattern ..
-                        "%s*([=+:?]+)%s*(.*)$"
-        private, macro_name, operator, remainder = line:match(pattern)
+        local modifier, macro_name, operator, remainder
+
+        for _, candidate in ipairs(obsolete_modifiers) do
+            local pattern = anchor .. candidate .. "%s+" .. macro_name_pattern ..
+                            "%s*([=+:?]+)%s*(.*)$"
+            macro_name, operator, remainder = line:match(pattern)
+            if macro_name then
+                modifier = candidate
+                break
+            end
+        end
+
         if not macro_name then
-            pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
+            local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
             macro_name, operator, remainder = line:match(pattern)
         end
         if macro_name and operators[operator] == true then
@@ -29,7 +39,7 @@ do
                 name = macro_name,
                 operator = operator,
                 macro_text = remainder,
-                private = private ~= nil,
+                modifier = modifier,
             }
         end
         return nil
