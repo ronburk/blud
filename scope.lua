@@ -7,13 +7,10 @@ M.__index = M
 
 
 -- generic get_parts() function to return value of variable
-M.get_parts = function(self, name, skip_private)
+M.get_parts = function(self, name)
     local result = self.variables[name]
-    if result and skip_private and result.private then
-        result = nil
-    end
     if result == nil and self.parent then
-        result = self.parent:get_parts(name, skip_private)
+        result = self.parent:get_parts(name)
     end
     return result
 end
@@ -38,12 +35,10 @@ end
 
 
 -- Store a canonical textual value so normal scope inheritance and expansion apply.
-M.set_boolean = function(self, name, value, private)
+M.set_boolean = function(self, name, value)
     assert(type(value) == "boolean")
-    assert(private == nil or type(private) == "boolean")
 
     local parts = { value and "true" or "false" }
-    parts.private = private or nil
     self:set(name, parts)
 end
 
@@ -81,12 +76,12 @@ M.commandline = M:new(M.bludfile, "commandline")
 M.build       = M:new(M.commandline, "build")
 
 
-M.environment.get_parts = function(self, name, skip_private)
+M.environment.get_parts = function(self, name)
     local value = os.getenv(name)
     if value ~= nil then
         return { value }
     end
-    return self.parent:get_parts(name, skip_private)
+    return self.parent:get_parts(name)
 end
 
 
@@ -96,12 +91,12 @@ end
 M.new_param_scope = function(self, parent, macro_actual)
     local scope = M:new(parent)
     scope.macro_actual = macro_actual
-    function scope:get_parts(name, skip_private)
+    function scope:get_parts(name)
         blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
-            return self.parent:get_parts(name, skip_private)
+            return self.parent:get_parts(name)
         end
     end
     function scope:set(name, value)
@@ -110,13 +105,7 @@ M.new_param_scope = function(self, parent, macro_actual)
     return scope
 end
 
-function M:set_target_parent(parent)
-    assert(parent and parent.target)
-    self.parent = parent
-    self.parent_is_target = true
-end
-
-local function target_get_parts(self, name, skip_private)
+local function target_get_parts(self, name)
     local result
     local bound_name = ""
     if name == "<" then
@@ -140,14 +129,8 @@ local function target_get_parts(self, name, skip_private)
         result = { self.target.BOUND_NAME }
     else
         result = self.variables[name]
-        if result and skip_private and result.private then
-            result = nil
-        end
         if result == nil and self.parent then
-            result = self.parent:get_parts(
-                name,
-                skip_private or self.parent_is_target
-            )
+            result = self.parent:get_parts(name)
         end
     end
     return result
@@ -155,9 +138,8 @@ end
 
 -- create a new per-target scope
 
--- we always use M.build for the parent scope; at runtime,
--- all but the first build target will have to adjust their
--- parent pointer
+-- Target-specific values apply only to this target. Build-wide values
+-- deliberately reach targets through the fixed M.build parent scope.
 M.new_target_scope   = function(self, target)
     local name = string.format("target(%s)", target.NAME)
     local new_scope  = M:new(M.build, name)

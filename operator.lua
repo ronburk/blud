@@ -282,17 +282,6 @@ do  -- Ordinary explicit dependency rules.
     end
 
     function op:BUILD(target_atom)
-        local parent_name = ''
-        if target_atom.PARENT then
-            -- Prerequisites inherit target-specific variables from their parent.
-            parent_name = target_atom.PARENT.NAME .. ' : '
-            target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
-        end
-        -- util.print("BUILD('%s%s') prereq=%s",
-        --            parent_name,
-        --            blud.dump_atom(target_atom),
-        --            util.dump(target_atom.PREREQUISITES))
-
 --        -- if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
@@ -449,16 +438,6 @@ do  -- Source lists: compile each source through a reverse rule, then link.
     end
 
     function op:BUILD(target_atom)
-        local parent_name = ''
-        if target_atom.PARENT then
-            parent_name = target_atom.PARENT.NAME .. ' :: '
-            target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
-        end
-        -- util.print("BUILD('%s%s') prereq=%s",
-        --            parent_name,
-        --            blud.dump_atom(target_atom),
-        --            util.dump(target_atom.PREREQUISITES))
-
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end

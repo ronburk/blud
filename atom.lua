@@ -16,7 +16,6 @@ local super_atom = {
         end
 
         local parts = blud.macro_tokens_from_text(macro.macro_text)
-        parts.private = macro.private or nil
         blud.macro_assign_parts(target.SCOPE, macro.name, macro.operator, parts)
     end,
     get_action = function(target)
@@ -168,10 +167,6 @@ local super_atom = {
     end,
     BUILD = function(target_atom)
         blud.why.reached(target_atom)
-
-        if target_atom.PARENT then
-            target_atom.SCOPE:set_target_parent(target_atom.PARENT.SCOPE)
-        end
 
         if not target_atom.RULE then
             -- must try implicit rules now

@@ -123,13 +123,16 @@ Rules may also assign variables for one target:
 debug: CFLAGS += -g
 ```
 
-Target-specific variables are inherited by prerequisites. The `private`
-modifier keeps a value on the target itself without passing it to
-prerequisites:
+Target-specific variables apply only to the named target. Prerequisites use
+their own target-specific values, or values from the selected build and outer
+scopes:
 
 ```
-program: private INTERNAL_VALUE = for-program-only
+program: CFLAGS += -fno-strict-aliasing
 ```
+
+Use a `:BUILD:` rule for values that should apply throughout a build
+configuration such as `debug` or `release`.
 
 Actions have these automatic variables:
 
