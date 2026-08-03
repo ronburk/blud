@@ -767,19 +767,26 @@ function M.error(fmt, ...)
     error("BLUD_COMPILE_ERROR:" .. message, 0)
 end
 
--- close(): insert sourcemap, return the generated text, and begin a new session
-function M.close()
+-- close(): optionally insert the sourcemap, return the generated text and map,
+-- and begin a new session. Dynamic chunks register the returned map directly
+-- and pass false to avoid changing blud.sourcemap when they execute.
+function M.close(embed_sourcemap)
     assert(sourcemap_gap ~= nil, "Did you forget to call emit_sourcemap()?")
-    local sourcemap_lua = sourcemap_to_lua(sourcemap)
-    local line_count    = count_nl(sourcemap_lua)
-    local entry         = sourcemap[sourcemap_gap]
---    local new_entry     = {filename="<sourcemap>", source_ln=1, dest_ln=entry.dest_ln}
---    table.insert(sourcemap, sourcemap_gap, new_entry);
-    for i = sourcemap_gap+1, #sourcemap do
-        sourcemap[i].dest_ln = sourcemap[i].dest_ln + line_count
+    local result
+
+    if embed_sourcemap == false then
+        table.remove(sourcemap, sourcemap_gap)
+        result = pre_sourcemap .. post_sourcemap
+    else
+        local sourcemap_lua = sourcemap_to_lua(sourcemap)
+        local line_count    = count_nl(sourcemap_lua)
+        for i = sourcemap_gap+1, #sourcemap do
+            sourcemap[i].dest_ln = sourcemap[i].dest_ln + line_count
+        end
+        sourcemap_lua = sourcemap_to_lua(sourcemap)
+        result = pre_sourcemap .. sourcemap_lua .. post_sourcemap
     end
-    sourcemap_lua = sourcemap_to_lua(sourcemap)
-    local result = pre_sourcemap .. sourcemap_lua .. post_sourcemap
+
     local completed_sourcemap = sourcemap
     reset_state()
     return result, completed_sourcemap
