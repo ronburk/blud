@@ -6,6 +6,7 @@ local source_cache = {}
 local step_mode
 local step_target_depth
 local stopped_depth
+local paused_frames
 local breakpoints = {}
 local registered_operators
 local operator_member_names
@@ -23,6 +24,79 @@ local function normalize_source_name(info)
     end
 
     return source
+end
+
+local function capture_paused_frames(start_level)
+    local frames = {}
+    local level = start_level
+
+    while true do
+        local info = lua_debug.getinfo(level, "nSluf")
+        if not info then
+            break
+        end
+
+        local source = normalize_source_name(info)
+        if not source:match("debugger%.lua$") then
+            local parameters = {}
+            for index = 1, info.nparams or 0 do
+                local name, value = lua_debug.getlocal(level, index)
+                if name then
+                    table.insert(parameters, {
+                        name = name,
+                        value = value,
+                    })
+                end
+            end
+
+            table.insert(frames, {
+                name = info.name or "?",
+                source = source,
+                line = info.currentline or -1,
+                what = info.what,
+                parameters = parameters,
+                is_vararg = info.isvararg,
+            })
+        end
+
+        level = level + 1
+    end
+
+    return frames
+end
+
+local function operator_frame(member_name, implementation, self, arguments)
+    local info = assert(
+        lua_debug.getinfo(implementation, "Su"),
+        "could not get debug information for operator member: " .. member_name
+    )
+    local parameters = {}
+
+    for index = 1, info.nparams or 0 do
+        local name = lua_debug.getlocal(implementation, index)
+        if name then
+            local value
+            if index == 1 then
+                value = self
+            else
+                value = arguments[index - 1]
+            end
+
+            table.insert(parameters, {
+                name = name,
+                value = value,
+            })
+        end
+    end
+
+    return {
+        name = member_name,
+        source = normalize_source_name(info),
+        line = info.linedefined or -1,
+        what = info.what,
+        parameters = parameters,
+        is_vararg = info.isvararg,
+    }
 end
 
 local function get_source_lines(source)
@@ -88,7 +162,9 @@ local function stop_at_operator_breakpoint(
         id,
         breakpoint,
         member_name,
-        implementation
+        implementation,
+        self,
+        arguments
     )
     print(string.format(
         "Breakpoint %d: operator %s, function %s",
@@ -103,12 +179,23 @@ local function stop_at_operator_breakpoint(
     )
     debug_info.currentline = debug_info.linedefined
     stopped_depth = call_depth(2)
+    local caller_frames = capture_paused_frames(2)
+    paused_frames = {
+        operator_frame(member_name, implementation, self, arguments),
+    }
+    for _, frame in ipairs(caller_frames) do
+        table.insert(paused_frames, frame)
+    end
     print_current_line()
     debugger.interactive(">")
 end
 
 local function operator_wrapper(operator, member_name, implementation)
     return function(self, ...)
+        local arguments = {
+            n = select("#", ...),
+            ...,
+        }
         local breakpoint_id, breakpoint =
             find_operator_breakpoint(operator.name)
         if breakpoint_id then
@@ -116,7 +203,9 @@ local function operator_wrapper(operator, member_name, implementation)
                 breakpoint_id,
                 breakpoint,
                 member_name,
-                implementation
+                implementation,
+                self,
+                arguments
             )
         end
         return implementation(self, ...)
@@ -165,24 +254,27 @@ end
 
 
 local function print_backtrace()
-    local frame = 0
-    local level = 3
+    for index, frame in ipairs(paused_frames or {}) do
+        local name = frame.name
 
-    while true do
-        local info = lua_debug.getinfo(level, "nSl")
-        if not info then
-            break
+        if frame.what == "Lua" then
+            local parameter_names = {}
+            for _, parameter in ipairs(frame.parameters) do
+                table.insert(parameter_names, parameter.name)
+            end
+            if frame.is_vararg then
+                table.insert(parameter_names, "...")
+            end
+            name = name .. "(" .. table.concat(parameter_names, ", ") .. ")"
         end
 
-        local source = normalize_source_name(info)
-        if not source:match("debugger%.lua$") then
-            local name = info.name or "?"
-            local line = info.currentline or -1
-            print(string.format("#%d  %s at %s:%d", frame, name, source, line))
-            frame = frame + 1
-        end
-
-        level = level + 1
+        print(string.format(
+            "#%d  %s at %s:%d",
+            index - 1,
+            name,
+            frame.source,
+            frame.line
+        ))
     end
 end
 
@@ -215,6 +307,7 @@ local function step_hook(event, line)
         step_mode = nil
         step_target_depth = nil
         stopped_depth = depth
+        paused_frames = capture_paused_frames(2)
         print_current_line()
         debugger.interactive(">")
     end
@@ -412,6 +505,45 @@ local function explore(root_value, root_expression)
     end
 end
 
+local function environment_for_frame(frame)
+    local parameter_values = {}
+    local parameter_names = {}
+
+    for _, parameter in ipairs(frame.parameters) do
+        parameter_names[parameter.name] = true
+        parameter_values[parameter.name] = parameter.value
+    end
+
+    return setmetatable({}, {
+        __index = function(_, name)
+            if parameter_names[name] then
+                return parameter_values[name]
+            end
+            return _G[name]
+        end,
+    })
+end
+
+local function parse_explore_argument(arg)
+    if arg == "" then
+        return nil, nil, "explore requires a Lua expression"
+    end
+
+    local frame_number = 0
+    local expression = arg
+
+    if arg:sub(1, 1) == "#" then
+        local number_text
+        number_text, expression = arg:match("^#(%d+)%s+(.+)$")
+        if not number_text then
+            return nil, nil, "usage: x [#frame] <lua expression>"
+        end
+        frame_number = tonumber(number_text)
+    end
+
+    return frame_number, expression
+end
+
 function debugger.probe()
     return true
 end
@@ -419,6 +551,7 @@ end
 function debugger.real_probe(args)
     debug_info = lua_debug.getinfo(2)
     stopped_depth = call_depth(2)
+    paused_frames = capture_paused_frames(2)
     print_current_line()
     debugger.interactive(">")
 end
@@ -460,7 +593,7 @@ function debugger.interactive(prompt, handler)
         arg = arg or ""
 
         if command == "?" or command == "help" then
-            print("q quit | c continue | s step | n next | bt backtrace | b <operator> break | e <lua> eval | x <lua> explore | ? help")
+            print("q quit | c continue | s step | n next | bt backtrace | b <operator> break | e <lua> eval | x [#frame] <lua> explore | ? help")
         elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
@@ -499,25 +632,35 @@ function debugger.interactive(prompt, handler)
                 print("Compilation error: " .. err)
             end
         elseif command == "x" or command == "explore" then
-            if arg == "" then
-                print("explore requires a Lua expression")
+            local frame_number, expression, parse_error =
+                parse_explore_argument(arg)
+            if parse_error then
+                print(parse_error)
             else
-                local chunk, err = load("return " .. arg)
-                if chunk then
-                    local status, result = pcall(chunk)
-                    if status then
-                        explore(result, arg)
-                    else
-                        print("Error during evaluation: " .. result)
-                    end
+                local frame = paused_frames and paused_frames[frame_number + 1]
+                if not frame then
+                    print("no such frame: #" .. frame_number)
                 else
-                    print("Compilation error: " .. err)
+                    local chunk, err = load("return " .. expression)
+                    if chunk then
+                        setfenv(chunk, environment_for_frame(frame))
+                        local status, result = pcall(chunk)
+                        if status then
+                            explore(result, expression)
+                        else
+                            print("Error during evaluation: " .. result)
+                        end
+                    else
+                        print("Compilation error: " .. err)
+                    end
                 end
             end
         else
             handler(command, arg)
         end
     end
+
+    paused_frames = nil
 end
 
 return debugger
