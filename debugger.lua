@@ -317,6 +317,101 @@ local function custom_handler(command, arg)
     print("unknown debugger command: " .. tostring(command) .. " " .. tostring(arg))
 end
 
+local help_summary =
+    "q quit | c continue | s step | n next | bt backtrace | "
+    .. "b <operator> break | e <lua> eval | "
+    .. "x [#frame] <lua> explore | h [command] help"
+
+local command_help = {
+    q = [[q, quit
+    Exit blud immediately.]],
+
+    c = [[c, continue, resume
+    Resume execution until the next breakpoint or debugger probe.]],
+
+    s = [[s, step
+    Resume execution and stop at the next Lua source line.]],
+
+    n = [[n, next
+    Resume execution and stop at the next Lua source line in the current
+    function or one of its callers.]],
+
+    bt = [[bt, where
+    List the paused stack frames and each Lua function's argument names.
+    Frame numbers can be passed to x to inspect a caller's arguments.]],
+
+    b = [[b <operator_name>
+break <operator_name>
+    Stop before each relevant member call dispatched to the named operator.
+    Prototype delegation does not stop again; c continues to the next call.
+
+    Example: b :TEST:]],
+
+    e = [[e <lua chunk>
+eval <lua chunk>
+    Execute a Lua chunk in the global environment and print its first return
+    value.
+
+    Example: e return blud.current_time]],
+
+    x = [[x [#frame] <lua expression>
+explore [#frame] <lua expression>
+    Evaluate an expression using the named arguments of a paused frame, then
+    explore the resulting value. Frame #0 is used by default.
+
+    Examples: x target
+              x #2 left_tokens]],
+
+    h = [[h [command]
+help [command]
+? [command]
+    Show the command summary, or detailed help for one command.]],
+}
+
+local help_aliases = {
+    ["?"] = "h",
+    h = "h",
+    help = "h",
+    q = "q",
+    quit = "q",
+    c = "c",
+    continue = "c",
+    resume = "c",
+    s = "s",
+    step = "s",
+    n = "n",
+    next = "n",
+    bt = "bt",
+    where = "bt",
+    b = "b",
+    ["break"] = "b",
+    e = "e",
+    eval = "e",
+    x = "x",
+    explore = "x",
+}
+
+local function print_help(arg)
+    if arg == "" then
+        print(help_summary)
+        return
+    end
+
+    local command = arg:match("^(%S+)%s*$")
+    if not command then
+        print("usage: h [command]")
+        return
+    end
+
+    local help = command_help[help_aliases[command]]
+    if not help then
+        print("unknown debugger command: " .. command)
+        return
+    end
+
+    print(help)
+end
+
 local function collect_entries(value)
     local entries = {}
 
@@ -594,8 +689,8 @@ function debugger.interactive(prompt, handler)
         arg = arg or ""
 
         if command == "" then
-        elseif command == "?" or command == "help" then
-            print("q quit | c continue | s step | n next | bt backtrace | b <operator> break | e <lua> eval | x [#frame] <lua> explore | ? help")
+        elseif command == "?" or command == "h" or command == "help" then
+            print_help(arg)
         elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
