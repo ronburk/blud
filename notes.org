@@ -141,9 +141,6 @@ space.
 Show the Linux commands you run and brief progress as you work. Never
 fabricate, reconstruct, or alter command output.
 
-
-Replace the section with this:
-
 GITHUB WORKFLOW
 
 The authoritative repository is
