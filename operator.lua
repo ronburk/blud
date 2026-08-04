@@ -829,6 +829,40 @@ do
     end
 end
 
+local operator_member_names = {
+    "EVAL_RULE",
+    "GLOB_TARGET_WORDS",
+    "GLOB_PREREQUISITE_WORDS",
+    "ATOMIZE_TARGET_WORDS",
+    "ATOMIZE_PREREQUISITE_WORDS",
+    "GROUP_TARGETS",
+    "SET_PRIMARY_TARGETS",
+    "ADD_RULES",
+    "ADD_RULE",
+    "BIND",
+    "PREPARE_PREREQUISITES",
+    "BUILD",
+}
+
+local operator_member_set = {}
+for _, name in ipairs(operator_member_names) do
+    assert(not operator_member_set[name],
+           "duplicate debugger operator member: " .. name)
+    assert(type(M[name]) == "function",
+           "debugger operator member is not a function: " .. name)
+    operator_member_set[name] = true
+end
+
+for name, value in pairs(M) do
+    if type(value) == "function" and name ~= "operator_new" then
+        assert(operator_member_set[name],
+               "generic operator member is missing from the debugger: " ..
+               tostring(name))
+    end
+end
+
+debugger.register_operators(blud.operators, operator_member_names)
+
 --[[
 blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action)
     util.print(":TEST:[%s] operator=%s, prereqs = %s",
