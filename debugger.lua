@@ -253,28 +253,32 @@ local function set_operator_breakpoint(operator_name)
 end
 
 
+local function format_frame(frame_number, frame)
+    local name = frame.name
+
+    if frame.what == "Lua" then
+        local parameter_names = {}
+        for _, parameter in ipairs(frame.parameters) do
+            table.insert(parameter_names, parameter.name)
+        end
+        if frame.is_vararg then
+            table.insert(parameter_names, "...")
+        end
+        name = name .. "(" .. table.concat(parameter_names, ", ") .. ")"
+    end
+
+    return string.format(
+        "#%d  %s at %s:%d",
+        frame_number,
+        name,
+        frame.source,
+        frame.line
+    )
+end
+
 local function print_backtrace()
     for index, frame in ipairs(paused_frames or {}) do
-        local name = frame.name
-
-        if frame.what == "Lua" then
-            local parameter_names = {}
-            for _, parameter in ipairs(frame.parameters) do
-                table.insert(parameter_names, parameter.name)
-            end
-            if frame.is_vararg then
-                table.insert(parameter_names, "...")
-            end
-            name = name .. "(" .. table.concat(parameter_names, ", ") .. ")"
-        end
-
-        print(string.format(
-            "#%d  %s at %s:%d",
-            index - 1,
-            name,
-            frame.source,
-            frame.line
-        ))
+        print(format_frame(index - 1, frame))
     end
 end
 
@@ -320,7 +324,7 @@ end
 local help_summary =
     "q quit | c continue | s step | n next | bt backtrace | "
     .. "b <operator> break | e <lua> eval | "
-    .. "x [#frame] <lua> explore | h [command] help"
+    .. "x <lua> or x #frame explore | h [command] help"
 
 local command_help = {
     q = [[q, quit
@@ -338,7 +342,7 @@ local command_help = {
 
     bt = [[bt, where
     List the paused stack frames and each Lua function's argument names.
-    Frame numbers can be passed to x to inspect a caller's arguments.]],
+    Use x #N to explore a frame's named arguments.]],
 
     b = [[b <operator_name>
 break <operator_name>
@@ -354,12 +358,16 @@ eval <lua chunk>
 
     Example: e return blud.current_time]],
 
-    x = [[x [#frame] <lua expression>
-explore [#frame] <lua expression>
-    Evaluate an expression using the named arguments of a paused frame, then
-    explore the resulting value. Frame #0 is used by default.
+    x = [[x <lua expression>
+x #frame [<lua expression>]
+explore <lua expression>
+explore #frame [<lua expression>]
+    With only a frame number, explore that frame's named arguments. With an
+    expression, evaluate it using the frame's arguments and explore its value;
+    frame #0 is used when no frame number is given.
 
     Examples: x target
+              x #1
               x #2 left_tokens]],
 
     h = [[h [command]
@@ -555,13 +563,30 @@ local function explorer_frame(value, path)
     }
 end
 
-local function explore(root_value, root_expression)
-    local stack = {explorer_frame(root_value, root_expression)}
+local function paused_frame_explorer_frame(frame_number, paused_frame)
+    local entries = {}
+    for _, parameter in ipairs(paused_frame.parameters) do
+        table.insert(entries, {
+            key = parameter.name,
+            value = parameter.value,
+        })
+    end
+
+    return {
+        path = string.format("#%d %s", frame_number, paused_frame.name),
+        child_path = "#" .. frame_number,
+        heading = format_frame(frame_number, paused_frame),
+        entries = entries,
+    }
+end
+
+local function explore(root_frame)
+    local stack = {root_frame}
 
     while true do
         local frame = stack[#stack]
 
-        print(frame.path .. " = " .. format_value(frame.value))
+        print(frame.heading or frame.path .. " = " .. format_value(frame.value))
         print()
 
         if frame.entries then
@@ -591,7 +616,8 @@ local function explore(root_value, root_expression)
         elseif frame.entries and input:match("^%d+$") then
             local entry = frame.entries[tonumber(input)]
             if entry then
-                table.insert(stack, explorer_frame(entry.value, child_path(frame.path, entry.key)))
+                local parent_path = frame.child_path or frame.path
+                table.insert(stack, explorer_frame(entry.value, child_path(parent_path, entry.key)))
             else
                 print("no such item: " .. input)
             end
@@ -599,6 +625,20 @@ local function explore(root_value, root_expression)
             print("invalid explorer command: " .. input)
         end
     end
+end
+
+local function explore_value(value, expression)
+    explore(explorer_frame(value, expression))
+end
+
+local function explore_paused_frame(frame_number, paused_frame)
+    if #paused_frame.parameters == 0 then
+        print(format_frame(frame_number, paused_frame))
+        print("frame #" .. frame_number .. " has no named arguments")
+        return
+    end
+
+    explore(paused_frame_explorer_frame(frame_number, paused_frame))
 end
 
 local function environment_for_frame(frame)
@@ -622,17 +662,22 @@ end
 
 local function parse_explore_argument(arg)
     if arg == "" then
-        return nil, nil, "explore requires a Lua expression"
+        return nil, nil, "explore requires a Lua expression or frame number"
     end
 
     local frame_number = 0
     local expression = arg
 
     if arg:sub(1, 1) == "#" then
-        local number_text
+        local number_text = arg:match("^#(%d+)%s*$")
+        if number_text then
+            return tonumber(number_text)
+        end
+
         number_text, expression = arg:match("^#(%d+)%s+(.+)$")
         if not number_text then
-            return nil, nil, "usage: x [#frame] <lua expression>"
+            return nil, nil,
+                "usage: x <lua expression> | x #frame [<lua expression>]"
         end
         frame_number = tonumber(number_text)
     end
@@ -737,13 +782,15 @@ function debugger.interactive(prompt, handler)
                 local frame = paused_frames and paused_frames[frame_number + 1]
                 if not frame then
                     print("no such frame: #" .. frame_number)
+                elseif not expression then
+                    explore_paused_frame(frame_number, frame)
                 else
                     local chunk, err = load("return " .. expression)
                     if chunk then
                         setfenv(chunk, environment_for_frame(frame))
                         local status, result = pcall(chunk)
                         if status then
-                            explore(result, expression)
+                            explore_value(result, expression)
                         else
                             print("Error during evaluation: " .. result)
                         end
