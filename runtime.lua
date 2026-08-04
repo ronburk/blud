@@ -240,6 +240,21 @@ blud.eval_target_assign_rule = function(left_parts, macro, action)
 end
 
 
+local function tokenize_prerequisites(text)
+    local separator = text:find("|", 1, true)
+    if not separator then
+        return tokenize_dependency_line(text), {}
+    end
+    if text:find("|", separator + 1, true) then
+        error("more than one '|' separator in prerequisite list")
+    end
+
+    local normal = tokenize_dependency_line(text:sub(1, separator - 1))
+    local order_only = tokenize_dependency_line(text:sub(separator + 1))
+    return normal, order_only
+end
+
+
 -- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
 --[[
@@ -275,9 +290,14 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
 
     -- seems sketchy for some operators to tokenize differently, so do that here
     local target_names = tokenize_dependency_line(left)
-    local prereq_names = tokenize_dependency_line(right)
+    local prereq_names, order_only_prereq_names = tokenize_prerequisites(right)
 
-    operator:EVAL_RULE(target_names, prereq_names, action)
+    operator:EVAL_RULE(
+        target_names,
+        prereq_names,
+        action,
+        order_only_prereq_names
+    )
 end
 
 function blud.macro(name, ...)
