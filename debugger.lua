@@ -6,6 +6,10 @@ local source_cache = {}
 local step_mode
 local step_target_depth
 local stopped_depth
+local breakpoints = {}
+local registered_operators
+local operator_member_names
+local instrumented_operators = {}
 
 local function normalize_source_name(info)
     local source = info.source or info.short_src or "<unknown>"
@@ -68,6 +72,95 @@ local function print_current_line()
             print("<source not available>")
         end
     end
+end
+
+local function find_operator_breakpoint(operator_name)
+    for id = 1, #breakpoints do
+        local breakpoint = breakpoints[id]
+        if breakpoint and breakpoint.kind == "operator"
+                and breakpoint.operator_name == operator_name then
+            return id, breakpoint
+        end
+    end
+end
+
+local function stop_at_operator_breakpoint(
+        id,
+        breakpoint,
+        member_name,
+        implementation
+    )
+    print(string.format(
+        "Breakpoint %d: operator %s, function %s",
+        id,
+        breakpoint.operator_name,
+        member_name
+    ))
+
+    debug_info = assert(
+        lua_debug.getinfo(implementation, "S"),
+        "could not get debug information for operator member: " .. member_name
+    )
+    debug_info.currentline = debug_info.linedefined
+    stopped_depth = call_depth(2)
+    print_current_line()
+    debugger.interactive(">")
+end
+
+local function operator_wrapper(operator, member_name, implementation)
+    return function(self, ...)
+        local breakpoint_id, breakpoint =
+            find_operator_breakpoint(operator.name)
+        if breakpoint_id then
+            stop_at_operator_breakpoint(
+                breakpoint_id,
+                breakpoint,
+                member_name,
+                implementation
+            )
+        end
+        return implementation(self, ...)
+    end
+end
+
+local function instrument_operator(operator)
+    if instrumented_operators[operator] then
+        return
+    end
+
+    local id = find_operator_breakpoint(operator.name)
+    if not id then
+        return
+    end
+
+    instrumented_operators[operator] = true
+    for _, member_name in ipairs(operator_member_names) do
+        local implementation = operator[member_name]
+        assert(type(implementation) == "function",
+               "operator member is not a function: " .. member_name)
+        operator[member_name] =
+            operator_wrapper(operator, member_name, implementation)
+    end
+end
+
+local function set_operator_breakpoint(operator_name)
+    local id = find_operator_breakpoint(operator_name)
+    if not id then
+        table.insert(breakpoints, {
+            kind = "operator",
+            operator_name = operator_name,
+        })
+        id = #breakpoints
+    end
+
+    if registered_operators then
+        local operator = registered_operators[operator_name]
+        if operator then
+            instrument_operator(operator)
+        end
+    end
+
+    print(string.format("Breakpoint %d: operator %s", id, operator_name))
 end
 
 
@@ -330,6 +423,28 @@ function debugger.real_probe(args)
     debugger.interactive(">")
 end
 
+function debugger.register_operators(operators, member_names)
+    assert(not registered_operators,
+           "debugger operator members have already been registered")
+    assert(type(operators) == "table",
+           "debugger operator registry must be a table")
+    assert(type(member_names) == "table",
+           "debugger operator member list must be a table")
+
+    registered_operators = operators
+    operator_member_names = member_names
+
+    for id = 1, #breakpoints do
+        local breakpoint = breakpoints[id]
+        if breakpoint then
+            local operator = operators[breakpoint.operator_name]
+            if operator then
+                instrument_operator(operator)
+            end
+        end
+    end
+end
+
 function debugger.interactive(prompt, handler)
     handler = handler or custom_handler
 
@@ -345,7 +460,7 @@ function debugger.interactive(prompt, handler)
         arg = arg or ""
 
         if command == "?" or command == "help" then
-            print("q quit | c continue | s step | n next | bt backtrace | e <lua> eval | x <lua> explore | ? help")
+            print("q quit | c continue | s step | n next | bt backtrace | b <operator> break | e <lua> eval | x <lua> explore | ? help")
         elseif command == "q" or command == "quit" then
             os.exit()
         elseif command == "c" or command == "continue" or command == "resume" then
@@ -364,6 +479,13 @@ function debugger.interactive(prompt, handler)
             end
             lua_debug.sethook(step_hook, "l")
             break
+        elseif command == "b" or command == "break" then
+            local operator_name = arg:match("^(%S+)%s*$")
+            if not operator_name then
+                print("usage: b <operator_name>")
+            else
+                set_operator_breakpoint(operator_name)
+            end
         elseif command == "e" or command == "eval" then
             local chunk, err = load(arg)
             if chunk then

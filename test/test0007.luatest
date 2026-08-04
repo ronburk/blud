@@ -47,6 +47,8 @@ assert(calls == 1)
 package.loaded.debugger = {
     probe = function()
     end,
+    register_operators = function()
+    end,
 }
 
 blud.operators = {}
