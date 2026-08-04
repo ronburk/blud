@@ -187,7 +187,7 @@ local function stop_at_operator_breakpoint(
         table.insert(paused_frames, frame)
     end
     print_current_line()
-    debugger.interactive(">")
+    debugger.interactive("debug> ")
 end
 
 local function operator_wrapper(operator, member_name, implementation)
@@ -309,7 +309,7 @@ local function step_hook(event, line)
         stopped_depth = depth
         paused_frames = capture_paused_frames(2)
         print_current_line()
-        debugger.interactive(">")
+        debugger.interactive("debug> ")
     end
 end
 
@@ -475,11 +475,12 @@ local function explore(root_value, root_expression)
             end
 
             print()
-            io.write("Select an item; Enter returns; q quits: ")
+            print("number selects; Enter goes back; q exits x")
         else
-            io.write("This value cannot be expanded; press Enter to return or q to quit: ")
+            print("Enter goes back; q exits x")
         end
 
+        io.write("x:" .. frame.path .. "> ")
         local input = io.read()
         if not input then
             os.exit()
@@ -491,7 +492,7 @@ local function explore(root_value, root_expression)
         elseif input == "q" or input == "quit" then
             return
         elseif input == "?" or input == "help" then
-            print("number descend | Enter return | q quit | ? help")
+            print("number selects | Enter goes back | q exits x | ? help")
         elseif frame.entries and input:match("^%d+$") then
             local entry = frame.entries[tonumber(input)]
             if entry then
@@ -553,7 +554,7 @@ function debugger.real_probe(args)
     stopped_depth = call_depth(2)
     paused_frames = capture_paused_frames(2)
     print_current_line()
-    debugger.interactive(">")
+    debugger.interactive("debug> ")
 end
 
 function debugger.register_operators(operators, member_names)
@@ -592,7 +593,8 @@ function debugger.interactive(prompt, handler)
         command = command or ""
         arg = arg or ""
 
-        if command == "?" or command == "help" then
+        if command == "" then
+        elseif command == "?" or command == "help" then
             print("q quit | c continue | s step | n next | bt backtrace | b <operator> break | e <lua> eval | x [#frame] <lua> explore | ? help")
         elseif command == "q" or command == "quit" then
             os.exit()
