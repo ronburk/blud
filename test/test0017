@@ -1,0 +1,116 @@
+-- expect: test0017.out
+-- Order-only prerequisite syntax is split before operator evaluation.
+
+all:
+
+do
+    local state = {
+        calls = 0,
+        captures = {},
+    }
+
+    state.operator = {}
+    function state.operator:EVAL_RULE(targets, normal, action, order_only)
+        assert(#targets == 1,
+               "capture operator expected exactly one target")
+        state.calls = state.calls + 1
+        state.captures[targets[1]] = {
+            normal = normal,
+            action = action,
+            order_only = order_only,
+        }
+    end
+
+    blud.test0017_state = state
+    blud.operators[":CAPTURE:"] = state.operator
+end
+
+TEST0017_SEPARATOR = |
+
+no_separator :CAPTURE: normal_a normal_b
+spaced :CAPTURE: normal_a normal_b | order_a order_b
+adjacent :CAPTURE: normal_a normal_b|order_a order_b
+empty_normal :CAPTURE: | order_a order_b
+empty_order :CAPTURE: normal_a normal_b |
+macro_separator :CAPTURE: normal_a$(TEST0017_SEPARATOR)order_a
+with_action :CAPTURE: normal_action | order_action
+    touch test0017-unexpected
+
+assignment: PIPE_VALUE = a|b
+
+do
+    local state = blud.test0017_state
+
+    local function assert_words(name, kind, expected)
+        local actual = state.captures[name][kind]
+        assert(type(actual) == "table",
+               name .. " " .. kind .. " prerequisites were not a table")
+        assert(#actual == #expected,
+               string.format(
+                   "%s had %d %s prerequisites instead of %d",
+                   name,
+                   #actual,
+                   kind,
+                   #expected))
+        for i = 1, #expected do
+            assert(actual[i] == expected[i],
+                   string.format(
+                       "%s %s prerequisite %d was %s instead of %s",
+                       name,
+                       kind,
+                       i,
+                       tostring(actual[i]),
+                       expected[i]))
+        end
+    end
+
+    assert_words("no_separator", "normal", {"normal_a", "normal_b"})
+    assert_words("no_separator", "order_only", {})
+
+    for _, name in ipairs({"spaced", "adjacent"}) do
+        assert_words(name, "normal", {"normal_a", "normal_b"})
+        assert_words(name, "order_only", {"order_a", "order_b"})
+    end
+
+    assert_words("empty_normal", "normal", {})
+    assert_words("empty_normal", "order_only", {"order_a", "order_b"})
+    assert_words("empty_order", "normal", {"normal_a", "normal_b"})
+    assert_words("empty_order", "order_only", {})
+    assert_words("macro_separator", "normal", {"normal_a"})
+    assert_words("macro_separator", "order_only", {"order_a"})
+
+    local with_action = state.captures.with_action
+    assert(type(with_action.action) == "function",
+           "rule action was not passed as the third operator argument")
+    assert_words("with_action", "normal", {"normal_action"})
+    assert_words("with_action", "order_only", {"order_action"})
+
+    local calls_before_error = state.calls
+    local accepted, error_message = pcall(
+        blud.eval_rule,
+        ":CAPTURE:",
+        {"multiple_separators"},
+        {"normal | order | extra"},
+        nil
+    )
+    assert(not accepted,
+           "prerequisite parser accepted more than one '|' separator")
+    assert(tostring(error_message):find(
+               "more than one '|' separator", 1, true),
+           "multiple-separator error had an unexpected message: " ..
+           tostring(error_message))
+    assert(state.calls == calls_before_error,
+           "operator was called after multiple separators were rejected")
+
+    local assignment = blud.get_or_create_target("assignment")
+    assert(assignment.SCOPE:get_text("PIPE_VALUE") == "a|b",
+           "target-specific assignment split its '|' character")
+
+    blud.operators[":CAPTURE:"] = nil
+    blud.test0017_state = nil
+
+    local output, error_message = io.open("test0017.out", "w")
+    assert(output,
+           "could not create test0017.out: " .. tostring(error_message))
+    output:close()
+end
