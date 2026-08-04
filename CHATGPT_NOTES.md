@@ -1,8 +1,9 @@
 # ChatGPT Notes for blud
 
 These are concise handoff notes for future ChatGPT sessions working on Ron
-Burk's `blud` project. They were refreshed on 2026-07-26 after prerequisite
-globs were moved into rule evaluation.
+Burk's `blud` project. They were refreshed on 2026-08-03 after executable
+`source` actions, sourcemapped Lua diagnostics, and non-inheriting
+target-specific macros were merged.
 
 ## Start of a chat
 
@@ -12,8 +13,8 @@ globs were moved into rule evaluation.
    or restored archives unless Ron explicitly directs otherwise.
 3. Check `origin/main` and the status of any previously worked PR before
    starting. Merge notifications are not automatic.
-4. Use a clean ordinary local clone and a separate feature branch for each
-   task. Do not commit to `main`.
+4. Reuse `./blud`; update clean `main` with `git pull --ff-only`, then create a
+   separate feature branch. Do not commit to `main`.
 5. Read `README.md` for documented user-visible behavior.
 6. Use `lua-nav.awk` before reading Lua sources:
 
@@ -31,28 +32,28 @@ reconstruct, normalize, or silently alter command output.
 
 ## Current baseline
 
-Current `main` includes the merged work through PR #29:
+At this refresh, `main` is `4361570` and includes merged PRs #60 and #61. The
+important recent behavior is:
 
-- structured line parsing and structured logical exits;
-- `-h`, `--why`, and silent command execution;
-- Linux copy primitives and the virtual-shell `cp` command;
-- early installation of the embedded Lua module loader;
-- private target-specific variables;
-- per-test staging and nested success logs;
-- a first user README;
-- intelligent messages on operator assertions;
-- early prerequisite-glob expansion.
+- every concrete root target reports when it is already up to date;
+- `--why` distinguishes completed, skipped, interrupted, failed, and
+  structurally unreached targets, including when the build raises an error;
+- compiled-bludfile syntax errors and Lua runtime errors use registered source
+  maps, including cached bytecode and preserved original source text;
+- the virtual-shell `source` command compiles and executes action files;
+- target-specific macro assignments no longer flow into prerequisites;
+- the interactive debugger has an update-phase breakpoint and a bounded,
+  control-character-safe value explorer.
 
-There are 13 tests, `test0001` through `test0013`.
+There are 16 direct bludfile tests, `test0001` through `test0016`.
 
 `build.sh` embeds an explicit list of Lua modules into `bludlua.c`. Any new Lua
-module must be added to that list. The minimal LuaJIT headers and static library
-needed by the Linux build are tracked under `luajit/src/`; `luajit.zip` and a
-complete LuaJIT source tree are not required.
+module must be added to that list. The build expects a built LuaJIT 2.1 tree at
+`luajit/`; LuaJIT itself is not vendored.
 
-`runtime.lua` contains substantial obsolete commented-out implementations.
-Search results there may identify dead code, so verify the active definition
-and its callers before editing.
+`runtime.lua` and `blud.lua` still contain substantial obsolete commented-out
+implementations. Search results may identify dead code, so verify the active
+definition and its callers before editing.
 
 ## Important current semantics
 
@@ -67,29 +68,113 @@ names only:
 - unmatched patterns contribute nothing;
 - matches are sorted within each pattern.
 
-The base operator implements this through
-`GLOB_PREREQUISITE_WORDS()`. `:TEST:` intentionally bypasses the base expansion
-because its patterns are relative to the suite directory. `:BUILD:` validates
-its raw prerequisite tokens before generic globbing can discard an unmatched
-pattern. `test/test0013` protects these details.
+The base operator implements this through `GLOB_PREREQUISITE_WORDS()`.
+`:TEST:` intentionally bypasses the base expansion because its patterns are
+relative to the suite directory. `:BUILD:` validates its raw prerequisite
+tokens before generic globbing can discard an unmatched pattern.
+`test/test0013` protects these details.
 
-### Target-specific variables
+### Target selection and root reporting
 
-Target-specific variables apply only to the named target. Every target scope
-has the fixed parent chain
-`build -> commandline -> bludfile -> environment -> base`; prerequisite
-traversal never inserts another target scope into that chain. Use `:BUILD:`
-assignments for values that should reach an entire build configuration.
+`runtime.lua:infer_targets()` turns command-line selections into the concrete
+atoms that `build_targets()` calls directly. With no positional target it
+selects the default target. A selected `:BUILD:` context with no following
+ordinary target also selects the default target. If needed, the default build
+context is prepended.
+
+`blud.roots` contains the complete concrete list before the first build starts.
+For each root, `BUILD()` returns both timestamp and `needs_building`; a false
+second result prints `NAME is up to date`. This central reporting covers
+ordinary, ruleless, and build-context roots.
+
+### Target-specific macros
+
+Target-specific macros apply only to the named target. Every target scope has
+the fixed parent chain:
+
+```
+build -> commandline -> bludfile -> environment -> base
+```
+
+Prerequisite traversal never inserts another target scope into that chain.
+Use `:BUILD:` assignments for values that should reach an entire build
+configuration.
+
+The old `private` and `public` target-assignment modifiers are recognized only
+to report that they are obsolete. There is currently no `override` modifier,
+but its possible future use has not been ruled out.
 
 `-W` sets `.ASSUME_NEW` in the named atom's target scope, so it affects only
-that atom.
-`.JUST_PRINT` and `.SILENT` remain ordinary inherited command-line Booleans.
+that atom. `.JUST_PRINT` and `.SILENT` remain inherited command-line Booleans.
 
-### Current explicit-rule representation
+### The virtual-shell `source` command
 
-Explicit rules are still shared raw tables created by
-`operator.lua:M:ADD_RULE()` and registered in `blud.rules`, initialized by
-`runtime.lua`. Their directly accessed fields are:
+`shell.lua` implements:
+
+```
+source [--boundary STRING] [--] FILE
+```
+
+It reads FILE, compiles the selected text as a standalone blud action, and
+executes the resulting function as `action(scope, 0)`. The sourced action uses
+the caller's scope and its status becomes the `source` command status.
+
+With `--boundary`, the first line containing STRING selects an input prefix.
+Every enclosed line must begin with that prefix; the prefix is stripped until
+the first prefixed line beginning with STRING. Newline padding preserves the
+physical file line numbers in diagnostics.
+
+Every invocation receives a unique Lua chunk name and registers its returned
+sourcemap directly. Dynamic compilation uses `compile_io.close(false)` so
+executing the chunk cannot replace the main bludfile's `blud.sourcemap`.
+`test/test0016` covers changed contents under one filename, caller scope,
+status and error propagation, boundary line numbers, and main-map preservation.
+
+### Lua source maps and diagnostics
+
+`init.lua` owns a Lua-source registry keyed by chunk name. Each entry retains
+the exact generated text and an optional sourcemap. `compile_io.lua` stores
+each compiler input once in `sourcemap.sources`; mapping entries refer to those
+texts by numeric `source_index`, so duplicate filenames remain distinct. The
+source table is serialized with cached bytecode.
+
+Freshly compiled bludfiles and `source` chunks register through
+`blud.load_lua_source()`. Cached bytecode instead sets
+`blud.sourcemap_chunk_name` and uses the map embedded in that bytecode; its
+`sources` table still contains the preserved compiler inputs.
+`blud.error_handler()` resolves runtime stack frames through those paths and
+displays the preserved line. Load-time syntax errors use the same location
+formatter. Diagnostics do not reopen source filenames.
+
+Remaining sourcemap work is narrow:
+
+- `--lua` still calls `loadfile()` directly instead of registering its text;
+- the generated embedded `<runtime>` chunk still uses its older loader path;
+- `source_from_generated_line()`, `report_runtime_error()`, and commented call
+  sites in `blud.lua` are obsolete cleanup.
+
+### `--why`
+
+`--why TARGET` observes the build selected by the positional arguments; it
+does not add TARGET to that build. Hooks record whether a matching atom was
+reached, considered, needed rebuilding, started its action, and completed it.
+The report runs after normal completion or from the Lua error handler, once
+only.
+
+The subject currently matches `atom.NAME` exactly. It does not match
+`BOUND_NAME`, so a request such as `--why debug/foo.o` remains unresolved when
+the atom's logical name is `foo.o`.
+
+If no matching atom was reached, `why.lua` performs a deliberately limited
+structural inference over `blud.rules`, `rule.targets`, and
+`rule.prereq_words`. It does not bind names, discover implicit rules, or ask
+operators to prepare prerequisites. Do not present that inferred result as an
+observed build event.
+
+### Explicit-rule representation
+
+Explicit rules remain shared raw tables created by `operator.lua:M:ADD_RULE()`
+and registered in `blud.rules`. Directly accessed fields include:
 
 ```
 targets
@@ -100,105 +185,53 @@ source_rule_prepared
 test_rule_prepared
 ```
 
-Every current explicit rule has exactly one target. `GROUP_TARGETS()` has never
-had an operator override, although the representation still carries a
-one-element `targets` array.
+Every current explicit rule has one target, although the representation still
+uses a one-element `targets` array. `operator.lua`, `atom.lua`, `runtime.lua`,
+and `why.lua` all inspect or mutate this representation. Implicit rules in
+`implicit.lua` have a different identity and lifecycle.
 
-Coupling is distributed as follows:
+An earlier explicit `Rule` object refactor was discussed but never approved or
+implemented. It is not the current next task. In particular, `test0014` is no
+longer available for a proposed Rule test; it now covers standalone action
+compilation and sourcemap return/embedding.
 
-- `operator.lua` creates rules, enforces repeated-declaration invariants, and
-  mutates special-operator state;
-- `atom.lua` reads rule data and dispatches through `rule.operator`;
-- `why.lua` walks `blud.rules`, `rule.targets`, and `rule.prereq_words`;
-- `runtime.lua` recognizes `:BUILD:` by inspecting `rule.operator`;
-- `::` and `:TEST:` use separate one-time preparation flags.
+## Validation and known failure
 
-Implicit pattern rules in `implicit.lua` are a different data structure with a
-different identity and lifecycle. They should not be unified with concrete
-explicit rules merely because both are called rules.
-
-Declared prerequisite names live in `rule.prereq_words`. During building they
-are materialized as atoms in `atom.PREREQUISITES`; `$<` and `$^` in `scope.lua`
-consume that atom list. The two representations serve different phases.
-
-## Current design question: an explicit Rule object
-
-The next design under consideration is to make explicit rules objects that
-hide their representation. No implementation has been approved or started.
-
-The change appears worthwhile only if the object owns invariants and behavior,
-not if it merely replaces field reads with trivial getters. The proposed
-boundary is:
-
-- add `rule.lua` with private rule storage and a private registry;
-- use `Rule.add()` to attach one rule to one target, accumulate repeated
-  prerequisite declarations, and reject mixed operators or multiple actions;
-- copy prerequisite arrays on input and output so private storage cannot be
-  mutated indirectly;
-- remove dormant `GROUP_TARGETS()` support and the `targets` array;
-- let a rule own operator dispatch for bind, prepare, build prerequisites,
-  build, and action execution;
-- centralize one-time preparation, replacing `source_rule_prepared` and
-  `test_rule_prepared`, with an intelligent recursive-preparation assertion;
-- migrate `::`, `:TEST:`, `why.lua`, and the `:BUILD:` check to the Rule API;
-- keep implicit rules separate;
-- keep `atom.PREREQUISITES` on atoms in the first refactor.
-
-Likely affected files:
-
-```
-rule.lua
-build.sh
-runtime.lua
-operator.lua
-atom.lua
-why.lua
-test/test0013
-test/test0014
-```
-
-`test/test0014` was proposed to cover hidden fields, repeated-declaration
-accumulation and order, mixed-operator rejection, second-action rejection, and
-exactly-once preparation. `test/test0013` currently reads
-`rule.prereq_words` directly and would need to use the public Rule API.
-
-One unresolved implementation detail is debugging private-storage objects:
-`util.dump()` does not currently provide a general custom-object protocol, and
-the existing ad hoc `rule.dump` field is not honored by it. Decide whether
-`rule:dump()` is sufficient or whether `util.dump()` needs a narrow extension.
-
-Do not combine the first Rule refactor with moving `atom.PREREQUISITES` or
-unifying implicit rules; either would broaden the change substantially.
-
-## Validation
-
-Use the smallest focused test while developing, then validate the integrated
-operators and diagnostics:
+Use the smallest focused test while developing. The recent compiler,
+diagnostic, and `source` paths can be checked with:
 
 ```
 bash build.sh
-(cd test && ../blud -f test0013)
-./blud
-./blud -B test
+./blud -f test/test0014
+./blud -f test/test0015
+./blud -f test/test0016
+./blud testsource
 ./blud -f test/test0001 --why talk
 git diff --check
 git status --short
 ```
 
-After changing Lua sources, rerun the relevant `lua-nav.awk` query before
-committing.
+As of this refresh, `./blud test` stops in `test0007.luatest`: that isolated
+atom harness constructs bound atoms without `SCOPE`, while
+`atom:get_timestamp()` now reads `.ASSUME_NEW` through `atom.SCOPE`. The error
+is `atom.lua:149: attempt to index field 'SCOPE' (a nil value)`. This predates
+and is unrelated to `source`; do not claim the full suite passed until the
+harness or contract is fixed.
 
 ## Do not resurrect
 
-The following belong to retired workflows or completed work:
+The following belong to retired workflows, completed work, or superseded
+plans:
 
 - `/mnt/data` archive selection, `.FRESH`, `.PATCH`, preflight leases, and
   `chatgpt_patch_finish.sh` as the normal collaboration workflow;
 - `CHATGPT_PREFLIGHT.sh`;
 - `lua-index.json` and its Python/tree-sitter generator;
-- the private-variable implementation plan;
+- public/private target-specific macro inheritance;
+- the preview-only `source: would execute ...` implementation;
+- reopening mapped filenames or scanning generated code for `--BLUDLINE`;
 - the old claim that multiline actions are unimplemented;
-- the paused `test0002` design as the current priority;
-- `luajit.zip`.
+- the paused `test0002` design or Rule-object proposal as the current priority;
+- `luajit.zip` or uploaded repository archives as authoritative source.
 
 Use GitHub branches and draft PRs under the current Project Instructions.
