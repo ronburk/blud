@@ -601,10 +601,6 @@ do  -- Test suites aggregate one generated success-log target per test.
     end
 
     function op:ADD_RULE(target, prereq_words, action)
-        if not action or action == blud.default_action then
-            blud.error("#1: :TEST: requires an action.", target.NAME)
-        end
-
         if not target.RULE then
             -- Record the suite as a :TEST: target, but keep its individual
             -- test cases and actions outside the ordinary one-rule model.
