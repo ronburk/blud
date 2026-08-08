@@ -293,18 +293,39 @@ M.macro_extract_call = function(scanner)
         if #parts <= 0 then
             error("empty macro invocation")
         else
---            assert(parts[1].type == "text" and parts[1].text ~= "")
---            util.array_append(arg_stack, parts)
             table.insert(arg_stack, parts)
-            local macro_name = parts[1]
             local stop_part  = scanner:get_next_part(" "..close_char)
+
+            if not stop_part then
+                error("unterminated macro invocation: expected '" .. close_char .. "'")
+            end
+
+            if arg_stack.eval == "immediate"
+                and #parts == 1
+                and type(parts[1]) == "string"
+                and parts[1]:match("^%d+$")
+            then
+                error(
+                    "positional macro argument ${" .. parts[1] ..
+                    "} cannot be expanded immediately; use $(" .. parts[1] .. ")"
+                )
+            end
+
             if stop_part.text == ' ' then
-                error("can't handle macro args yet")
+                repeat
+                    parts = M.parts_from_text_(scanner, ","..close_char)
+                    table.insert(arg_stack, parts)
+
+                    stop_part = scanner:get_next_part(","..close_char)
+                    if not stop_part then
+                        error("unterminated macro invocation: expected '" .. close_char .. "'")
+                    end
+                until stop_part.text == close_char
             elseif stop_part.text ~= close_char then
-                error(string.format("malformed macro call '%s' because of '%s'",
-                                    macro_name, stop_part.text))
-            else  -- else we hit closing paren of macro call
-                
+                error(
+                    "malformed macro invocation: expected '" .. close_char ..
+                    "', got '" .. stop_part.text .. "'"
+                )
             end
         end
     end
@@ -475,6 +496,33 @@ do
         end
     end
 
+    local function check_macro_arguments(name, text, expected)
+        local parts = M.parts_from_text(text)
+        check_final_format(parts)
+        assert_eq(
+            "macro argument parser: " .. name,
+            parts_to_string(parts),
+            expected
+        )
+    end
+
+    local function check_macro_argument_error(name, text, expected)
+        local ok, actual = pcall(function()
+            M.parts_from_text(text)
+        end)
+        if ok then
+            error("macro argument parser: " .. name .. " should have failed", 2)
+        end
+        if not tostring(actual):find(expected, 1, true) then
+            error(
+                "macro argument parser: " .. name .. " failed with the wrong error\n" ..
+                "expected: " .. expected .. "\n" ..
+                "actual:   " .. tostring(actual),
+                2
+            )
+        end
+    end
+
     check_parts(
         "abc",
         'text:"abc"'
@@ -567,6 +615,51 @@ do
 
     check_error("$()")
     check_error("${}")
+
+    -- MACRO_ARGUMENT_PARSER_TESTS
+    -- These test only the parser's argument boundaries and resulting parts.
+    -- Argument expansion is deliberately outside the scope of this change.
+    check_macro_arguments(
+        "three comma-separated arguments",
+        "$(macro_name param_1,param2,param_3)",
+        'macro(text:"macro_name", text:"param_1", text:"param2", text:"param_3")'
+    )
+
+    check_macro_arguments(
+        "empty arguments are retained",
+        "$(macro_name ,two,)",
+        'macro(text:"macro_name", , text:"two", )'
+    )
+
+    check_macro_arguments(
+        "nested commas belong to the nested invocation",
+        "$(outer $(inner a,b),c)",
+        'macro(text:"outer", macro(text:"inner", text:"a", text:"b"), text:"c")'
+    )
+
+    check_macro_arguments(
+        "commas inside quoted text do not separate arguments",
+        '$(macro_name "a,b",c)',
+        'macro(text:"macro_name", text:"\\\"a,b\\\"", text:"c")'
+    )
+
+    check_macro_arguments(
+        "immediate invocation retains its arguments",
+        "${macro_name one,two}",
+        'macro{text:"macro_name", text:"one", text:"two"}'
+    )
+
+    check_macro_argument_error(
+        "immediate positional reference is rejected",
+        "${12}",
+        "positional macro argument ${12} cannot be expanded immediately; use $(12)"
+    )
+
+    check_macro_argument_error(
+        "missing closing delimiter is reported",
+        "$(macro_name one,two",
+        "unterminated macro invocation: expected ')'"
+    )
 end
 --]=]
 
