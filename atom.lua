@@ -165,7 +165,7 @@ local super_atom = {
     BUILD_PREREQUISITES = function(atom)
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
-    BUILD = function(target_atom)
+    BUILD = function(target_atom, parent)
         blud.why.reached(target_atom)
 
         if not target_atom.RULE then
@@ -178,7 +178,7 @@ local super_atom = {
         end
 
         if target_atom.RULE then
-            return target_atom.RULE.operator:BUILD(target_atom)
+            return target_atom.RULE.operator:BUILD(target_atom, parent)
         end
 
         target_atom:BIND()
@@ -202,8 +202,7 @@ local super_atom = {
             -- util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
             for _, prereq_name in ipairs(prerequisites) do
                 local prerequisite = atom.BIND(prereq_name)
-                prerequisite.PARENT = atom
-                local this_time = prerequisite.BUILD(prerequisite)
+                local this_time = prerequisite:BUILD(atom)
                 if this_time > newest_time then
                     newest_time = this_time
                     newest_prerequisite = prerequisite
@@ -282,14 +281,15 @@ blud.TARGETS = {
     [ ".AFTER" ] = {
         NAME = ".AFTER",
         ATTRIBUTE = true,
-        DO_ACTION = function(target, prerequisites, action)
+        DO_ACTION = function(target, parent)
             local after = function()
                 status = blud.execute(
                     target.ATTRIBUTE_TARGET.SCOPE,
                     target.ATTRIBUTE_TARGET.ACTION
                 )
             end
-            blud.set_callback(target.PARENT, "DO_ACTION", after)
+            -- The parent belongs to this traversal edge, not to the atom.
+            blud.set_callback(parent, "DO_ACTION", after)
             return true
         end
     },

@@ -46,10 +46,9 @@ function M:BIND(atom)
 end
 
 -- Default timestamp-driven build used by aggregate-like operators.
-function M:BUILD(target_atom)
+function M:BUILD(target_atom, parent)
         -- util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
-        
-        -- if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -87,7 +86,7 @@ function M:BUILD(target_atom)
             local rule = target_atom.RULE
             if rule and rule.action then
                 blud.why.action_started(target_atom)
-                target_atom:DO_ACTION()
+                target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
                 -- Record successful actions even when they do not create a file.
                 target_atom.TIMESTAMP = blud.current_time
@@ -281,8 +280,7 @@ do  -- Ordinary explicit dependency rules.
         return target_atom
     end
 
-    function op:BUILD(target_atom)
---        -- if target_atom.PARENT then print("PARENT('" .. blud.dump_atom(target_atom.PARENT) .. "')") end
+    function op:BUILD(target_atom, parent)
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -319,7 +317,7 @@ do  -- Ordinary explicit dependency rules.
             local rule = target_atom.RULE
             if rule and rule.action then
                 blud.why.action_started(target_atom)
-                target_atom:DO_ACTION()
+                target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
@@ -426,8 +424,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
         -- These prerequisites are already atoms, so bypass word expansion.
         for _, prerequisite in ipairs(prerequisites) do
             prerequisite:BIND()
-            prerequisite.PARENT = target_atom
-            local this_time = prerequisite:BUILD()
+            local this_time = prerequisite:BUILD(target_atom)
             if this_time > newest_time then
                 newest_time = this_time
                 newest_prerequisite = prerequisite
@@ -437,7 +434,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
         return newest_time, newest_prerequisite
     end
 
-    function op:BUILD(target_atom)
+    function op:BUILD(target_atom, parent)
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -463,7 +460,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
             local rule = target_atom.RULE
             if rule and rule.action then
                 blud.why.action_started(target_atom)
-                target_atom:DO_ACTION()
+                target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
@@ -750,9 +747,9 @@ do  -- Test suites aggregate one generated success-log target per test.
         rule.test_rule_prepared = true
     end
 
-    function op:BUILD(target)
+    function op:BUILD(target, parent)
         -- PREPARE_PREREQUISITES supplies the graph expected by generic BUILD.
-        return M.BUILD(self, target)
+        return M.BUILD(self, target, parent)
     end
 end
 

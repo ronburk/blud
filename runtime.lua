@@ -1558,16 +1558,6 @@ blud.add_rules = function(colon_operator, targets, prerequisites, action)
 end
 
 
---[=[
-blud.build = function(target, parent_atom)
-    print("[[[[[[[[[build " .. target.NAME .. "]]]]]]]]")
-    blud.global.BIND(target)
-    target.PARENT = parent_atom
-    target:BUILD_PREREQUISITES()
-    return target:BUILD()
-end
---]=]
-
 blud.get_or_create_target = function(target_name)
     local target = blud.TARGETS[target_name]
     if target == nil then
