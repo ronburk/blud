@@ -43,7 +43,7 @@ do
             ": do\n" ..
             ":     scope.directive_ran = true\n" ..
             ": end\n" ..
-            "echo first\n"
+            "echo first --option\n"
         )
     local second, _, second_sourcemap, second_embedded_sourcemap =
         compile_action("second.action", "echo second\n")
@@ -53,7 +53,7 @@ do
     assert_sourcemaps_equal(first_sourcemap, first_embedded_sourcemap)
     assert_sourcemaps_equal(second_sourcemap, second_embedded_sourcemap)
 
-    assert(first:find("echo first", 1, true),
+    assert(first:find("echo first --option", 1, true),
            "first compilation omitted its action")
     assert(second:find("echo second", 1, true),
            "second compilation omitted its action")
@@ -65,7 +65,7 @@ do
     local function execute(scope, command)
         assert(scope == first_scope,
                "compiled action did not pass its scope to blud.execute")
-        assert(command == "echo first",
+        assert(command == "echo first --option",
                "compiled action passed unexpected command " .. tostring(command))
         return 0
     end
