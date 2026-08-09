@@ -192,7 +192,9 @@ function compile_macro_assign(compile_io, macro_name)
 
     compile_io.skip_white()
     local macro_text = compile_io.get_line_remainder()
-    local parts = m.parts_from_text(macro_text)
+    -- Assignments are directive text, so comments must be removed before the
+    -- macro parser can mistake comment contents for an expansion.
+    local parts = m.parts_from_lua_text(macro_text)
 
     compile_io.emit_line("blud.macro_assign_parts(blud.Scope.bludfile, %q, %q, %s)",
                          macro_name, assign_op, parts_to_body_lua(parts))
@@ -286,6 +288,8 @@ local function action_to_lua(statements)
 end
 
 local function append_action_line(statements, macro_text)
+    -- Action lines are command text. In particular, "--option" must reach the
+    -- command parser unchanged rather than being treated as a Lua comment.
     local parts = m.parts_from_text(macro_text)
     local command = m.parts_to_lua_expression(parts)
 
@@ -364,7 +368,7 @@ function M.compile_action(compile_io)
 end
 
 local function compile_rule_or_target_assignment(compile_io)
-    local parts = m.parts_from_text(compile_io.get_current_line())
+    local parts = m.parts_from_lua_text(compile_io.get_current_line())
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
     if not operator then
@@ -383,7 +387,9 @@ local function compile_rule_or_target_assignment(compile_io)
 end
 
 local function emit_lua_line(compile_io, line)
-    local parts = m.parts_from_text(line)
+    -- Strip source comments before expanding macros so comment contents are
+    -- never parsed and expansions yielding "--" remain ordinary Lua text.
+    local parts = m.parts_from_lua_text(line)
     compile_io.emit_line("%s", m.parts_to_lua(parts))
 end
 

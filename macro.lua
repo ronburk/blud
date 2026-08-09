@@ -47,33 +47,22 @@ do
 end
 
 
---[[
-
-    parts_from_text() - break text into parts
-    
-
-]]
--- parts_from_text: break text into parts
--- Each part is a table with a "type" field. Each non-macro part has a "text" field.
--- A part with "type" equal to "macro" is an "argstack" array.
-local function is_comment(text, pos)
-    local result = false
-    if text:sub(pos, pos+1) == '--' then
-        result = true
-    end
-    return result
-end
+-- Break text into literal and macro parts. Comment recognition is a property
+-- of the source language containing the text, not of macro expansion itself.
+-- Callers therefore choose explicitly whether literal, unquoted `--` starts a
+-- Lua comment.
 
 -- little scanner class maintains state of a scan
 local Scanner   = {}
 do
     Scanner.__index = Scanner
-    function Scanner.new(text, start_pos)
+    function Scanner.new(text, start_pos, recognize_lua_comments)
         local self = {
-            text      = text,
-            len       = #text,
-            pos       = start_pos or 1,
-            part      = nil
+            text                   = text,
+            len                    = #text,
+            pos                    = start_pos or 1,
+            part                   = nil,
+            recognize_lua_comments = recognize_lua_comments or false,
         }
         return setmetatable(self, Scanner)
     end
@@ -112,7 +101,8 @@ do
             return result
         end
         local stop_pos, stop_char
-        local pattern  = '([%-%$\'\"' .. stop_chars .. '])'
+        local comment_stop = self.recognize_lua_comments and "%-" or ""
+        local pattern = '([' .. comment_stop .. '%$\'\"' .. stop_chars .. '])'
         local start_pos = self.pos
 
         if start_pos <= self.len then -- if there are chars left to scan
@@ -129,8 +119,10 @@ do
                 if stop_pos == self.len and stop_char:find("['\"$-]") then
                     result   = { type="text", text=self.text:sub(start_pos) }
                     self.pos = self.len + 1
-                elseif self.text:sub(stop_pos, stop_pos+1) == '--' then -- if comment
---                  result = { type="comment", text=self.text:sub(start_pos) }
+                elseif self.recognize_lua_comments
+                        and self.text:sub(stop_pos, stop_pos+1) == '--' then
+                    -- Only Lua/directive text selects this policy. Action text
+                    -- must preserve `--` for command-line options.
                     result = nil
                     self.pos = self.len + 1
                 elseif stop_char == '-' then -- stopped in case it was --, but it wasn't so look further
@@ -168,8 +160,8 @@ local function assert_eq(name, actual, expected)
 end
 
 do
-    local function collect(text, stop_chars)
-        local s = Scanner.new(text)
+    local function collect(text, stop_chars, recognize_lua_comments)
+        local s = Scanner.new(text, nil, recognize_lua_comments)
         local result = {}
 
         while true do
@@ -182,15 +174,21 @@ do
     end
 
     assert_eq(
-        "comment after text should return text first, then comment",
+        "ordinary text should preserve double hyphens",
         collect("abc -- comment"),
+        "text:abc -- comment"
+    )
+
+    assert_eq(
+        "Lua comment should stop scanning after preceding text",
+        collect("abc -- comment", nil, true),
         "text:abc "
     )
 
     assert_eq(
-        "single '-' is ordinary text, even if returned in adjacent text parts",
+        "single '-' is ordinary text",
         collect("a-b$c", "%$"),
-        "text:a|text:-b|stop:$|text:c"
+        "text:a-b|stop:$|text:c"
     )
     assert_eq(
         "adjacent stop chars should produce two stop tokens",
@@ -245,11 +243,22 @@ local function append_part(parts, part)
     end
 end
 
-M.parts_from_text = function(text)
+local function parts_from_text(text, recognize_lua_comments)
     assert(text)
-    local scanner = Scanner.new(text)
+    local scanner = Scanner.new(text, nil, recognize_lua_comments)
     local result  = M.parts_from_text_(scanner)
     return result
+end
+
+-- Action and other literal text keeps `--`; it may be a command-line option.
+M.parts_from_text = function(text)
+    return parts_from_text(text, false)
+end
+
+-- Directive text uses Lua's quote-aware line-comment syntax. This scan occurs
+-- before expansion, so a macro cannot create a comment retroactively.
+M.parts_from_lua_text = function(text)
+    return parts_from_text(text, true)
 end
 
 
@@ -487,6 +496,21 @@ do
         end
     end
 
+    local function check_lua_parts(text, expected)
+        local parts = M.parts_from_lua_text(text)
+        check_final_format(parts)
+
+        local actual = parts_to_string(parts)
+        if actual ~= expected then
+            error(
+                "parts_from_lua_text(" .. string.format("%q", text) .. ") failed\n" ..
+                "expected: " .. expected .. "\n" ..
+                "actual:   " .. actual,
+                2
+            )
+        end
+    end
+
     local function check_error(text)
         local ok = pcall(function()
             M.parts_from_text(text)
@@ -580,10 +604,20 @@ do
 
     check_parts(
         "a--comment",
-        'text:"a"'
+        'text:"a--comment"'
     )
 
     check_parts(
+        [["abc" -- comment]],
+        'text:"\\"abc\\" -- comment"'
+    )
+
+    check_lua_parts(
+        "a--comment",
+        'text:"a"'
+    )
+
+    check_lua_parts(
         [["abc" -- comment]],
         'text:"\\"abc\\" "'
     )

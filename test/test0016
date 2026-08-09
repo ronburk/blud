@@ -2,7 +2,7 @@
 -- source compiles and executes action files without replacing the main map.
 
 all:
-    source "--boundary" __SOURCE__ test0016.action
+    source --boundary __SOURCE__ test0016.action
     test0016_check_scope
     rm "--" test0016.action
 
