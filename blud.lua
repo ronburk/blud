@@ -1,41 +1,7 @@
---[[
-function require_compiled(name)
-    local source = CSTRGet(name)
-    if source == nil then error("no such internal file: " .. name ) end
-    local chunk = load(source, "internal." .. name)
-    return chunk()
-end
-local foo = require_compiled("debugger.lua")
-print(foo.dump("foo"))
-assert(false)
-]]
 
 util = require("util")
 
 blud_module_code = CSTRGet("runtime.lua")
--- local function dump(o)
---     error("dump wasn't dead")
---     if type(o) == 'table' then
---         local s = '{ '
---         for k,v in pairs(o) do
---             if type(k) ~= 'number' then k = '"'..k..'"' end
---             if v ~= "__index" then
---                 s = s .. '['..k..'] = ' .. dump(v) .. ','
---             end
---         end
---         return s .. '} '
---     else
---         return tostring(o)
---     end
--- end
-
-
--- function template(str, values)
---     error("template wasn't dead")
---     return (str:gsub("{(.-)}", function(key)
---                          return values[key] or "{" .. key .. "}"
---     end))
--- end
 
 
 
@@ -44,118 +10,6 @@ blud_primary_target_name = ""
 
 blud_user_code = ""
 
-
--- returns generator that lets you read/peek one line at a time from the file
--- function buffered_line_io(file)
---     error("buffered_line_io wasn't dead")
---     assert(io.type(file) == "file");
---     local current_line; --  = file:read("*l")  -- Read the first line to prime the generator
---     local has_peeked   = false
---     local peek_line    = nil
--- 
---     return function(peek)
---         if peek then
---             if has_peeked then
---                 return peek_line  -- Return the peeked line without advancing
---             else
---                 peek_line  = file:read("*l")
---                 has_peeked = true
---                 return peek_line
---             end
---         else
---             if has_peeked then    -- We've peeked, now consume that line
---                 has_peeked   = false
---                 current_line = peek_line
---                 peek_line    = nil
---             else                -- No peek happened, move to the next line
---                 current_line = file:read("*l")
---             end
---             return current_line
---         end
---     end
--- end
-
--- function buffered_line_io_string(input_string)
---     error("buffered_line_io_string wasn't dead")
---     local lines = {}
---     local pos = 1
--- 
---     -- Split the input_string into lines
---     for line in input_string:gmatch("([^\r\n]*)[\r\n]?") do
---         table.insert(lines, line)
---     end
--- 
---     return function(peek)
---         if pos > #lines then
---             return nil -- No more lines
---         end
---         if peek then
---             return lines[pos] -- Peek the current line without advancing
---         else
---             local current_line = lines[pos]
---             pos = pos + 1 -- Advance to the next line
---             return current_line
---         end
---     end
--- end
-
-
--- function calculate_indent(line)
---     error("calculate_indent wasn't dead")
---     if line == nil then return 0 end
---     local indent = 0
---     for i = 1, #line do
---         local char = line:sub(i, i)
---         if char == ' ' then
---             indent = indent + 1
---         elseif char == '\t' then
---             indent = indent + 4
---         else
---             break
---         end
---     end
---     --    print("indent of '" .. line .. "' = " .. indent);
---     return indent
--- end
-
--- function atoms_to_string(atoms)
---     error("atoms_to_string wasn't dead")
---     local result = ""
---     for _, name in ipairs(atoms) do
---         if result ~= "" then result = result .. ", " end
---         result = result .. name
---     end
---     return result
--- end
-
-do
-    local keywords   = {
-        ["do"]       = true,
-        ["else"]     = true,
-        ["elseif"]   = true,
-        ["end"]      = true,
-        ["for"]    = true,
-        ["function"] = true,
-        ["if"]       = true,
-        ["local"]    = true,
-        ["repeat"] = true,
-        ["then"]   = true,
-        ["until"]  = true,
-        ["while"]  = true,
-    }
-
---     function line_is_lua(line)
---         error("line_is_lua wasn't dead")
---         local result     = true
---         local first_word = line:match("^%a+")
---         if first_word ~= nil then
---             if keywords[first_word] == nil then
---                 result = false
---             end
---         end
---         return result
---     end
-end
 
 
 function lua_quote(str)
@@ -172,20 +26,6 @@ function lua_quote(str)
     -- Wrap the string in double quotes
     return '"' .. str .. '"'
 end
-
--- function emit_macro_assign(macro_name, operator, remainder)
---     error("emit_macro_assign wasn't dead")
---     local variables = {
---         macro_name = lua_quote(macro_name),
---         operator   = lua_quote(operator),
---         remainder  = lua_quote(remainder)
---     }
---     local script = [[
--- blud.macro_assign({macro_name}, {operator}, {remainder})
--- ]]
--- local var =  script:gsub("{(.-)}", variables)
--- -- print(var)
--- end
 
 
 function syntax_error(line, line_number, format_string, ...)
@@ -225,92 +65,10 @@ function phase1_line_is_empty(line)
     end
 end
 
--- function preprocess(get_line)
---     error("preprocess wasn't dead")
---     local previous_indent   = 0
--- 
---     while true do     -- for line in file:lines() do
---         local line = get_line(false)
---         if line == nil then break end
---         local macro_name, operator, remainder = match_macro_assign(line)
---         if macro_name then
---             emit_macro_assign(macro_name, operator, remainder)
---         else
---         end
---         if false then
---             if not line_is_lua(line) then
---                 blud_user_code = blud_user_code .. "do -- " .. line .. "\n"
---                 local targets, prerequisites = process_make_rule(line) 
---                 local indent = calculate_indent(line)
---                 local action = ""
---                 while calculate_indent(get_line(true)) > indent do
---                     action = action .. get_line(false) .. "\n"
---                 end
---                 blud_user_code = blud_user_code .. "    blud.add_rules(targets, prerequisites, "
---                 if action == nil then
---                     blud_user_code = blud_user_code .. "nil)\n"
---                 else
---                     blud_user_code = blud_user_code .. "[[" .. action .. "]])\n"
---                 end
---                 
---                 blud_user_code = blud_user_code .. "end "
---             else -- line is Lua, but could be extended by comment or quoted string
---                 while true do
---                     blud_user_code = blud_user_code .. line .. '\n'
---                 end
---             end
---         end
---     end
--- end
-
--- function process_make_rule(line)
---     error("process_make_rule wasn't dead")
---     local targets       = {}
---     local prerequisites = {}
--- 
---     -- Split the line at the colon
---     local target_part, prerequisite_part = line:match("^%s*(.-)%s*:%s*(.*)")
--- 
---     -- Check and split the target part into paths
---     blud_user_code = blud_user_code .. "    local targets = { "
---     for target in target_part:gmatch("%S+") do
---         blud_primary_target_name = blud_primary_target_name or target
---         table.insert(targets, target)
---         blud_user_code = blud_user_code .. '"' .. target .. '"'
---     end
---     blud_user_code = blud_user_code .. " }\n"
--- 
---     -- Check and split the prerequisite part into paths
---     blud_user_code = blud_user_code .. "    local prerequisites = { "
---     for prerequisite in prerequisite_part:gmatch("%S+") do
---         table.insert(prerequisites, prerequisite)
---         blud_user_code = blud_user_code .. '"' .. prerequisite .. '"'
---     end
---     blud_user_code = blud_user_code .. " }\n"
--- 
---     --[=[
---         local code = [[    blud.add_dependents(targets, prerequisites)
---         ]]
--- 
---         for _, target in ipairs(targets) do
---         local atom_list = ""
---         for _, prerequisite in ipairs(prerequisites) do
---         atom_list = atom_list .. "," .. prerequisite
---         end
---         code = code:gsub("{target}", target);
---         code = code:gsub("{atom_list}", atom_list);
---         blud_user_code = blud_user_code .. code
---         end
---     ]=]
--- 
---     return targets, prerequisites
--- end
 
 
-
--- print("start executing phase 1")
 local bludfile_path = get_bludfile_path()
-local luac_path = bludfile_path .. ".luac"
+local luac_path     = bludfile_path .. ".luac"
 local blud_exe_path = get_executable_path()
 assert(blud_exe_path ~= nil)
 local blud_exe_timestamp = get_path_timestamp(blud_exe_path)
@@ -458,26 +216,6 @@ function blud.report_runtime_error(err, map)
 end
 
 
--- local function split_lua_runtime_error(err)
---     error("split_lua_runtime_error wasn't dead")
---     local chunk_name, generated_ln, message =
---         text:match('^%[string "([^"]*)"%]:(%d+):%s*(.*)$')
--- 
---     assert(
---         chunk_name,
---         "\nCould not parse Lua runtime error message" ..
---         "\nexpected form: [string \"...\"]:line: message" ..
---         "\nactual:        " .. string.format("%q", err)
---     )
--- 
---     generated_ln = tonumber(generated_ln)
--- 
---     assert(generated_ln)
---     assert(message)
--- 
---     return chunk_name, generated_ln, message
--- end
-
 -- execute the bytecode residing in an external file
 function execute_bytecode(file_path)
     -- Open the bytecode file
@@ -549,87 +287,3 @@ blud.build_targets(blud.primary_targets)
 blud.why.report()
 
 
---[[
-print("About to call pcall")
-local ok, err = pcall(execute_bytecode, (luac_path))
-print(string.format("After pcall, ok=%q, err=%q", ok, err))
-if not ok then
-    print("Got an error in our compiled bludfile at runtime")
-    assert(blud.sourcemap)
-    if blud.sourcemap then
-        blud.report_runtime_error(err, blud.sourcemap)
-    else
-        print("Error executing bytecode: " .. tostring(err))
-    end
-end
---]]
-
-
-
---print(blud_user_code);
-
---[[
-    function lines_length(input, line_number)
-    if line_number >= 1 then
-    local current_line = 1
-    local position = 1
-
-    -- Repeat finding new lines until the desired line
-    while true do
-    if current_line == line_number then
-    return position
-    end
-    local start_pos, end_pos = string.find(input, "\n", position)
-    if not start_pos then
-    break  -- No more newlines found
-    end
-    current_line = current_line + 1
-    position     = end_pos + 1
-    end
-    end
-    return nil  -- Line number does not exist in the input
-    end
-
-
-    function parse_blud_file_text(source_text)
-    local lua_text  = ""
-    local func, error_message = loadstring(source_text)
-    local line, message = error_message:match(":(%d+):%s*(.*)")
-    if error_message then
-    print("line " .. line .. ": " .. message)
-    assert(false)
-    end
-    end
-    parse_blud_file_text(blud_file_text)
-    assert(false)
-]]
-
---[[
-    function report_error(error_message, code)
-    print("Error ", error_message)
-    -- Extracting the line number from the error message
-    local lineNumber = tonumber(error_message:match(":(%d+):"))
-    if lineNumber then
-    -- Splitting the code into lines and printing the problematic line
-    local lines = {}
-    for line in code:gmatch("([^\n]*)\n?") do
-    table.insert(lines, line)
-    end
-    print("Error at line", lineNumber, ":", lines[lineNumber])
-    end
-
-    end
-
-
-    local program = blud_module_code .. blud_user_code
-    local func, err = loadstring(program)
-    print("back from loadstring")
-    if func then
-    status, err = pcall(func)
-    if not status then
-    report_error(err, program);
-    end
-    else
-    report_error(err, program);
-    end
-]]
