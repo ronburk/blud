@@ -55,7 +55,7 @@ Options:
   -s, --silent,
       --quiet           Do not print actions before executing them.
   -W ATOM               Assume ATOM is newly changed.
-  -h, --help            Show this help and exit.]])
+  -?, -h, --help        Show this help and exit.]])
 end
 
 function blud.parse_command_line()
@@ -71,7 +71,7 @@ function blud.parse_command_line()
     while i <= #args do
         local arg = args[i]
 
-        if arg == "-h" or arg == "--help" then
+        if arg == "-?" or arg == "-h" or arg == "--help" then
             print_help()
             os.exit(0)
         elseif arg == "-f" then
