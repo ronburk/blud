@@ -538,6 +538,10 @@ do  -- Test suites aggregate one generated success-log target per test.
         return basename
     end
 
+    local function default_test_action(scope)
+        return blud.execute(scope, "source " .. scope:get_text("<"))
+    end
+
     local function stage_test(test_info, scope)
         -- Recreate the private test tree immediately before its action. Directory
         -- tests copy directly to the destination; file tests become dest/basename.
@@ -601,6 +605,8 @@ do  -- Test suites aggregate one generated success-log target per test.
     end
 
     function op:ADD_RULE(target, prereq_words, action)
+        action = action or default_test_action
+
         if not target.RULE then
             -- Record the suite as a :TEST: target, but keep its individual
             -- test cases and actions outside the ordinary one-rule model.
@@ -693,9 +699,6 @@ do  -- Test suites aggregate one generated success-log target per test.
         for _, test_info in ipairs(tests) do
             local test_atom = test_info.atom
             local test_action = test_atom.TEST_ACTIONS[target]
-            assert(test_action,
-                   "test has no action in suite " .. tostring(target.NAME) ..
-                   ": " .. tostring(test_info.source_name))
             test_info.destination =
                 test_dir .. "/" .. test_info.basename
 
