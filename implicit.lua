@@ -149,34 +149,56 @@ function implicit.find_reverse(prereq_name)
 end
 
 
--- add a rule to the implicit rule database
-function implicit.add_rule(target, prerequisites, action)
---    util.print("implicit.add_rule(%s,%s,action)", util.dump(target), util.dump(prerequisites))
-    local parsed, errmsg
-    -- Add the rule as usual
-    local rule = {target = target, prerequisites = prerequisites, action = action, order = #rules + 1}
-    table.insert(rules, rule)
-    parsed, errmsg = parse_pattern(target)
-    if not parsed then return errmsg end
-    rule.parsed_target = parsed
-    -- Populate rules_from_suffix and ensure each prerequisite has a literal suffix
-    rule.parsed_prerequisites = {}
+local function make_rule(target, prerequisites, action)
+    local parsed_target, errmsg = parse_pattern(target)
+    if not parsed_target then
+        return nil, nil, errmsg
+    end
+
+    local parsed_prerequisites = {}
+    local prerequisite_suffixes = {}
     for _, prereq in ipairs(prerequisites) do
         local suffix = prereq:match("%.[^%%/.]*$")
         if not suffix then
-            return string.format(
+            return nil, nil, string.format(
                 "Prerequisite pattern does not contain a literal suffix: '%q'", prereq)
         end
-        parsed, errmsg = parse_pattern(prereq)
-        if not parsed then return errmsg end
-        table.insert(rule.parsed_prerequisites, parsed)
-        -- Add the rule to the rules_from_suffix table
+
+        local parsed_prerequisite
+        parsed_prerequisite, errmsg = parse_pattern(prereq)
+        if not parsed_prerequisite then
+            return nil, nil, errmsg
+        end
+        table.insert(parsed_prerequisites, parsed_prerequisite)
+        table.insert(prerequisite_suffixes, suffix)
+    end
+
+    return {
+        target = target,
+        prerequisites = prerequisites,
+        action = action,
+        parsed_target = parsed_target,
+        parsed_prerequisites = parsed_prerequisites,
+    }, prerequisite_suffixes
+end
+
+
+-- add a rule to the implicit rule database
+function implicit.add_rule(target, prerequisites, action)
+--    util.print("implicit.add_rule(%s,%s,action)", util.dump(target), util.dump(prerequisites))
+    local rule, prerequisite_suffixes, errmsg = make_rule(target, prerequisites, action)
+    if not rule then
+        return errmsg
+    end
+
+    rule.order = #rules + 1
+    table.insert(rules, rule)
+    for _, suffix in ipairs(prerequisite_suffixes) do
         if not rules_from_suffix[suffix] then
             rules_from_suffix[suffix] = {}
         end
         table.insert(rules_from_suffix[suffix], rule)
     end
-    return errmsg
 end
 
 -- Match a concrete name against an unparsed implicit-rule pattern.

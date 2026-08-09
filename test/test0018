@@ -1,0 +1,18 @@
+-- expect: test0018.out
+-- A rejected implicit rule must not remain in either rule index.
+
+all:
+
+do
+    local errmsg = blud.implicit.add_rule(
+        "%.transactional-output",
+        { "%.transactional-input", "%" })
+    assert(errmsg, "invalid implicit rule was accepted")
+    assert(not blud.implicit.find_reverse("source.transactional-input"),
+           "invalid implicit rule remained in the reverse-rule index")
+
+    local output, error_message = io.open("test0018.out", "w")
+    assert(output,
+           "could not create test0018.out: " .. tostring(error_message))
+    output:close()
+end
