@@ -59,7 +59,7 @@ Options:
   -s, --silent,
       --quiet           Do not print actions before executing them.
   -W ATOM               Assume ATOM is newly changed.
-  -h, --help            Show this help and exit.
+  -?, -h, --help        Show this help and exit.
 ```
 
 For example:
