@@ -29,6 +29,38 @@ do
     write_action("test0016_status\n")
     assert(commands.source({"source", action_filename}, scope) == 7,
            "source did not return its action status")
+
+    write_action([[ignored prefix
+#__SOURCE__    test0016_status
+this line must not be parsed
+]])
+    assert(commands.source(
+               {"source", action_filename, "--boundary", "__SOURCE__"},
+               scope
+           ) == 7,
+           "source did not execute an inline boundary action")
+
+    write_action([[ignored prefix
+#__SOURCE__  : assert(error("test0016 inline source failure"))
+ignored suffix
+]])
+    local function run_failing_inline_source()
+        commands.source(
+            {"source", action_filename, "--boundary", "__SOURCE__"},
+            scope
+        )
+    end
+    local inline_succeeded, inline_diagnostic = xpcall(
+        run_failing_inline_source,
+        blud.error_handler
+    )
+    assert(not inline_succeeded, "inline sourced Lua error did not propagate")
+    assert(inline_diagnostic:find(action_filename .. ":2", 1, true),
+           "inline sourced Lua error used the wrong line: " .. inline_diagnostic)
+    assert(inline_diagnostic:find(
+               "test0016 inline source failure", 1, true),
+           "inline sourced Lua error lost its message: " .. inline_diagnostic)
+
     commands.test0016_status = nil
     assert(blud.sourcemap == original_sourcemap,
            "source replaced the main sourcemap")
