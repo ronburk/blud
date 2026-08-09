@@ -546,9 +546,10 @@ local function cd(argv)
     return 0
 end
 
--- Return the text between the first pair of boundary lines. The text before
--- the opening boundary is a prefix that must begin every enclosed line and is
--- stripped from the resulting script.
+-- Return text selected by the first boundary. Text following the boundary on
+-- that line is a complete one-line script. Otherwise, the text before the
+-- boundary is a prefix that must begin every enclosed line and is stripped
+-- until a closing boundary.
 local function extract_source_script(text, boundary)
     local pos = 1
     local line_number = 1
@@ -562,6 +563,11 @@ local function extract_source_script(text, boundary)
 
         if boundary_pos then
             prefix = line:sub(1, boundary_pos - 1)
+            local inline_script = line:sub(boundary_pos + #boundary)
+            if inline_script:find("%S") then
+                inline_script = inline_script:gsub("^%s+", "")
+                return string.rep("\n", line_number - 1) .. inline_script
+            end
             pos = next_pos
             line_number = line_number + 1
             break
@@ -628,8 +634,9 @@ local function compile_source_action(filename, script)
     return action
 end
 
--- Implement `source [--boundary string] [--] file` by compiling the selected
--- text as an action body and executing it in the caller's scope.
+-- Implement `source [--boundary string] [--] file`, accepting options before
+-- or after the file, by compiling the selected text as an action body and
+-- executing it in the caller's scope.
 local function source(argv, scope)
     local boundary
     local filename
@@ -654,7 +661,6 @@ local function source(argv, scope)
             return diagnostic("source", "too many operands")
         else
             filename = arg
-            options = false
         end
         pos = pos + 1
     end
