@@ -2,7 +2,7 @@
 --
 -- Simple test to make sure SOMETHING works
 --
--- __BLUD_TEST_ $(OWD)/blud -f $<
+-- _BLUD_TEST_ $(OWD)/blud -f $<
 
 
 A = first

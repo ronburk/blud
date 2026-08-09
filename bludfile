@@ -10,6 +10,7 @@ CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -DBUILD_ID=666
 all : blud test
 
 test :TEST: test[0-9][0-9][0-9][0-9] | blud
+    source --boundary _BLUD_TEST_ -f $<
 
 debug release :BUILD:
 debug: CFLAGS += -g
