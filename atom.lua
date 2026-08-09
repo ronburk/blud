@@ -201,7 +201,7 @@ local super_atom = {
         if prerequisites and #prerequisites > 0 then
             -- util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
             for _, prereq_name in ipairs(prerequisites) do
-                prerequisite = atom.BIND(prereq_name)
+                local prerequisite = atom.BIND(prereq_name)
                 prerequisite.PARENT = atom
                 local this_time = prerequisite.BUILD(prerequisite)
                 if this_time > newest_time then

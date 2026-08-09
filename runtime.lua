@@ -70,6 +70,8 @@ local function dump1(o)
         return tostring(o)
     end
 end
+
+
 local function formatValue(value)
     if type(value) == "string" then
         if #value > 100 then
