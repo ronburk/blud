@@ -143,6 +143,9 @@ fabricate, reconstruct, or alter command output.
 
 GITHUB WORKFLOW
 
+NEVER USE THE "GitHub repository skill". IT IS WRONG FOR THIS PROJECT.
+USE THE INSTRUCTIONS BELOW. ALWAYS READ FROM LOCAL REPO CLONE!
+
 The authoritative repository is
 [https://github.com/ronburk/blud](https://github.com/ronburk/blud). Ignore attached or restored archives
 unless I explicitly direct you to use one.

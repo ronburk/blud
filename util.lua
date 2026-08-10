@@ -4,6 +4,30 @@ string_buf = require("string.buffer")
 
 
 
+-- imperfect:
+--     pairs won't work on the resulting table
+--     doesn't protect any fields it returns that are tables
+M.readonly = function(t)
+    return setmetatable({}, {
+        __index = t,
+        __newindex = function() error("attempt to modify read-only table", 2) end,
+    })
+end
+
+M.map = function(t, f)
+    local out = {}
+    for i, v in ipairs(t) do out[i] = f(v) end
+    return out
+end
+
+M.filter = function(t, pred)
+    local out = {}
+    for _, v in ipairs(t) do
+        if pred(v) then out[#out + 1] = v end
+    end
+    return out
+end
+
 M.deep_copy = function(value, seen)
     if type(value) ~= "table" then
         return value
