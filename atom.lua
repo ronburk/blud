@@ -219,9 +219,8 @@ local super_atom = {
         end
         assert(action)
 
-        local exit_code
-        -- print("DO_ACTION in super atom for " .. target_atom.NAME)
-        exit_code = action(target_atom.SCOPE)
+        -- action was compiled into a function
+        local exit_code = action(target_atom.SCOPE)
 
         if exit_code and exit_code ~= 0 then
             error("command failed[" .. exit_code .. "]: ")
