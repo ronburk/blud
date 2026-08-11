@@ -8,14 +8,6 @@ local function diagnostic(command, message)
     return 1
 end
 
--- Filesystem-changing commands invalidate the cache shared with blud.glob.
--- The guard keeps this module usable during early initialization or in tests.
-local function invalidate_directory_cache()
-    if blud then
-        blud.dir_cache = {}
-    end
-end
-
 -- Split one command line into words. Spaces and tabs delimit words; single and
 -- double quotes group text; backslash quotes the following character. Unquoted
 -- shell operators and substitutions are rejected because blud does not define
@@ -113,15 +105,6 @@ end
 -- As in default Bash behavior, an unmatched pattern remains a literal operand.
 local function expand_words(words)
     local argv = {}
-    local has_glob = false
-
-    for _, word in ipairs(words) do
-        has_glob = has_glob or word.glob
-    end
-    if has_glob then
-        invalidate_directory_cache()
-    end
-
     for _, word in ipairs(words) do
         if word.glob and blud and blud.glob then
             local count = blud.glob.expand_pattern(argv, word.text)
@@ -210,7 +193,6 @@ local function cp(argv)
         return diagnostic("cp", "cannot copy '" .. paths[1] .. "' to '" .. paths[2] .. "'")
     end
 
-    invalidate_directory_cache()
     return 0
 end
 
@@ -247,7 +229,6 @@ local function touch(argv)
         end
     end
 
-    invalidate_directory_cache()
     return 0
 end
 
@@ -444,7 +425,6 @@ local function rm(argv)
         end
     end
 
-    invalidate_directory_cache()
     return 0
 end
 
@@ -495,7 +475,6 @@ local function mkdir(argv)
         end
     end
 
-    invalidate_directory_cache()
     return 0
 end
 
@@ -539,7 +518,6 @@ local function cd(argv)
     end
 
     M.previous_directory = old_directory
-    invalidate_directory_cache()
     if print_directory then
         io.stdout:write(assert(os_getcwd()), "\n")
     end
