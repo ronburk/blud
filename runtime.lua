@@ -327,7 +327,7 @@ blud.assert          = function(condition, format, ...)
         end
     end
 end
-blud.require("dircache.lua")
+blud.glob            = blud.require("dircache.lua")
 blud.operators       = {}
 blud.build_name      = nil
 blud.default_build   = nil
