@@ -374,7 +374,6 @@ end
 blud.glob = {}
 -- Main function to expand the glob pattern
 function blud.glob.expand_pattern(words, pattern)
-    assert(type(pattern) == 'string', "expand_pattern expecting string argument")
     -- Split the pattern into path components
     local path_components = blud.glob.path_split(pattern)
     local dir = path_components[1]  -- Start with the root directory (or "." for current directory)

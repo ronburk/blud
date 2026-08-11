@@ -3,6 +3,9 @@
 -- BLUD_ASSERT_EXIT(code, data) records the one logical exit expected by the
 -- current invocation. BLUD_EXIT(code, data) exits successfully only when that
 -- pair matches; BLUD_EXIT(0) records normal completion.
+
+
+local M = {}
 local expected_code
 local expected_data
 
@@ -77,3 +80,5 @@ function BLUD_EXIT(code, data)
     )
     os.exit(1)
 end
+
+return M
