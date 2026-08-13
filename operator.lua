@@ -13,7 +13,6 @@ M.operator_new   = function(t)
 end
 
 local function register_operator(name)
-    assert(type(name) == "string", "operator name must be a string")
     assert(not blud.operators[name], "operator already registered: " .. name)
 
     local operator = M.operator_new({ name = name })
@@ -64,7 +63,7 @@ function M:BUILD(target_atom, parent)
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
-                BLUD_EXIT(1000, target_atom.NAME)
+            BLUD_EXIT(1000, target_atom.NAME)
         end
         
         -- Operators may materialize or rewrite prerequisites once build scope exists.
