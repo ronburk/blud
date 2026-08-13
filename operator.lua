@@ -245,41 +245,14 @@ function Operator:ADD_RULE(target, prereq_words, action)
 end
 
 
-
-
---[[ killme!
-blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
-    if target.NAME:find("%%") then
-        local rule = {target=target, prerequisites = prereq_atoms, action = action}
-        table.insert(blud.implicit_rules, rule)
-    else
-        return target:ADD_RULE(prereq_atoms, action)
-    end
-end
-
-blud.operators[":"] = function(colon_operator, target, prereq_atoms, action)
-    if target.NAME:find("%%") then
-        local prereq_names = {}
-        for _, prereq in ipairs(prereq_atoms) do
-            table.insert(prereq_names, prereq.NAME)
-        end
-
-        blud.implicit.add_rule(target.NAME, prereq_names, action)
-    else
-        return target:ADD_RULE(prereq_atoms, action)
-    end
-end
-
---]]
-
 do  -- Ordinary explicit dependency rules.
-    local op = register_operator(":")
-    function op:SET_PRIMARY_TARGETS(target_atom)
+    local Colon = register_operator(":")
+    function Colon:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:]:SET_PRIMARY_TARGETS()=%s", util.dump(target_atom))
         return target_atom
     end
 
-    function op:BUILD(target_atom, parent)
+    function Colon:BUILD(target_atom, parent)
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
@@ -331,13 +304,13 @@ do  -- Ordinary explicit dependency rules.
 end
 
 do  -- Pattern rules are registered for later implicit-rule lookup.
-    local op = register_operator("%:")
-    function op:SET_PRIMARY_TARGETS(target_atom)
+    local PercentColon = register_operator("%:")
+    function PercentColon:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[%%:]:SET_PRIMARY_TARGETS()")
         -- implicit rules are not candidates for primary targets
         return nil
     end
-    function op:ADD_RULE(target_atom, prereq_words, action)
+    function PercentColon:ADD_RULE(target_atom, prereq_words, action)
         -- util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
         assert(target_atom.NAME:find("%", 1, true),
                "pattern-rule target has no '%' wildcard: " ..
@@ -351,11 +324,11 @@ do  -- Pattern rules are registered for later implicit-rule lookup.
 end
 
 do  -- Source lists: compile each source through a reverse rule, then link.
-    local op = register_operator("::")
+    local DoubleColon = register_operator("::")
 
     local function prepare_prerequisites(target_atom)
         local source_rule = target_atom.RULE
-        assert(source_rule and source_rule.operator == op,
+        assert(source_rule and source_rule.operator == DoubleColon,
                "'::' prerequisite preparation requires a '::' rule for: " ..
                tostring(target_atom.NAME))
 
@@ -433,7 +406,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
         return newest_time, newest_prerequisite
     end
 
-    function op:BUILD(target_atom, parent)
+    function DoubleColon:BUILD(target_atom, parent)
         if target_atom.BUILDING == true then
             error("circular dependency on " .. target_atom.NAME)
         end
