@@ -1,28 +1,28 @@
 local debugger = require("debugger")
 
-local M= {} -- default behavior inherited by concrete operators
-M.__index = M
+local Operator= {} -- default behavior inherited by concrete operators
+Operator.__index = Operator
 
 local function target_needs_building(newest_prerequisite, timestamp)
     return blud.command_line_options.always_make or
            timestamp == 0 or
            newest_prerequisite > timestamp
 end
-M.operator_new   = function(t)
-    return setmetatable(t, M)
+Operator.operator_new   = function(t)
+    return setmetatable(t, Operator)
 end
 
 local function register_operator(name)
     assert(not blud.operators[name], "operator already registered: " .. name)
 
-    local operator = M.operator_new({ name = name })
+    local operator = Operator.operator_new({ name = name })
     blud.operators[name] = operator
     return operator
 end
 
 -- Generated targets bind under OWD; source-only targets bind under SWD.
 -- The presence of an action is what distinguishes the two.
-function M:BIND(atom)
+function Operator:BIND(atom)
     if not atom.SCOPE then atom.SCOPE = blud.ScopeTarget:new(atom) end
     assert(atom.SCOPE.target == atom,
            "target has a scope owned by another atom: " .. tostring(atom.NAME))
@@ -45,7 +45,7 @@ function M:BIND(atom)
 end
 
 -- Default timestamp-driven build used by aggregate-like operators.
-function M:BUILD(target_atom, parent)
+function Operator:BUILD(target_atom, parent)
         -- util.print("BUILD('%s') prereq=%s", blud.dump_atom(target_atom), util.dump(target_atom.PREREQUISITES))
 
         if target_atom.BUILDING == true then
@@ -100,10 +100,10 @@ function M:BUILD(target_atom, parent)
     end
 
 -- Hook for operators that lazily materialize or rewrite prerequisites.
-function M:PREPARE_PREREQUISITES(atom)
+function Operator:PREPARE_PREREQUISITES(atom)
 end
 
-function M:EVAL_RULE(left_tokens, right_tokens, action)
+function Operator:EVAL_RULE(left_tokens, right_tokens, action)
     -- util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
 --    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
     local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
@@ -120,10 +120,10 @@ function M:EVAL_RULE(left_tokens, right_tokens, action)
     end
 --]]
 end
-function M:GLOB_TARGET_WORDS(words)
+function Operator:GLOB_TARGET_WORDS(words)
     return glob_words(words)
 end
-function M:GLOB_PREREQUISITE_WORDS(words)
+function Operator:GLOB_PREREQUISITE_WORDS(words)
     return glob_words(words)
 end
 function atomize_words(t)
@@ -133,25 +133,25 @@ function atomize_words(t)
     end
     return result
 end
-function M:ATOMIZE_TARGET_WORDS(target_words)
+function Operator:ATOMIZE_TARGET_WORDS(target_words)
     return atomize_words(target_words)
 end
-function M:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
+function Operator:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
     return atomize_words(prerequisite_words)
 end
 
 
 -- override and return nil if your target cannot be primary build target
-function M:SET_PRIMARY_TARGETS(target_atom)
+function Operator:SET_PRIMARY_TARGETS(target_atom)
     return target_atom
 end
 
-function M:GROUP_TARGETS(target_words, prereq_words, action)
+function Operator:GROUP_TARGETS(target_words, prereq_words, action)
     return false
 end
 
 -- Parsed target words are normally independent rules; an operator can group them.
-function M:ADD_RULES(target_words, prereq_words, action)
+function Operator:ADD_RULES(target_words, prereq_words, action)
 --[[
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
           util.dump(target_words), util.dump(prereq_words))
@@ -212,7 +212,7 @@ local function rule_dump(rule)
     return table.concat(lines, "\n")
 end
 
-function M:ADD_RULE(target, prereq_words, action)
+function Operator:ADD_RULE(target, prereq_words, action)
    -- util.array_append(target.PREREQUISITES, prereqs)
 --    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
     -- Repeated declarations accumulate prerequisites until one supplies the action.
@@ -606,7 +606,7 @@ do  -- Test suites aggregate one generated success-log target per test.
         if not target.RULE then
             -- Record the suite as a :TEST: target, but keep its individual
             -- test cases and actions outside the ordinary one-rule model.
-            M.ADD_RULE(self, target, {}, nil)
+            Operator.ADD_RULE(self, target, {}, nil)
         elseif target.RULE.operator ~= self then
             blud.error("#1: target used with more than one operator.", target.NAME)
         end
@@ -748,7 +748,7 @@ do  -- Test suites aggregate one generated success-log target per test.
 
     function op:BUILD(target, parent)
         -- PREPARE_PREREQUISITES supplies the graph expected by generic BUILD.
-        return M.BUILD(self, target, parent)
+        return Operator.BUILD(self, target, parent)
     end
 end
 
@@ -769,7 +769,7 @@ do
         assert(#right_tokens == 0,
                ":BUILD: prerequisites are not supported for: " ..
                table.concat(left_tokens, ", "))
-        return M.EVAL_RULE(self, left_tokens, right_tokens, action)
+        return Operator.EVAL_RULE(self, left_tokens, right_tokens, action)
     end
 
     function op:ADD_RULE(target, prereqs, action)
@@ -799,7 +799,7 @@ do
         end
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
-        M.ADD_RULE(self, target, {}, nil)
+        Operator.ADD_RULE(self, target, {}, nil)
     end
 
     function op:BUILD(target)
@@ -843,12 +843,12 @@ local operator_member_set = {}
 for _, name in ipairs(operator_member_names) do
     assert(not operator_member_set[name],
            "duplicate debugger operator member: " .. name)
-    assert(type(M[name]) == "function",
+    assert(type(Operator[name]) == "function",
            "debugger operator member is not a function: " .. name)
     operator_member_set[name] = true
 end
 
-for name, value in pairs(M) do
+for name, value in pairs(Operator) do
     if type(value) == "function" and name ~= "operator_new" then
         assert(operator_member_set[name],
                "generic operator member is missing from the debugger: " ..
