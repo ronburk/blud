@@ -165,6 +165,7 @@ local super_atom = {
     BUILD_PREREQUISITES = function(atom)
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
+    -- called when we must build an atom that has no rule
     INVENT_RULE = function(atom)
         assert(not atom.RULE)
 
