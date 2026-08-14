@@ -52,14 +52,6 @@ function Operator:BUILD(target_atom, parent)
             error("circular dependency on " .. target_atom.NAME)
         end
         target_atom.BUILDING   = true
-        if not target_atom.RULE then
-            -- Resolve implicit rules lazily, when a target is actually requested.
-            local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
-            -- util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
-            if implicit_rule then
-                blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
-            end
-        end
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
@@ -257,14 +249,6 @@ do  -- Ordinary explicit dependency rules.
             error("circular dependency on " .. target_atom.NAME)
         end
         target_atom.BUILDING   = true
-        if not target_atom.RULE then
-            -- Resolve implicit rules lazily, when a target is actually requested.
-            local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
---            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
-            if implicit_rule then
-                blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
-            end
-        end
         target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()

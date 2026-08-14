@@ -165,16 +165,24 @@ local super_atom = {
     BUILD_PREREQUISITES = function(atom)
         return atom.RULE.operator:BUILD_PREREQUISITES(atom)
     end,
+    INVENT_RULE = function(atom)
+        assert(not atom.RULE)
+
+        local implicit_rule, _, prereq_words =
+            blud.implicit.find_forward(atom.NAME)
+        if implicit_rule then
+            blud.operators[":"]:ADD_RULE(
+                atom,
+                prereq_words,
+                implicit_rule.action
+            )
+        end
+    end,
     BUILD = function(target_atom, parent)
         blud.why.reached(target_atom)
 
         if not target_atom.RULE then
-            -- must try implicit rules now
-            local implicit_rule, match, prereq_words = blud.implicit.find_forward(target_atom.NAME)
---            util.print("IMPLICIT %s | %s | %s", util.dump(implicit_rule), util.dump(match), util.dump(prereq_words))
-            if implicit_rule then
-                blud.operators[":"]:ADD_RULE(target_atom, prereq_words, implicit_rule.action)
-            end
+            target_atom:INVENT_RULE()
         end
 
         if target_atom.RULE then
