@@ -143,7 +143,12 @@ function Operator:GROUP_TARGETS(target_words, prereq_words, action)
 end
 
 -- Parsed target words are normally independent rules; an operator can group them.
-function Operator:ADD_RULES(target_words, prereq_words, action)
+function Operator:ADD_RULES(
+    target_words,
+    prereq_words,
+    action,
+    order_only_prereq_words
+)
 --[[
     util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
           util.dump(target_words), util.dump(prereq_words))
@@ -161,11 +166,16 @@ function Operator:ADD_RULES(target_words, prereq_words, action)
             end
         end
         if not group then -- multiple targets synonym for multiple rules
-            self:ADD_RULE(target_atom, prereq_words, action)
+            self:ADD_RULE(
+                target_atom,
+                prereq_words,
+                action,
+                order_only_prereq_words
+            )
         end
     end
     if group then
-        self:ADD_RULE(targets, prereq_words, action)
+        self:ADD_RULE(targets, prereq_words, action, order_only_prereq_words)
     end
 end
 
@@ -189,10 +199,12 @@ local function rule_dump(rule)
     local lines = {}
 
     table.insert(lines, string.format(
-        "%s %s %s",
+        "%s %s %s%s",
         targets_dump(rule.targets),
         rule.operator.name,
-        words_dump(rule.prereq_words)
+        words_dump(rule.prereq_words),
+        #(rule.order_only_prereq_words or {}) > 0 and
+            " | " .. words_dump(rule.order_only_prereq_words) or ""
     ))
 
     if rule.action then
@@ -431,7 +443,18 @@ do  -- Source lists: compile each source through a reverse rule, then link.
     end
 end
 
-do  -- Test suites aggregate one generated success-log target per test.
+local bludtest_operator = register_operator(":BLUDTEST:")
+
+function bludtest_operator:EVAL_RULE()
+    error(":BLUDTEST: is an internal operator")
+end
+
+function bludtest_operator:BUILD(target)
+    error(":BLUDTEST: BUILD is not implemented for: " .. target.NAME)
+end
+
+
+do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
     local op = register_operator(":TEST:")
 
     local function is_absolute_path(path)
@@ -477,11 +500,6 @@ do  -- Test suites aggregate one generated success-log target per test.
         return tests
     end
 
-    local function test_log_name(basename)
-        -- Log names are relative to suite OWD and nested beside staged files.
-        return basename .. "/" .. basename .. ".log"
-    end
-
     local function test_basename(test_name)
         local name = test_name:gsub("[/\\]+$", "")
         local basename = name:match("([^/\\]+)$")
@@ -495,55 +513,13 @@ do  -- Test suites aggregate one generated success-log target per test.
         return blud.execute(scope, "source " .. scope:get_text("<"))
     end
 
-    local function stage_test(test_info, scope)
-        -- Recreate the private test tree immediately before its action. Directory
-        -- tests copy directly to the destination; file tests become dest/basename.
-        -- Return shell status so a staging failure suppresses action and success log.
-        if blud.just_print(scope) then
-            return 0
+    local function append_unique(words, word)
+        for _, existing in ipairs(words) do
+            if existing == word then
+                return
+            end
         end
-
-        local source = test_info.atom.BOUND_NAME
-        assert(source,
-               "test source was not bound before staging: " ..
-               tostring(test_info.source_name))
-        assert(test_info.destination,
-               "test destination was not assigned before staging: " ..
-               tostring(test_info.source_name))
-        if source == test_info.destination then
-            blud.error(
-                "#1: test source and destination are the same.",
-                source
-            )
-        end
-        local source_type = os_path_type(source)
-
-        -- Reuse virtual-shell commands so staging shares their path semantics.
-        local commands = blud.shell.commands
-        local status = commands.rm({
-            "rm", "-rf", "--", test_info.destination,
-        })
-        if status ~= 0 then
-            return status
-        end
-
-        if source_type == 2 then
-            return commands.cp({
-                "cp", "-r", "--", source, test_info.destination,
-            })
-        end
-
-        -- Make file destinations directories so cp preserves the source basename.
-        status = commands.mkdir({
-            "mkdir", "-p", "--", test_info.destination,
-        })
-        if status ~= 0 then
-            return status
-        end
-
-        return commands.cp({
-            "cp", "--", source, test_info.destination,
-        })
+        table.insert(words, word)
     end
 
     -- a :TEST: name cannot be a primary target
@@ -553,158 +529,101 @@ do  -- Test suites aggregate one generated success-log target per test.
 
     -- Test patterns are suite-relative, so ADD_RULE expands them after the
     -- suite target is known instead of using ordinary prerequisite globbing.
-    function op:EVAL_RULE(left_tokens, right_tokens, action)
-        self:ADD_RULES(left_tokens, right_tokens, action)
+    function op:EVAL_RULE(
+        left_tokens,
+        right_tokens,
+        action,
+        order_only_prereq_words
+    )
+        self:ADD_RULES(
+            left_tokens,
+            right_tokens,
+            action,
+            order_only_prereq_words
+        )
     end
 
-    function op:ADD_RULE(target, prereq_words, action)
+    function op:ADD_RULE(
+        target,
+        prereq_words,
+        action,
+        order_only_prereq_words
+    )
         action = action or default_test_action
 
         if not target.RULE then
-            -- Record the suite as a :TEST: target, but keep its individual
-            -- test cases and actions outside the ordinary one-rule model.
             Operator.ADD_RULE(self, target, {}, nil)
         elseif target.RULE.operator ~= self then
             blud.error("#1: target used with more than one operator.", target.NAME)
         end
-        assert(not target.RULE.test_rule_prepared,
-               "cannot add tests after preparing suite: " .. tostring(target.NAME))
 
-        target.TESTS = target.TESTS or {}
-        target.TESTS_BY_NAME = target.TESTS_BY_NAME or {}
-        target.TESTS_BY_BASENAME = target.TESTS_BY_BASENAME or {}
-
-        -- Overlapping patterns may repeat a name, but basenames must stay unique
-        -- because both private destinations and logs are basename-derived.
         local tests = expand_test_words(target.NAME, prereq_words)
-        for _, test in ipairs(tests) do
-            local test_name = test.name
-            local test_atom = blud.get_or_create_target(test_name)
-            local basename = test_basename(test_name)
-
-            if test.source_directory then
-                -- Absolute tests bind directly; relative tests bind through suite SWD.
-                local existing = test_atom.SCOPE.variables.SWD
-                if existing and
-                        test_atom.SCOPE:get_text("SWD") ~= test.source_directory then
-                    blud.error(
-                        "#1: test atom has conflicting source directories.",
-                        test_name
-                    )
-                end
-                test_atom.SCOPE:set("SWD", test.source_directory)
-            end
-
-            if not target.TESTS_BY_NAME[test_name] then
-                local existing = target.TESTS_BY_BASENAME[basename]
-                if existing then
-                    blud.error(
-                        "#1 and #2 have the same test basename.",
-                        existing.source_name,
-                        test_name
-                    )
-                end
-
-                -- Preserve the order in which tests first enter the suite.
-                local test_info = {
-                    atom = test_atom,
-                    source_name = test_name,
-                    basename = basename,
-                }
-                target.TESTS_BY_NAME[test_name] = test_info
-                target.TESTS_BY_BASENAME[basename] = test_info
-                table.insert(target.TESTS, test_info)
-            end
-
-            -- A test atom may belong to several suites, each with its own action.
-            -- Repeating it in one suite deliberately replaces that suite's action.
-            test_atom.TEST_ACTIONS = test_atom.TEST_ACTIONS or {}
-            test_atom.TEST_ACTIONS[target] = action
-        end
-    end
-
-    function op:PREPARE_PREREQUISITES(target)
-        local rule = target.RULE
-        assert(rule and rule.operator == self,
-               ":TEST: prerequisite preparation requires a :TEST: rule for: " ..
-               tostring(target.NAME))
-
-        -- Destinations depend on the selected :BUILD: OWD, so expand lazily.
-        if rule.test_rule_prepared then
-            return
-        end
-
-        local tests = target.TESTS or {}
         if #tests == 0 then
             blud.error("#1: :TEST: matched no tests.", target.NAME)
         end
 
-        local owd = target.SCOPE:get_text("OWD")
-        assert(owd ~= "",
-               "test suite has an empty OWD: " .. tostring(target.NAME))
-        local test_dir = owd .. "/" .. target.NAME
-        if not blud.just_print(target.SCOPE) and os_mkdir(test_dir) == 2 then
-            error("could not create test directory: " .. test_dir)
-        end
+        local target_rule = target.RULE
+        for _, test in ipairs(tests) do
+            local test_name = test.name
+            local test_atom = blud.get_or_create_target(test_name)
+            local basename = test_basename(test_name)
+            local bound_name = test.source_directory and
+                test.source_directory .. "/" .. test_name or test_name
 
-        -- Each log is both a success stamp and an ordinary build prerequisite.
-        local log_names = {}
-        for _, test_info in ipairs(tests) do
-            local test_atom = test_info.atom
-            local test_action = test_atom.TEST_ACTIONS[target]
-            test_info.destination =
-                test_dir .. "/" .. test_info.basename
-
-            local log_name = test_log_name(test_info.basename)
-            local log_atom = blud.get_or_create_target(log_name)
-            if log_atom.RULE then
-                blud.error("#1: test log target already has a rule.", log_name)
+            if test_atom.BOUND_NAME and test_atom.BOUND_NAME ~= bound_name then
+                blud.error(
+                    "#1: test atom has conflicting source bindings.",
+                    test_name
+                )
             end
-            log_atom.SCOPE:set("OWD", test_dir)
+            test_atom.BOUND_NAME = bound_name
 
-            local function log_action(scope)
-                assert(scope == log_atom.SCOPE,
-                       "test log action received the wrong target scope: " ..
-                       tostring(log_name))
-                local log_path = scope:get_text("@")
-                local just_print = blud.just_print(scope)
-                -- A failed rerun must never leave an old success stamp behind.
-                if not just_print then
-                    os.remove(log_path)
+            local is_new_test = true
+            for _, existing_name in ipairs(target_rule.prereq_words) do
+                if existing_name == test_name then
+                    is_new_test = false
+                    break
+                elseif test_basename(existing_name) == basename then
+                    blud.error(
+                        "#1 and #2 have the same test basename.",
+                        existing_name,
+                        test_name
+                    )
                 end
-
-                local status = stage_test(test_info, scope)
-                if status ~= 0 then
-                    return status
-                end
-
-                status = test_action(scope)
-                if status and status ~= 0 then
-                    return status
-                end
-
-                if not just_print then
-                    util.string_to_file(log_path, "success\n")
-                end
-                return 0
             end
 
-            -- Source changes make the corresponding success stamp out of date.
-            blud.operators[":"]:ADD_RULE(
-                log_atom,
-                { test_atom.NAME },
-                log_action
-            )
-            table.insert(log_names, log_name)
-        end
+            if is_new_test then
+                table.insert(target_rule.prereq_words, test_name)
+            end
 
-        -- The suite is now an ordinary aggregate over its success stamps.
-        rule.prereq_words = log_names
-        rule.test_rule_prepared = true
+            local test_rule = test_atom.RULE
+            if not test_rule then
+                Operator.ADD_RULE(bludtest_operator, test_atom, {}, action)
+                test_rule = test_atom.RULE
+                test_rule.test_target = target
+                test_rule.test_basename = basename
+                test_rule.order_only_prereq_words = {}
+            elseif test_rule.operator ~= bludtest_operator then
+                blud.error(
+                    "#1: test atom already belongs to another operator.",
+                    test_name
+                )
+            elseif test_rule.test_target ~= target then
+                blud.error(
+                    "#1: test atom belongs to another :TEST: target.",
+                    test_name
+                )
+            else
+                test_rule.action = action
+            end
+
+            for _, order_only in ipairs(order_only_prereq_words or {}) do
+                append_unique(test_rule.order_only_prereq_words, order_only)
+            end
+        end
     end
 
     function op:BUILD(target, parent)
-        -- PREPARE_PREREQUISITES supplies the graph expected by generic BUILD.
         return Operator.BUILD(self, target, parent)
     end
 end
