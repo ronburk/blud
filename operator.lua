@@ -443,19 +443,22 @@ do  -- Source lists: compile each source through a reverse rule, then link.
     end
 end
 
-local bludtest_operator = register_operator(":BLUDTEST:")
+do  -- Internal update behavior for individual tests.
+    local op = register_operator(":BLUDTEST:")
 
-function bludtest_operator:EVAL_RULE()
-    error(":BLUDTEST: is an internal operator")
-end
+    function op:EVAL_RULE()
+        error(":BLUDTEST: is an internal operator")
+    end
 
-function bludtest_operator:BUILD(target)
-    error(":BLUDTEST: BUILD is not implemented for: " .. target.NAME)
+    function op:BUILD(target)
+        error(":BLUDTEST: BUILD is not implemented for: " .. target.NAME)
+    end
 end
 
 
 do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
     local op = register_operator(":TEST:")
+    local bludtest_operator = blud.operators[":BLUDTEST:"]
 
     local function is_absolute_path(path)
         return path:match("^/") or path:match("^[A-Za-z]:[/\\]")
