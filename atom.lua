@@ -136,6 +136,10 @@ local super_atom = {
     end,
     -- BIND: associate an atom with an actual filename
     BIND  = function(atom)
+        if atom.BOUND_NAME then
+            return atom
+        end
+
         local rule = atom.RULE
         if rule then
             return rule.operator:BIND(atom)
