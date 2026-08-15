@@ -446,6 +446,158 @@ end
 do  -- Internal update behavior for individual tests.
     local op = register_operator(":BLUDTEST:")
 
+    local function join_path(parent, child)
+        if parent:match("[/\\]$") then
+            return parent .. child
+        end
+        return parent .. "/" .. child
+    end
+
+    local function path_basename(path)
+        local trimmed = path:gsub("[/\\]+$", "")
+        local basename = trimmed:match("([^/\\]+)$")
+        assert(basename, "path has no basename: " .. tostring(path))
+        return basename
+    end
+
+    local function source_entries(directory)
+        local entries = blud.glob.get_cached_dir(directory)
+        local names = {}
+
+        for name in pairs(entries) do
+            if name ~= "." then
+                table.insert(names, name)
+            end
+        end
+        table.sort(names)
+        return entries, names
+    end
+
+    local function files_equal(from, to)
+        if os_path_type(to) ~= 1 then
+            return false
+        end
+
+        local from_file = assert(io.open(from, "rb"))
+        local to_file = io.open(to, "rb")
+        if not to_file then
+            from_file:close()
+            return false
+        end
+
+        local equal = true
+        while true do
+            local from_chunk = from_file:read(64 * 1024)
+            local to_chunk = to_file:read(64 * 1024)
+            if from_chunk ~= to_chunk then
+                equal = false
+                break
+            end
+            if from_chunk == nil then
+                break
+            end
+        end
+
+        from_file:close()
+        to_file:close()
+        return equal
+    end
+
+    local function compare_directory(from, to)
+        if os_path_type(to) ~= 2 then
+            return false
+        end
+
+        local entries, names = source_entries(from)
+        for _, name in ipairs(names) do
+            local from_child = join_path(from, name)
+            local to_child = join_path(to, name)
+            if entries[name].is_dir then
+                if not compare_directory(from_child, to_child) then
+                    return false
+                end
+            elseif not files_equal(from_child, to_child) then
+                return false
+            end
+        end
+        return true
+    end
+
+    local function scompare(from, to)
+        local from_type = os_path_type(from)
+        if from_type == 0 then
+            error("test source does not exist: " .. tostring(from))
+        end
+        if os_path_type(to) ~= 2 then
+            return false
+        end
+        if from_type == 2 then
+            return compare_directory(from, to)
+        end
+        return files_equal(from, join_path(to, path_basename(from)))
+    end
+
+    local function ensure_directory(path)
+        local path_type = os_path_type(path)
+        if path_type == 2 then
+            return false
+        end
+        if path_type ~= 0 then
+            error("test destination is not a directory: " .. tostring(path))
+        end
+        if os_mkdir(path) == 2 then
+            error("could not create test directory: " .. tostring(path))
+        end
+        return true
+    end
+
+    local function update_file(from, to)
+        if files_equal(from, to) then
+            return false
+        end
+        if os_path_type(to) == 2 then
+            error("test destination is a directory: " .. tostring(to))
+        end
+        if os_copy_file(from, to) ~= 0 then
+            error(
+                "could not update test file: " ..
+                tostring(from) .. " -> " .. tostring(to)
+            )
+        end
+        return true
+    end
+
+    local function update_directory(from, to)
+        local updated = ensure_directory(to)
+        local entries, names = source_entries(from)
+
+        for _, name in ipairs(names) do
+            local from_child = join_path(from, name)
+            local to_child = join_path(to, name)
+            local child_updated
+            if entries[name].is_dir then
+                child_updated = update_directory(from_child, to_child)
+            else
+                child_updated = update_file(from_child, to_child)
+            end
+            updated = child_updated or updated
+        end
+        return updated
+    end
+
+    local function testupdate(from, to)
+        local from_type = os_path_type(from)
+        if from_type == 0 then
+            error("test source does not exist: " .. tostring(from))
+        end
+
+        if from_type == 2 then
+            return update_directory(from, to)
+        end
+        local updated = ensure_directory(to)
+        return update_file(from, join_path(to, path_basename(from))) or updated
+    end
+
     function op:EVAL_RULE()
         error(":BLUDTEST: is an internal operator")
     end
