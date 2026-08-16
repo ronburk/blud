@@ -692,9 +692,8 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
-    blud.Scope.build.variables = {
-        OWD = { [1] = ".", name = "OWD" },
-    }
+    blud.Scope.build.variables = {}
+    blud.Scope.build:set("OWD", { [1] = ".", name = "OWD" })
 end
 
 --[[

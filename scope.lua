@@ -2,13 +2,29 @@
 scope.lua - implement the scopes of macros/variables
 --]]
 
+local Macro = require("macro")
+
 local M = {}     -- this will be the metatable for scope objects
 M.__index = M
 
 
+local function get_local_parts(scope, name)
+    local macro = scope.variables[name]
+    if macro == nil then
+        return nil
+    end
+
+    assert(type(macro) == "table")
+    assert(type(macro.get_parts) == "function")
+    local parts = macro:get_parts()
+    assert(type(parts) == "table")
+    return parts
+end
+
+
 -- generic get_parts() function to return value of variable
 M.get_parts = function(self, name)
-    local result = self.variables[name]
+    local result = get_local_parts(self, name)
     if result == nil and self.parent then
         result = self.parent:get_parts(name)
     end
@@ -54,7 +70,7 @@ M.set = function(self, name, value)
         parts = value
     end
 
-    self.variables[name] = parts
+    self.variables[name] = Macro.from_parts(parts)
 end
 
 
@@ -128,7 +144,7 @@ local function target_get_parts(self, name)
     elseif name == "@" then
         result = { self.target.BOUND_NAME }
     else
-        result = self.variables[name]
+        result = get_local_parts(self, name)
         if result == nil and self.parent then
             result = self.parent:get_parts(name)
         end
