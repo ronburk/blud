@@ -617,7 +617,70 @@ do  -- Internal update behavior for individual tests.
     end
 
     function op:BUILD(target)
-        error(":BLUDTEST: BUILD is not implemented for: " .. target.NAME)
+        if target.BUILDING == true then
+            error("circular dependency on " .. target.NAME)
+        end
+        target.BUILDING = true
+
+        local rule = assert(
+            target.RULE and target.RULE.operator == self and target.RULE,
+            "test target does not belong to the :BLUDTEST: operator: " ..
+            tostring(target.NAME)
+        )
+        local test_target = assert(
+            rule.test_target,
+            "test has no owning :TEST: target: " .. tostring(target.NAME)
+        )
+        local test_basename = assert(
+            rule.test_basename,
+            "test has no workspace basename: " .. tostring(target.NAME)
+        )
+        local source = assert(
+            target.BOUND_NAME,
+            "test has no bound source: " .. tostring(target.NAME)
+        )
+
+        -- Each test owns a directory below its suite in OWD. The source is
+        -- copied there before execution; the source atom remains bound to the
+        -- original path so timestamp caching never changes its identity.
+        local workspace = join_path(
+            join_path(target.SCOPE:get_text("OWD"), test_target.NAME),
+            test_basename
+        )
+        local pass_path = join_path(workspace, "bludtest.pass")
+        local source_changed = not scompare(source, workspace)
+
+        -- A changed staged source invalidates a previous successful run. In
+        -- just-print mode the comparison still affects the decision, but no
+        -- workspace files or pass marker may be changed.
+        if source_changed and not blud.just_print(target.SCOPE) then
+            testupdate(source, workspace)
+
+            local pass_type = os_path_type(pass_path)
+            if pass_type == 2 then
+                error("test pass marker is a directory: " .. pass_path)
+            end
+            if pass_type ~= 0 and os_remove_file(pass_path) ~= 0 then
+                error("could not remove test pass marker: " .. pass_path)
+            end
+        end
+
+        -- There is no single filesystem timestamp for a test result. For now,
+        -- combine the known invalidation signals into mustrun. Actual execution
+        -- and creation of bludtest.pass belong to the next implementation step.
+        local mustrun = blud.command_line_options.always_make or
+                        source_changed or
+                        os_path_type(pass_path) ~= 1
+        if mustrun then
+            error(":BLUDTEST: test execution is not implemented for: " ..
+                  target.NAME)
+        end
+
+        -- Zero is a virtual timestamp here, paired with false to say that this
+        -- target is current. It deliberately does not describe a directory entry.
+        target.TIMESTAMP = 0
+        target.BUILDING = false
+        return 0, false
     end
 end
 
