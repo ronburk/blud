@@ -464,15 +464,17 @@ do  -- Internal update behavior for individual tests.
         local entries = blud.glob.get_cached_dir(directory)
         local names = {}
 
+        -- Use the same cached view of the source tree as wildcard expansion.
+        -- Sorting makes both the first reported mismatch and update order stable.
         for name in pairs(entries) do
-            if name ~= "." then
-                table.insert(names, name)
-            end
+            table.insert(names, name)
         end
         table.sort(names)
         return entries, names
     end
 
+    -- Compare contents rather than timestamps. Reading in chunks keeps large
+    -- test fixtures from becoming equally large temporary Lua strings.
     local function files_equal(from, to)
         if os_path_type(to) ~= 1 then
             return false
@@ -503,6 +505,8 @@ do  -- Internal update behavior for individual tests.
         return equal
     end
 
+    -- A source directory contributes its contents directly to the destination.
+    -- Only source entries matter: extra workspace files are deliberately ignored.
     local function compare_directory(from, to)
         if os_path_type(to) ~= 2 then
             return false
@@ -523,20 +527,24 @@ do  -- Internal update behavior for individual tests.
         return true
     end
 
+    -- The destination is always the test workspace. A file source is compared
+    -- with workspace/basename(source); a directory source maps directly onto it.
     local function scompare(from, to)
         local from_type = os_path_type(from)
         if from_type == 0 then
             error("test source does not exist: " .. tostring(from))
         end
-        if os_path_type(to) ~= 2 then
-            return false
-        end
         if from_type == 2 then
             return compare_directory(from, to)
+        end
+        if os_path_type(to) ~= 2 then
+            return false
         end
         return files_equal(from, join_path(to, path_basename(from)))
     end
 
+    -- Report creation so testupdate can distinguish an added empty directory
+    -- from a workspace that was already identical.
     local function ensure_directory(path)
         local path_type = os_path_type(path)
         if path_type == 2 then
@@ -551,6 +559,8 @@ do  -- Internal update behavior for individual tests.
         return true
     end
 
+    -- Avoid needless writes to identical files. A directory collision is an
+    -- error rather than an excuse to delete workspace content we may not own.
     local function update_file(from, to)
         if files_equal(from, to) then
             return false
@@ -567,6 +577,8 @@ do  -- Internal update behavior for individual tests.
         return true
     end
 
+    -- Walk only the source tree: add or update corresponding entries without
+    -- removing destination-only logs, pass markers, or other workspace files.
     local function update_directory(from, to)
         local updated = ensure_directory(to)
         local entries, names = source_entries(from)
@@ -585,6 +597,8 @@ do  -- Internal update behavior for individual tests.
         return updated
     end
 
+    -- Preserve exactly the same source-to-workspace mapping as scompare, and
+    -- return whether any file or directory had to be created or changed.
     local function testupdate(from, to)
         local from_type = os_path_type(from)
         if from_type == 0 then
