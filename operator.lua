@@ -559,14 +559,18 @@ do  -- Internal update behavior for individual tests.
         return true
     end
 
-    -- Avoid needless writes to identical files. A directory collision is an
-    -- error rather than an excuse to delete workspace content we may not own.
+    -- Avoid needless writes to identical files. Refuse to replace a workspace
+    -- directory when the corresponding test source is a file.
     local function update_file(from, to)
         if files_equal(from, to) then
             return false
         end
         if os_path_type(to) == 2 then
-            error("test destination is a directory: " .. tostring(to))
+            error(
+                "cannot update test workspace: source is a file but " ..
+                "destination is a directory: " ..
+                tostring(from) .. " -> " .. tostring(to)
+            )
         end
         if os_copy_file(from, to) ~= 0 then
             error(
