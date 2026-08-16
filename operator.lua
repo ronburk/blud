@@ -444,7 +444,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
 end
 
 do  -- Internal update behavior for individual tests.
-    local op = register_operator(":BLUDTEST:")
+    local opBLUDTEST = register_operator(":BLUDTEST:")
 
     local function join_path(parent, child)
         if parent:match("[/\\]$") then
@@ -616,11 +616,11 @@ do  -- Internal update behavior for individual tests.
         return update_file(from, join_path(to, path_basename(from))) or updated
     end
 
-    function op:EVAL_RULE()
+    function opBLUDTEST:EVAL_RULE()
         error(":BLUDTEST: is an internal operator")
     end
 
-    function op:BUILD(target)
+    function opBLUDTEST:BUILD(target)
         if target.BUILDING == true then
             error("circular dependency on " .. target.NAME)
         end
