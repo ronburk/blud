@@ -3,6 +3,17 @@ local M = {}
 local util = require("util")
 
 
+M.from_parts = function(parts)
+    assert(type(parts) == "table")
+
+    local macro = {}
+    function macro:get_parts()
+        return parts
+    end
+    return macro
+end
+
+
 local macro_name_pattern = "([%.]?[%a_][%w_%.]*)"
 
 -- parse a line that looks like macro assign, or return nil
@@ -401,6 +412,13 @@ end
 
 ---[=[UNIT_TESTS
 do
+    local wrapped_parts = { "one" }
+    local wrapped_macro = M.from_parts(wrapped_parts)
+    assert(type(wrapped_macro) == "table")
+    assert(type(wrapped_macro.get_parts) == "function")
+    assert(wrapped_macro[1] == nil)
+    assert(wrapped_macro:get_parts() == wrapped_parts)
+
     local function try(parts)
         local result = ""
         for _, part in ipairs(parts) do
