@@ -94,7 +94,6 @@ M.new_param_scope = function(self, parent, macro_actual)
     local scope = M:new(parent)
     scope.macro_actual = macro_actual
     function scope:get_macro(name)
-        blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
