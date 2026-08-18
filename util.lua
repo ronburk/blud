@@ -65,9 +65,6 @@ M.count_char = function(text, char)
 end
 
 M.match_or = function(text, pattern, init)
-    assert(type(text) == "string")
-    assert(type(pattern) == "string")
-
     for part in (pattern .. "|"):gmatch("(.-)|") do
         local result = { text:match(part, init) }
         if result[1] ~= nil then
@@ -200,12 +197,22 @@ M.printf = function(...)
 end
 
 M.string_to_file = function(filename, text)
-    assert(filename)
-    assert(text)
+    local file, errmsg = io.open(filename, "wb")
+    if not file then
+        error("cannot open " .. filename .. " for writing: " .. errmsg)
+    end
 
-    local file = assert(io.open(filename, "wb"))
-    assert(file:write(text))
-    assert(file:close())
+    local success
+    success, errmsg = file:write(text)
+    if not success then
+        file:close()
+        error("cannot write " .. filename .. ": " .. errmsg)
+    end
+
+    success, errmsg = file:close()
+    if not success then
+        error("cannot close " .. filename .. ": " .. errmsg)
+    end
 end
 
 
