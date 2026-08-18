@@ -749,55 +749,19 @@ blud.macro_expand_self_reference = function(macro_call, macro_tokens)
 end
 
 
-do
-    local ref_count = 0  -- counter for making unique names
-    -- traverse parts, change any macro call named 'old_name' to 'new_name'
-    local function rewrite_self_references(parts, old_name, new_name)
-        local result = false   -- assume we won't find any
-        for i = 1, #parts do
-            local part = parts[i]
-            if part.macro then
-                local arg = part[1]
-                if #arg == 1 and arg[1] == old_name then
-                    result = true   -- let caller know we found at least one
-                    arg[1] = { new_name }
-                end
-                
-            else
-            end
-            
-        end
-        return result
+blud.macro_assign_parts = function(scope, macro_name, operator, parts)
+    local macro = scope:get_macro(macro_name)
+
+    -- An undefined name has no object on which to dispatch. Start it with the
+    -- ordinary parts-backed flavor; ?= then has the same effect as =.
+    if macro == nil then
+        macro = blud.Macro.from_parts({})
+        if operator == "?=" then operator = "=" end
     end
-    blud.macro_assign_parts = function(scope, macro_name, operator, parts)
-        local existing_macro = scope:get_macro(macro_name)
-        local existing_parts = existing_macro and existing_macro:get_parts()
-        if parts then
-            parts = util.deep_copy(parts)
-        else
-            parts = {}
-        end
-        if operator == "?=" then -- if set-if-not-set operator
-            if existing_parts ~= nil then return end
-            operator = "="   -- if not set, then it's an ordinary assignment
-        end
-        if operator == "=" then
-            ref_count = ref_count + 1
-            local new_name = string.format("%s %3d", macro_name, ref_count)
-            if rewrite_self_references(parts, macro_name, new_name) then
-                scope:set(new_name, existing_parts)
-            end
-        elseif operator == "+=" then
-            local new_parts = util.deep_copy(existing_parts or {})
-            if #new_parts > 0 and #parts > 0 then
-                table.insert(new_parts, " ")
-            end
-            util.array_append(new_parts, parts)
-            parts = new_parts
-        else
-            error("Unknown assignment operator '" .. operator .. "':")
-        end
-        scope:set(macro_name, parts)
+
+    local replacement = macro:assign(scope, macro_name, operator, parts)
+    if replacement ~= nil then
+        scope:set_macro(macro_name, replacement)
     end
 end
 

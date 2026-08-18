@@ -1,5 +1,31 @@
 INNER = inner
 OUTER = $(INNER)tail
+DEFAULT ?= first
+DEFAULT ?= second
+RECURSIVE = before
+RECURSIVE = $(RECURSIVE) after
+APPENDED = one
+APPENDED += two
+
+do
+    local virtual_macro = {}
+
+    function virtual_macro:expand()
+        error("VIRTUAL assignment did not replace its original macro")
+    end
+
+    function virtual_macro:assign(scope, name, operator, parts)
+        assert(scope == blud.Scope.bludfile)
+        assert(name == "VIRTUAL")
+        assert(operator == "+=")
+        assert(#parts == 1 and parts[1] == "ignored")
+        return blud.Macro.from_parts({ "virtualized" })
+    end
+
+    blud.Scope.bludfile:set_macro("VIRTUAL", virtual_macro)
+end
+
+VIRTUAL += ignored
 
 all: first second first
     echo $@
@@ -7,6 +33,8 @@ all: first second first
     echo $^
     echo $(BLUD_SCOPE_ENV)
     echo $(OUTER)
+    echo $(DEFAULT):$(RECURSIVE):$(APPENDED)
+    echo $(VIRTUAL)
 
 first:
     touch $@
