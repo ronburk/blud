@@ -38,4 +38,9 @@ if "$root/blud" --lua >/dev/null 2>"$tmp/error"; then
 fi
 grep -F -- '--lua requires a Lua file' "$tmp/error" >/dev/null
 
+"$root/blud" -v >"$output"
+test "$(wc -l <"$output")" -eq 2
+grep -E '^blud build [0-9]+$' "$output" >/dev/null
+grep -E '^LuaJIT .+$' "$output" >/dev/null
+
 touch test0011.out
