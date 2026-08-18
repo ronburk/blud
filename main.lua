@@ -55,6 +55,7 @@ Options:
   -s, --silent,
       --quiet           Do not print actions before executing them.
   -W ATOM               Assume ATOM is newly changed.
+  -v                    Show blud and LuaJIT versions and exit.
   -?, -h, --help        Show this help and exit.]])
 end
 
@@ -73,6 +74,10 @@ function blud.parse_command_line()
 
         if arg == "-?" or arg == "-h" or arg == "--help" then
             print_help()
+            os.exit(0)
+        elseif arg == "-v" then
+            print("blud build " .. blud.build_id)
+            print(jit.version)
             os.exit(0)
         elseif arg == "-f" then
             i = i + 1

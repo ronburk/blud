@@ -552,6 +552,11 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    lua_getglobal(L, "blud");
+    lua_pushinteger(L, BUILD_ID);
+    lua_setfield(L, -2, "build_id");
+    lua_pop(L, 1);
+
     lua_register(L, "CSTRGet", lua_CSTRGet);
     lua_register(L, "glob_expand", lua_glob_expand);
     lua_register(L, "os_getcwd", lua_os_getcwd);
