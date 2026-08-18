@@ -903,12 +903,6 @@ do
         end
         target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
         target.ACTION = action
-        if target.SCOPE.variables.OWD == nil then
-            target.SCOPE:set("OWD", {
-                [1] = target.NAME,
-                name = "OWD",
-            })
-        end
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
         Operator.ADD_RULE(self, target, {}, nil)
@@ -921,9 +915,8 @@ do
         assert(target.RULE and target.RULE.operator == self,
                "build target does not belong to the :BUILD: operator: " ..
                tostring(target.NAME))
-        assert(target.SCOPE.variables.OWD,
-               "build has no local OWD: " .. tostring(target.NAME))
         blud.build_atom = target
+        target.SCOPE:set_macro("OWD", blud.owd_macro)
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
             local mkdir_result = os_mkdir(owd)
