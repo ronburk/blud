@@ -239,7 +239,6 @@ local function append_part(parts, part)
 --]]
 
 local function append_part(parts, part)
-    assert(parts)
     assert(part)
 
     local previous = parts[#parts]
@@ -255,7 +254,6 @@ local function append_part(parts, part)
 end
 
 local function parts_from_text(text, recognize_lua_comments)
-    assert(text)
     local scanner = Scanner.new(text, nil, recognize_lua_comments)
     local result  = M.parts_from_text_(scanner)
     return result
@@ -362,7 +360,6 @@ M.part_to_lua = function(part)
     if type(part) == "string" then
         return part
     end
-    assert(type(part) == "table")
 
     if part.macro then
         assert(part[1])
@@ -387,7 +384,6 @@ M.part_to_lua_expression = function(part)
     if type(part) == "string" then
         return string.format("%q", part)
     end
-    assert(type(part) == "table")
     
     if part.macro then
         assert(part[1])
