@@ -869,6 +869,20 @@ end
 do
     local opBuild = register_operator(":BUILD:")
 
+    local function expand_owd()
+        error("OWD expansion is not implemented")
+    end
+
+    -- Default and named builds share this macro; its value will be derived
+    -- whenever it is expanded rather than stored separately in each scope.
+    local owd_macro = blud.Macro.from_function(expand_owd)
+
+    function opBuild:INIT()
+        blud.build_atom = nil
+        blud.Scope.build.variables = {}
+        blud.Scope.build:set_macro("OWD", owd_macro)
+    end
+
     -- a build name cannot be a primary target
     function opBuild:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
@@ -916,7 +930,7 @@ do
                "build target does not belong to the :BUILD: operator: " ..
                tostring(target.NAME))
         blud.build_atom = target
-        target.SCOPE:set_macro("OWD", blud.owd_macro)
+        target.SCOPE:set_macro("OWD", owd_macro)
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
             local mkdir_result = os_mkdir(owd)
