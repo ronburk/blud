@@ -329,7 +329,7 @@ blud.assert          = function(condition, format, ...)
 end
 blud.glob            = blud.require("dircache.lua")
 blud.operators       = {}
-blud.build_name      = nil
+blud.build_atom      = nil
 blud.default_build   = nil
 blud.default_target  = nil
 blud.primary_targets = nil
@@ -631,6 +631,7 @@ blud.match_macro_assign = function(line)
 end
 
 blud.build_init = function()
+    blud.build_atom = nil
     blud.Scope.build.variables = {}
     blud.Scope.build:set("OWD", { [1] = ".", name = "OWD" })
 end
