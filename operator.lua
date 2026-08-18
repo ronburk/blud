@@ -867,15 +867,15 @@ end
 
 -- :BUILD: operator
 do
-    local op = register_operator(":BUILD:")
+    local opBuild = register_operator(":BUILD:")
 
     -- a build name cannot be a primary target
-    function op:SET_PRIMARY_TARGETS(target_atom)
+    function opBuild:SET_PRIMARY_TARGETS(target_atom)
         -- util.print("[:BUILD:]:SET_PRIMARY_TARGETS()")
         return nil
     end
 
-    function op:EVAL_RULE(left_tokens, right_tokens, action)
+    function opBuild:EVAL_RULE(left_tokens, right_tokens, action)
         -- Validate the written prerequisite list before ordinary globbing can
         -- discard an unmatched pattern.
         assert(#right_tokens == 0,
@@ -884,7 +884,7 @@ do
         return Operator.EVAL_RULE(self, left_tokens, right_tokens, action)
     end
 
-    function op:ADD_RULE(target, prereqs, action)
+    function opBuild:ADD_RULE(target, prereqs, action)
         -- util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
         --            util.dump(target), util.dump(prereqs))
 
@@ -914,7 +914,7 @@ do
         Operator.ADD_RULE(self, target, {}, nil)
     end
 
-    function op:BUILD(target)
+    function opBuild:BUILD(target)
         util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE and target.SCOPE.target == target,
                "build has no owning target scope: " .. tostring(target.NAME))
