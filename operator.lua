@@ -923,6 +923,7 @@ do
                tostring(target.NAME))
         assert(target.SCOPE.variables.OWD,
                "build has no local OWD: " .. tostring(target.NAME))
+        blud.build_name = target.NAME
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
             local mkdir_result = os_mkdir(owd)
