@@ -8,35 +8,21 @@ local M = {}     -- this will be the metatable for scope objects
 M.__index = M
 
 
-local function get_local_parts(scope, name)
-    local macro = scope.variables[name]
-    if macro == nil then
-        return nil
-    end
-
-    assert(type(macro) == "table")
-    assert(type(macro.get_parts) == "function")
-    local parts = macro:get_parts()
-    assert(type(parts) == "table")
-    return parts
-end
-
-
--- generic get_parts() function to return value of variable
-M.get_parts = function(self, name)
-    local result = get_local_parts(self, name)
+-- generic get_macro() function to return value of variable
+M.get_macro = function(self, name)
+    local result = self.variables[name]
     if result == nil and self.parent then
-        result = self.parent:get_parts(name)
+        result = self.parent:get_macro(name)
     end
     return result
 end
 
--- generic get_text() function, wraps get_parts() and handles expanding variable definition into text
+-- generic get_text() function, wraps get_macro() and handles expanding variable definition into text
 M.get_text = function(self, name)
-    local tokens = self:get_parts(name)
+    local macro = self:get_macro(name)
     local result = ""
-    if tokens then
-        result = blud.Macro.expand_tokens(self, tokens)
+    if macro then
+        result = blud.Macro.expand_tokens(self, macro:get_parts())
     end
     return result
 end
@@ -92,12 +78,12 @@ M.commandline = M:new(M.bludfile, "commandline")
 M.build       = M:new(M.commandline, "build")
 
 
-M.environment.get_parts = function(self, name)
+M.environment.get_macro = function(self, name)
     local value = os.getenv(name)
     if value ~= nil then
-        return { value }
+        return Macro.from_parts({ value })
     end
-    return self.parent:get_parts(name)
+    return self.parent:get_macro(name)
 end
 
 
@@ -107,12 +93,12 @@ end
 M.new_param_scope = function(self, parent, macro_actual)
     local scope = M:new(parent)
     scope.macro_actual = macro_actual
-    function scope:get_parts(name)
+    function scope:get_macro(name)
         blud.assert(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")
         else
-            return self.parent:get_parts(name)
+            return self.parent:get_macro(name)
         end
     end
     function scope:set(name, value)
@@ -121,13 +107,13 @@ M.new_param_scope = function(self, parent, macro_actual)
     return scope
 end
 
-local function target_get_parts(self, name)
+local function target_get_macro(self, name)
     local result
     local bound_name = ""
     if name == "<" then
         local first_prereq = self.target.PREREQUISITES[1]
         if first_prereq then
-            result = { first_prereq.BOUND_NAME }
+            result = Macro.from_parts({ first_prereq.BOUND_NAME })
         end
     elseif name == "^" then
         result = {}
@@ -140,13 +126,13 @@ local function target_get_parts(self, name)
                 table.insert(result,  " " )
             end
         end
-        result = { table.concat(result) }
+        result = Macro.from_parts({ table.concat(result) })
     elseif name == "@" then
-        result = { self.target.BOUND_NAME }
+        result = Macro.from_parts({ self.target.BOUND_NAME })
     else
-        result = get_local_parts(self, name)
+        result = self.variables[name]
         if result == nil and self.parent then
-            result = self.parent:get_parts(name)
+            result = self.parent:get_macro(name)
         end
     end
     return result
@@ -160,7 +146,7 @@ M.new_target_scope   = function(self, target)
     local name = string.format("target(%s)", target.NAME)
     local new_scope  = M:new(M.build, name)
     new_scope.target = target
-    new_scope.get_parts = target_get_parts
+    new_scope.get_macro = target_get_macro
     return new_scope
 end
 
