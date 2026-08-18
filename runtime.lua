@@ -400,7 +400,6 @@ function blud.Scope:get(name)
 end
 
 function blud.Scope:get_text(name)
-    blud.assert(self.get)
     local tokens = self:get(name)
     local result = ""
     if tokens then
@@ -500,7 +499,6 @@ function blud.Macro.expand_call(scope, macro_call, stack)
     table.insert(stack, name_string)
     local macro = scope:get_macro(name_string)
     local macro_body = macro and macro:get_parts() or {}
-    assert(type(macro_body) == "table")
     local param_scope = blud.Scope:new_param_scope(scope, new_actual)
     result = { blud.Macro.expand_tokens(param_scope, macro_body, stack) }
     table.remove(stack)
@@ -563,8 +561,6 @@ function blud.Macro:append(scope, more_body)
     if type(self.body) == "table" then  -- if I am a late-binding macro
         if type(new_body) == "string" then
             more_body = { more_body }  -- turn string into array of macro tokens
-        else
-            assert(type(more_body) == "table")
         end
         for _, token in ipairs(more_body) do
             table.insert(self.body, token)
@@ -643,7 +639,6 @@ blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
     stop_chars        = "(" .. stop_chars .. ")"
     pos               = pos or 1
     local result      = {}
-    blud.assert(text)
     local len         = #text
 
     while pos <= len do
@@ -770,8 +765,6 @@ end
 
 
 blud.macro_expand = function(scope, macro_call)
-    assert(macro_call ~= nil)
-
 local result = ""
     local macro = scope:get_macro(macro_call.name)
     if macro then
@@ -945,7 +938,6 @@ do
             parts = new_parts
         else
             error("Unknown assignment operator '" .. operator .. "':")
-            assert(false)
         end
         scope:set(macro_name, parts)
     end
