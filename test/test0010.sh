@@ -31,6 +31,8 @@ grep -Fx 'echo ./first ./second ' "$log" >/dev/null
 grep -Fx './first ./second' "$log" >/dev/null
 grep -Fx 'environment' "$log" >/dev/null
 grep -Fx 'innertail' "$log" >/dev/null
+grep -Fx 'first:before after:one two' "$log" >/dev/null
+grep -Fx 'virtualized' "$log" >/dev/null
 grep -Fx 'echo child::outer:outer' "$log" >/dev/null
 grep -Fx 'child::outer:outer' "$log" >/dev/null
 grep -Fx 'echo parent:parent:parent:outer parent' "$log" >/dev/null

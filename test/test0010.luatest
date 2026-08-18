@@ -12,7 +12,7 @@ local macro = scope:get_macro("NAME")
 local parts = macro:get_parts()
 assert(type(parts) == "table")
 assert(#parts == 1 and parts[1] == "literal")
-assert(scope.variables.NAME == macro)
+assert(scope:get_macro("NAME") == macro)
 assert(type(macro.get_parts) == "function")
 assert(macro[1] == nil)
 
@@ -25,7 +25,7 @@ function function_macro:expand(invocation_scope, actuals, stack)
     return table.concat(actuals, ":")
 end
 assert(function_macro.get_parts == nil)
-scope.variables.FUNCTION = function_macro
+scope:set_macro("FUNCTION", function_macro)
 assert(scope:get_text("FUNCTION") == "FUNCTION")
 
 local call_result = Macro.expand_call(scope, {

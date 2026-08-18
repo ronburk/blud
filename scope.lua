@@ -42,6 +42,14 @@ M.set_boolean = function(self, name, value)
 end
 
 
+-- Install an already constructed macro without invoking source-language
+-- assignment. Assignment implementations use this for replacement values and
+-- for private aliases that preserve an old value during self-reference.
+M.set_macro = function(self, name, macro)
+    self.variables[name] = macro
+end
+
+
 -- generic set() function to set value of variable
 M.set = function(self, name, value)
     local parts
@@ -53,7 +61,7 @@ M.set = function(self, name, value)
         parts = value
     end
 
-    self.variables[name] = Macro.from_parts(parts)
+    self:set_macro(name, Macro.from_parts(parts))
 end
 
 
@@ -96,9 +104,11 @@ M.new_param_scope = function(self, actuals)
             return self.parent:get_macro(name)
         end
     end
-    function scope:set(name, value)
+    local function reject_assignment()
         error("You can't set a param value macro!")
     end
+    scope.set = reject_assignment
+    scope.set_macro = reject_assignment
     return scope
 end
 

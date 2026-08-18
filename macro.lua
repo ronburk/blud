@@ -3,6 +3,27 @@ local M = {}
 local util = require("util")
 
 
+local saved_value_count = 0
+
+-- A recursive assignment refers to the value that existed before the
+-- assignment, not to the replacement being defined. Give that old value an
+-- unspellable name and redirect top-level self-references to it.
+local function rewrite_self_references(parts, old_name, new_name)
+    local found = false
+    for i = 1, #parts do
+        local part = parts[i]
+        if type(part) == "table" and part.macro then
+            local argument = part[1]
+            if #argument == 1 and argument[1] == old_name then
+                found = true
+                argument[1] = { new_name }
+            end
+        end
+    end
+    return found
+end
+
+
 M.from_parts = function(parts)
     assert(type(parts) == "table")
 
@@ -14,6 +35,34 @@ M.from_parts = function(parts)
     function macro:expand(scope, actuals, stack)
         local param_scope = scope:new_param_scope(actuals)
         return M.expand_tokens(param_scope, parts, stack)
+    end
+
+    -- Assignment is virtualized on the value being replaced. This flavor is
+    -- immutable: it returns a replacement macro, or nil when ?= leaves an
+    -- existing value alone.
+    function macro:assign(scope, name, operator, assigned_parts)
+        local replacement_parts = util.deep_copy(assigned_parts or {})
+
+        if operator == "?=" then
+            return nil
+        elseif operator == "=" then
+            saved_value_count = saved_value_count + 1
+            local saved_name = string.format("%s %3d", name, saved_value_count)
+            if rewrite_self_references(replacement_parts, name, saved_name) then
+                scope:set_macro(saved_name, macro)
+            end
+        elseif operator == "+=" then
+            local appended_parts = util.deep_copy(parts)
+            if #appended_parts > 0 and #replacement_parts > 0 then
+                table.insert(appended_parts, " ")
+            end
+            util.array_append(appended_parts, replacement_parts)
+            replacement_parts = appended_parts
+        else
+            error("Unknown assignment operator '" .. operator .. "':")
+        end
+
+        return M.from_parts(replacement_parts)
     end
 
     function macro:get_parts()
@@ -476,6 +525,38 @@ do
     assert(type(wrapped_macro.get_parts) == "function")
     assert(wrapped_macro[1] == nil)
     assert(wrapped_macro:get_parts() == wrapped_parts)
+
+    local installed = {}
+    local assignment_scope = {}
+    function assignment_scope:set_macro(name, value)
+        installed[name] = value
+    end
+
+    local appended_macro = wrapped_macro:assign(
+        assignment_scope, "VALUE", "+=", { "two" }
+    )
+    local appended_parts = appended_macro:get_parts()
+    assert(#appended_parts == 3)
+    assert(appended_parts[1] == "one")
+    assert(appended_parts[2] == " ")
+    assert(appended_parts[3] == "two")
+    assert(wrapped_macro:get_parts() == wrapped_parts)
+
+    assert(wrapped_macro:assign(
+        assignment_scope, "VALUE", "?=", { "ignored" }
+    ) == nil)
+
+    local count_before_test = saved_value_count
+    local recursive_macro = wrapped_macro:assign(
+        assignment_scope,
+        "VALUE",
+        "=",
+        M.parts_from_text("$(VALUE) two")
+    )
+    local recursive_parts = recursive_macro:get_parts()
+    local saved_name = recursive_parts[1][1][1][1]
+    assert(installed[saved_name] == wrapped_macro)
+    saved_value_count = count_before_test
 
     local function try(parts)
         local result = ""
