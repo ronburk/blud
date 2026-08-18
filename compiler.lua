@@ -202,7 +202,6 @@ end
 
 
 local function match_colon_operator(text, pos)
-    assert(text)
     assert(pos)
 
     local stop = text:match("^:[%a_][%w_]*:()", pos)
