@@ -13,21 +13,21 @@ local Scope = assert(loadfile("scope.lua"))()
 
 local scope = Scope:new(nil, "test")
 scope:set("NAME", "literal")
-local parts = scope:get_parts("NAME")
+local macro = scope:get_macro("NAME")
+local parts = macro:get_parts()
 assert(type(parts) == "table")
 assert(#parts == 1 and parts[1] == "literal")
-assert(type(scope.variables.NAME) == "table")
-assert(type(scope.variables.NAME.get_parts) == "function")
-assert(scope.variables.NAME[1] == nil)
-assert(scope.variables.NAME:get_parts() == parts)
+assert(scope.variables.NAME == macro)
+assert(type(macro.get_parts) == "function")
+assert(macro[1] == nil)
 
 scope:set_boolean(".JUST_PRINT", true)
-assert(type(scope:get_parts(".JUST_PRINT")) == "table")
+assert(scope:get_macro(".JUST_PRINT"):get_parts()[1] == "true")
 assert(scope:get_boolean(".JUST_PRINT") == true)
 scope:set_boolean(".JUST_PRINT", false)
 assert(scope:get_boolean(".JUST_PRINT") == false)
 
-local environment_parts = Scope.environment:get_parts("BLUD_SCOPE_ENV")
+local environment_parts = Scope.environment:get_macro("BLUD_SCOPE_ENV"):get_parts()
 assert(type(environment_parts) == "table")
 assert(#environment_parts == 1 and environment_parts[1] == "environment")
 
@@ -41,15 +41,15 @@ local target = {
 }
 local target_scope = Scope:new_target_scope(target)
 
-local target_parts = target_scope:get_parts("@")
+local target_parts = target_scope:get_macro("@"):get_parts()
 assert(type(target_parts) == "table")
 assert(#target_parts == 1 and target_parts[1] == "target")
 
-local first_parts = target_scope:get_parts("<")
+local first_parts = target_scope:get_macro("<"):get_parts()
 assert(type(first_parts) == "table")
 assert(#first_parts == 1 and first_parts[1] == "first")
 
-local prerequisites_parts = target_scope:get_parts("^")
+local prerequisites_parts = target_scope:get_macro("^"):get_parts()
 assert(type(prerequisites_parts) == "table")
 assert(#prerequisites_parts == 1)
 assert(prerequisites_parts[1] == "first second ")
@@ -72,7 +72,7 @@ assert(parent_scope:get_text("SHARED") == "parent")
 local child_target = { BOUND_NAME = "child", PREREQUISITES = {} }
 local child_scope = Scope:new_target_scope(child_target)
 assert(child_scope.parent == Scope.build)
-assert(child_scope:get_parts("ONLY_HERE") == nil)
+assert(child_scope:get_macro("ONLY_HERE") == nil)
 assert(child_scope:get_text("FALLBACK") == "outer")
 assert(child_scope:get_text("SHARED") == "outer")
 
