@@ -59,6 +59,7 @@ Options:
   -s, --silent,
       --quiet           Do not print actions before executing them.
   -W ATOM               Assume ATOM is newly changed.
+  -v                    Show blud and LuaJIT versions and exit.
   -?, -h, --help        Show this help and exit.
 ```
 
