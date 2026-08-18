@@ -72,6 +72,16 @@ M.from_parts = function(parts)
 end
 
 
+M.from_function = function(expand)
+    local macro = {}
+
+    function macro:expand(scope, actuals, stack)
+        return expand(scope, actuals, stack)
+    end
+    return macro
+end
+
+
 local macro_name_pattern = "([%.]?[%a_][%w_%.]*)"
 
 -- parse a line that looks like macro assign, or return nil

@@ -334,6 +334,15 @@ blud.default_build   = nil
 blud.default_target  = nil
 blud.primary_targets = nil
 blud.roots           = {}
+
+local function expand_owd()
+    error("OWD expansion is not implemented")
+end
+
+-- Every build scope receives this same macro. Its value will be derived when
+-- expanded rather than stored separately in each scope.
+blud.owd_macro = blud.Macro.from_function(expand_owd)
+
 blud.array_append    = function(array, more)
     if not (type(array) == "table" and type(more) == "table") then
         blud.error("Bad call to array_append")
@@ -633,7 +642,7 @@ end
 blud.build_init = function()
     blud.build_atom = nil
     blud.Scope.build.variables = {}
-    blud.Scope.build:set("OWD", { [1] = ".", name = "OWD" })
+    blud.Scope.build:set_macro("OWD", blud.owd_macro)
 end
 
 --[[

@@ -16,14 +16,13 @@ assert(scope:get_macro("NAME") == macro)
 assert(type(macro.get_parts) == "function")
 assert(macro[1] == nil)
 
--- Exercise the interface with no parts accessor. This is test-only direct
--- installation; construction of function-backed macros is a later step.
-local function_macro = {}
-function function_macro:expand(invocation_scope, actuals, stack)
+-- Function-backed macros share the expansion interface without exposing parts.
+local function_macro = Macro.from_function(function(
+    invocation_scope, actuals, stack)
     assert(invocation_scope == scope)
     assert(type(stack) == "table")
     return table.concat(actuals, ":")
-end
+end)
 assert(function_macro.get_parts == nil)
 scope:set_macro("FUNCTION", function_macro)
 assert(scope:get_text("FUNCTION") == "FUNCTION")
