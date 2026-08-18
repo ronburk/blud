@@ -4,12 +4,12 @@ scope.lua - implement the scopes of macros/variables
 
 local Macro = require("macro")
 
-local M = {}     -- this will be the metatable for scope objects
-M.__index = M
+local Scope = {}     -- this will be the metatable for scope objects
+Scope.__index = Scope
 
 
 -- generic get_macro() function to return value of variable
-M.get_macro = function(self, name)
+Scope.get_macro = function(self, name)
     local result = self.variables[name]
     if result == nil and self.parent then
         result = self.parent:get_macro(name)
@@ -19,7 +19,7 @@ end
 
 -- The scope selects a macro; the macro object decides how to produce text.
 -- This keeps lookup independent of the macro's backing representation.
-M.get_text = function(self, name)
+Scope.get_text = function(self, name)
     local macro = self:get_macro(name)
     return macro and macro:expand(self, { name }, {}) or ""
 end
@@ -27,14 +27,14 @@ end
 
 -- Boolean variables use the existing textual convention:
 -- empty or "false" is false; every other expanded value is true.
-M.get_boolean = function(self, name)
+Scope.get_boolean = function(self, name)
     local value = self:get_text(name)
     return value ~= "" and value ~= "false"
 end
 
 
 -- Store a canonical textual value so normal scope inheritance and expansion apply.
-M.set_boolean = function(self, name, value)
+Scope.set_boolean = function(self, name, value)
     assert(type(value) == "boolean")
 
     local parts = { value and "true" or "false" }
@@ -45,13 +45,13 @@ end
 -- Install an already constructed macro without invoking source-language
 -- assignment. Assignment implementations use this for replacement values and
 -- for private aliases that preserve an old value during self-reference.
-M.set_macro = function(self, name, macro)
+Scope.set_macro = function(self, name, macro)
     self.variables[name] = macro
 end
 
 
 -- generic set() function to set value of variable
-M.set = function(self, name, value)
+Scope.set = function(self, name, value)
     local parts
 
     if type(value) == "string" then
@@ -65,25 +65,25 @@ M.set = function(self, name, value)
 end
 
 
-M.new = function(self, parent, name)
+Scope.new = function(self, parent, name)
     local instance = {
         name       = name,
         variables  = {},
         parent     = parent,
     }
-    return setmetatable(instance, M)
+    return setmetatable(instance, Scope)
 end
 
 
 -- set up (most of) the scope ordering
-M.base        = M:new(nil, "base")
-M.environment = M:new(M.base, "environment")
-M.bludfile    = M:new(M.environment, "bludfile")
-M.commandline = M:new(M.bludfile, "commandline")
-M.build       = M:new(M.commandline, "build")
+Scope.base        = Scope:new(nil, "base")
+Scope.environment = Scope:new(Scope.base, "environment")
+Scope.bludfile    = Scope:new(Scope.environment, "bludfile")
+Scope.commandline = Scope:new(Scope.bludfile, "commandline")
+Scope.build       = Scope:new(Scope.commandline, "build")
 
 
-M.environment.get_macro = function(self, name)
+Scope.environment.get_macro = function(self, name)
     local value = os.getenv(name)
     if value ~= nil then
         return Macro.from_parts({ value })
@@ -94,8 +94,8 @@ end
 
 -- A parameter scope keeps invocation arguments local while ordinary macro
 -- names continue through the scope in which the invocation occurred.
-M.new_param_scope = function(self, actuals)
-    local scope = M:new(self)
+Scope.new_param_scope = function(self, actuals)
+    local scope = Scope:new(self)
     scope.macro_actual = actuals
     function scope:get_macro(name)
         if name:match("^%-?%d+$") then
@@ -146,10 +146,10 @@ end
 -- create a new per-target scope
 
 -- Target-specific values apply only to this target. Build-wide values
--- deliberately reach targets through the fixed M.build parent scope.
-M.new_target_scope   = function(self, target)
+-- deliberately reach targets through the fixed Scope.build parent scope.
+Scope.new_target_scope   = function(self, target)
     local name = string.format("target(%s)", target.NAME)
-    local new_scope  = M:new(M.build, name)
+    local new_scope  = Scope:new(Scope.build, name)
     new_scope.target = target
     new_scope.get_macro = target_get_macro
     return new_scope
@@ -157,4 +157,4 @@ end
 
 
 
-return M
+return Scope
