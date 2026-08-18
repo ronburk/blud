@@ -7,6 +7,15 @@ M.from_parts = function(parts)
     assert(type(parts) == "table")
 
     local macro = {}
+
+    -- Expansion belongs to the macro object so callers need not know that this
+    -- flavor stores parsed parts. Positional arguments live in a child scope;
+    -- ordinary names continue to resolve from the invocation scope.
+    function macro:expand(scope, actuals, stack)
+        local param_scope = scope:new_param_scope(actuals)
+        return M.expand_tokens(param_scope, parts, stack)
+    end
+
     function macro:get_parts()
         return parts
     end
@@ -348,6 +357,59 @@ M.macro_extract_call = function(scanner)
         end
     end
     return arg_stack
+end
+
+
+-- Expand the invocation name and arguments before asking the selected macro
+-- object to render itself. Immediate versus deferred syntax determines when
+-- this function is called; it does not change the macro object's interface.
+M.expand_call = function(scope, macro_call, stack)
+    stack = stack or {}
+
+    local actuals = {}
+    for _, argument_parts in ipairs(macro_call) do
+        table.insert(actuals, M.expand_tokens(scope, argument_parts, stack))
+    end
+
+    local name = actuals[1]
+    for _, active_name in ipairs(stack) do
+        if active_name == name then
+            error("die")
+        end
+    end
+
+    table.insert(stack, name)
+    local macro = scope:get_macro(name)
+    local result = { macro and macro:expand(scope, actuals, stack) or "" }
+    table.remove(stack)
+    return result
+end
+
+
+-- Parts expansion coordinates nested macro calls, but each resolved macro
+-- decides how it produces its own text.
+M.expand_tokens = function(scope, tokens, stack)
+    if type(tokens) == "string" then
+        return tokens
+    end
+
+    stack = stack or {}
+    local result = {}
+    for _, token in ipairs(tokens) do
+        if type(token) == "string" then
+            table.insert(result, token)
+        elseif type(token) == "table" then
+            util.array_append(result, M.expand_call(scope, token, stack))
+        else
+            error("Illegal token in token array: " .. util.dump(token))
+        end
+    end
+    return table.concat(result)
+end
+
+
+M.expand_text = function(scope, text, stack)
+    return M.expand_tokens(scope, M.parts_from_text(text), stack)
 end
 
 

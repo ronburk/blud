@@ -17,14 +17,11 @@ M.get_macro = function(self, name)
     return result
 end
 
--- generic get_text() function, wraps get_macro() and handles expanding variable definition into text
+-- The scope selects a macro; the macro object decides how to produce text.
+-- This keeps lookup independent of the macro's backing representation.
 M.get_text = function(self, name)
     local macro = self:get_macro(name)
-    local result = ""
-    if macro then
-        result = blud.Macro.expand_tokens(self, macro:get_parts())
-    end
-    return result
+    return macro and macro:expand(self, { name }, {}) or ""
 end
 
 
@@ -87,12 +84,11 @@ M.environment.get_macro = function(self, name)
 end
 
 
--- a param scope filters out any numeric macro name references
--- it never allows those references to search any higher scope
--- it passes all non-numeric macro name references up the scope chain
-M.new_param_scope = function(self, parent, macro_actual)
-    local scope = M:new(parent)
-    scope.macro_actual = macro_actual
+-- A parameter scope keeps invocation arguments local while ordinary macro
+-- names continue through the scope in which the invocation occurred.
+M.new_param_scope = function(self, actuals)
+    local scope = M:new(self)
+    scope.macro_actual = actuals
     function scope:get_macro(name)
         if name:match("^%-?%d+$") then
             blud.error(" don't handle numerics yet!")

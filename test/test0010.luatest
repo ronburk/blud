@@ -1,14 +1,9 @@
 blud = {
-    Macro = {
-        expand_tokens = function(_, parts)
-            assert(type(parts) == "table")
-            return table.concat(parts)
-        end,
-    },
     assert = assert,
     error = error,
 }
 
+local Macro = require("macro")
 local Scope = assert(loadfile("scope.lua"))()
 
 local scope = Scope:new(nil, "test")
@@ -20,6 +15,25 @@ assert(#parts == 1 and parts[1] == "literal")
 assert(scope.variables.NAME == macro)
 assert(type(macro.get_parts) == "function")
 assert(macro[1] == nil)
+
+-- Exercise the interface with no parts accessor. This is test-only direct
+-- installation; construction of function-backed macros is a later step.
+local function_macro = {}
+function function_macro:expand(invocation_scope, actuals, stack)
+    assert(invocation_scope == scope)
+    assert(type(stack) == "table")
+    return table.concat(actuals, ":")
+end
+assert(function_macro.get_parts == nil)
+scope.variables.FUNCTION = function_macro
+assert(scope:get_text("FUNCTION") == "FUNCTION")
+
+local call_result = Macro.expand_call(scope, {
+    { "FUNCTION" },
+    { "argument" },
+})
+assert(#call_result == 1)
+assert(call_result[1] == "FUNCTION:argument")
 
 scope:set_boolean(".JUST_PRINT", true)
 assert(scope:get_macro(".JUST_PRINT"):get_parts()[1] == "true")
