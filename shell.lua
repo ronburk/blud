@@ -689,7 +689,6 @@ M.commands = {
 -- literal leading `shell` delegates its remainder to the OS shell; every other
 -- command must use blud's parser and one of the handlers above.
 function M.execute(command, scope)
-    assert(type(command) == "string")
     assert(not command:find("[\r\n]"))
 
     local shell_text = extract_shell_text(command)
