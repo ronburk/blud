@@ -685,6 +685,7 @@ blud.build_targets = function(targets)
     end
 end
 
+--[[
 -- blud.lines: return an iterator that returns one line of the string at a time
 blud.lines = function(str)
     local pos = 1
@@ -705,7 +706,7 @@ blud.lines = function(str)
         return line
     end
 end
-
+--]]
 
 blud.is_positive_integer = function(n)
     if type(n) == "string" then
@@ -1015,6 +1016,7 @@ function expand_pattern(words, pattern)
 end
 --]=]
 
+--[=[
 function blud.phase3:parse()
     -- print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     -- print(blud.phase2_text)
@@ -1070,7 +1072,7 @@ function blud.phase3:parse()
     end
     -- print(table.concat(self.text))
 end
-
+--]=]
 
 --[=[
 blud.phase3       = function ()
