@@ -870,7 +870,8 @@ do
     local opBuild = register_operator(":BUILD:")
 
     local function expand_owd()
-        error("OWD expansion is not implemented")
+        util.printf("OWD expansion is not implemented")
+        return "./debug"
     end
 
     -- Default and named builds share this macro; its value will be derived
