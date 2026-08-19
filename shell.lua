@@ -1,5 +1,6 @@
 -- Parse and execute one command line using blud's portable command grammar.
 -- The operating-system shell is invoked only by the explicit `shell` command.
+local AliasDir = require("aliasdir")
 local M = {}
 
 -- Print a command-style diagnostic and return the conventional failure status.
@@ -493,10 +494,7 @@ local function cd(argv)
         return diagnostic("cd", "too many arguments")
     end
 
-    local old_directory = os_getcwd()
-    if not old_directory then
-        return diagnostic("cd", "cannot determine current directory")
-    end
+    local old_directory = AliasDir.get_cwd()
 
     local path = argv[first]
     local print_directory = false
@@ -513,13 +511,13 @@ local function cd(argv)
         print_directory = true
     end
 
-    if os_setcwd(path) ~= 0 then
+    if AliasDir.set_cwd(path) ~= 0 then
         return diagnostic("cd", path .. ": No such file or directory")
     end
 
     M.previous_directory = old_directory
     if print_directory then
-        io.stdout:write(assert(os_getcwd()), "\n")
+        io.stdout:write(AliasDir.get_cwd(), "\n")
     end
     return 0
 end
