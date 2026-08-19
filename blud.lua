@@ -83,18 +83,6 @@ if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
     end
 end
 
---print(phase1_text)
-local final_code = [[
-blud.phase3:parse()
-if blud.primary_targets == nil then
-    error("No targets to build!")
-else
-    blud.build_init()
-    blud.build_targets(blud.primary_targets)
-    blud.why.report()
-end
-]]
-
 
 if luac_needs_building then
     --rlb
