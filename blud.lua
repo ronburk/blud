@@ -1,3 +1,4 @@
+print(package.config)
 
 util = require("util")
 
