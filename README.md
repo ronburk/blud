@@ -91,8 +91,8 @@ executes, after variable expansion. They enumerate existing filesystem names,
 not virtual buildable names. An unmatched pattern contributes no prerequisite,
 and files created later in the same invocation do not enter an earlier rule.
 
-Actions do not implicitly run through the operating-system shell. Blud
-currently implements these commands itself:
+Blud currently implements these commands itself when they are the first word
+of an action:
 
 | Command | Supported form |
 | --- | --- |
@@ -104,8 +104,10 @@ currently implements these commands itself:
 | `touch` | `touch [-c|--no-create] [--] PATH...` |
 | `shell` | `shell COMMAND...` |
 
-Use `shell` explicitly for compilers, pipelines, redirection, and other
-external commands. The built-in `cd` changes Blud's own working directory, so
+An unrecognized first word sends the original action through the operating-
+system shell. Use `shell` explicitly to force shell interpretation when the
+first word names an internal command, such as `shell echo text >file`. The
+built-in `cd` changes Blud's own working directory, so
 its effect remains visible to later actions.
 
 ## Variables
