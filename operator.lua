@@ -1,3 +1,4 @@
+local AliasDir = require("aliasdir")
 local debugger = require("debugger")
 
 local Operator= {} -- default behavior inherited by concrete operators
@@ -868,10 +869,19 @@ end
 -- :BUILD: operator
 do
     local opBuild = register_operator(":BUILD:")
+    local default_owd = AliasDir.to_absolute(".")
 
     local function expand_owd()
-        util.printf("OWD expansion is not implemented")
-        return "./debug"
+        local absolute_owd = default_owd
+
+        if blud.build_atom then
+            absolute_owd = assert(
+                blud.build_atom.BOUND_NAME,
+                "active build has no bound output directory"
+            )
+        end
+
+        return AliasDir.to_relative(absolute_owd)
     end
 
     -- Default and named builds share this macro; its value will be derived
@@ -918,6 +928,7 @@ do
         end
         target.NOT_PREREQUISITE = "Build names can't be used as prerequisites."
         target.ACTION = action
+        target.BOUND_NAME = AliasDir.to_absolute(target.NAME)
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
         Operator.ADD_RULE(self, target, {}, nil)
