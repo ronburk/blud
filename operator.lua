@@ -617,6 +617,32 @@ do  -- Internal update behavior for individual tests.
         return update_file(from, join_path(to, path_basename(from))) or updated
     end
 
+    local function execute_test_action(rule, target, workspace, entry_name)
+        local action_scope = blud.Scope:new(
+            target.SCOPE,
+            "test action(" .. target.NAME .. ")"
+        )
+        action_scope:set("<", entry_name)
+
+        if blud.just_print(action_scope) then
+            return rule.action(action_scope)
+        end
+
+        if AliasDir.push_cwd(workspace) ~= 0 then
+            error("could not enter test workspace: " .. workspace)
+        end
+
+        local succeeded, status = pcall(rule.action, action_scope)
+        local restore_result = AliasDir.pop_cwd()
+        if restore_result ~= 0 then
+            error("could not restore directory after test: " .. target.NAME)
+        end
+        if not succeeded then
+            error(status, 0)
+        end
+        return status
+    end
+
     function opBLUDTEST:EVAL_RULE()
         error(":BLUDTEST: is an internal operator")
     end
@@ -670,22 +696,31 @@ do  -- Internal update behavior for individual tests.
             end
         end
 
-        -- There is no single filesystem timestamp for a test result. For now,
-        -- combine the known invalidation signals into mustrun. Actual execution
-        -- and creation of bludtest.pass belong to the next implementation step.
+        -- There is no single filesystem timestamp for a test result. Combine
+        -- the known invalidation signals into mustrun.
         local mustrun = blud.command_line_options.always_make or
                         source_changed or
                         os_path_type(pass_path) ~= 1
         if mustrun then
-            error(":BLUDTEST: test execution is not implemented for: " ..
-                  target.NAME)
+            local status = execute_test_action(
+                rule,
+                target,
+                workspace,
+                test_basename
+            )
+            if status and status ~= 0 then
+                error("command failed[" .. status .. "]: ")
+            end
+            if not blud.just_print(target.SCOPE) then
+                util.string_to_file(pass_path, "")
+            end
         end
 
-        -- Zero is a virtual timestamp here, paired with false to say that this
-        -- target is current. It deliberately does not describe a directory entry.
+        -- Zero is a virtual timestamp here; mustrun reports whether this
+        -- invocation selected the test action.
         target.TIMESTAMP = 0
         target.BUILDING = false
-        return 0, false
+        return 0, mustrun
     end
 end
 
