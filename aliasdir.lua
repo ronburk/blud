@@ -103,7 +103,8 @@ function AliasDir.to_absolute(path)
 
     local root = split_root(path)
     if root then
-        return normalize_absolute(path)
+        local absolute = normalize_absolute(path)
+        return absolute
     end
 
     local drive, remainder = path:match("^([A-Za-z]:)(.*)$")
