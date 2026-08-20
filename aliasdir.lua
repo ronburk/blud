@@ -44,14 +44,6 @@ local function split_root(path)
     end
 end
 
-local function split_components(path)
-    local components = {}
-    for component in path:gmatch("[^/]+") do
-        components[#components + 1] = component
-    end
-    return components
-end
-
 local function append_normalized(components, path)
     for component in path:gmatch("[^/]+") do
         if component == ".." then
@@ -72,14 +64,19 @@ local function join_absolute(root, components)
     return root .. separator .. table.concat(components, "/")
 end
 
-local function normalize_absolute(path)
+local function absolute_parts(path)
     path = with_forward_slashes(path)
     local root, remainder = split_root(path)
     assert(root, "path is not absolute: " .. path)
 
     local components = {}
     append_normalized(components, remainder)
-    return join_absolute(root, components), root, components
+    return root, components
+end
+
+local function normalize_absolute(path)
+    local root, components = absolute_parts(path)
+    return join_absolute(root, components)
 end
 
 initial_cwd = normalize_absolute(initial_cwd)
@@ -103,44 +100,42 @@ function AliasDir.to_absolute(path)
 
     local root = split_root(path)
     if root then
-        local absolute = normalize_absolute(path)
-        return absolute
+        return normalize_absolute(path)
     end
 
     local drive, remainder = path:match("^([A-Za-z]:)(.*)$")
-    local current_root, current_remainder = split_root(current_cwd)
+    local current_root, components = absolute_parts(current_cwd)
     if drive then
         assert(current_root:sub(1, 2):lower() == drive:lower(),
                "cannot resolve a path relative to another drive: " .. path)
         path = remainder
     end
 
-    local components = split_components(current_remainder)
     append_normalized(components, path)
     return join_absolute(current_root, components)
 end
 
-function AliasDir.to_relative(path)
-    local absolute, target_root, target_components = normalize_absolute(path)
-    local _, current_root, current_components = normalize_absolute(current_cwd)
-    local windows_path = target_root:match("^[A-Za-z]:/") or
-                         target_root:sub(1, 2) == "//"
-
-    local function equal(left, right)
-        if windows_path then
-            return left:lower() == right:lower()
-        end
-        return left == right
+local function path_part_equal(left, right)
+    if windows_paths then
+        return left:lower() == right:lower()
     end
+    return left == right
+end
 
-    if not equal(target_root, current_root) then
+function AliasDir.to_relative(path)
+    local target_root, target_components = absolute_parts(path)
+    local current_root, current_components = absolute_parts(current_cwd)
+    local absolute = join_absolute(target_root, target_components)
+
+    if not path_part_equal(target_root, current_root) then
         return absolute
     end
 
     local common = 0
     while current_components[common + 1] and
           target_components[common + 1] and
-          equal(current_components[common + 1], target_components[common + 1]) do
+          path_part_equal(current_components[common + 1],
+                          target_components[common + 1]) do
         common = common + 1
     end
 
