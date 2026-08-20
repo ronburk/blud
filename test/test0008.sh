@@ -83,7 +83,7 @@ EOF_BLUD
 run_internal
 [[ -f "$tmp/cd-result" ]]
 
-# Unsupported syntax is an error; it must not trigger an implicit shell.
+# Unsupported syntax remains an error for a command implemented internally.
 cat >"$bludfile" <<EOF_BLUD
 all:
     echo blocked >$tmp/implicit
@@ -94,20 +94,19 @@ if run_internal >/dev/null 2>&1; then
 fi
 [[ ! -e "$tmp/implicit" ]]
 
-# An unknown command is also an error unless explicitly prefixed by `shell`.
+# An unknown command runs through the platform shell without an explicit prefix.
 cat >"$bludfile" <<'EOF_BLUD'
 all:
     printf blocked
 EOF_BLUD
-if run_internal >/dev/null 2>&1; then
-    echo "unknown command unexpectedly succeeded" >&2
-    exit 1
-fi
+output=$(run_internal)
+[[ "$output" == *blocked ]]
 
-# `shell` passes its remainder unchanged, including substitution and redirection.
+# `shell` forces an internally implemented command through the platform shell
+# and passes its remainder unchanged, including substitution and redirection.
 cat >"$bludfile" <<'EOF_BLUD'
 all:
-    shell printf '%s' "$BLUD_SHELL_TEST" >test/test0008.tmp/explicit
+    shell echo "$BLUD_SHELL_TEST" >test/test0008.tmp/explicit
 EOF_BLUD
 run_internal
 [[ $(<"$tmp/explicit") == 'verbatim  value' ]]

@@ -1,5 +1,6 @@
--- Parse and execute one command line using blud's portable command grammar.
--- The operating-system shell is invoked only by the explicit `shell` command.
+-- Parse and execute recognized commands using blud's portable command grammar.
+-- Unrecognized commands retain their original text and run through the
+-- operating-system shell.
 local AliasDir = require("aliasdir")
 local M = {}
 
@@ -18,6 +19,7 @@ local function parse(command)
     local bytes = {}
     local word_started = false
     local has_glob = false
+    local command_name
     local quote
     local pos = 1
 
@@ -33,6 +35,7 @@ local function parse(command)
                 text = table.concat(bytes),
                 glob = has_glob,
             }
+            command_name = command_name or words[#words].text
             bytes = {}
             word_started = false
             has_glob = false
@@ -52,7 +55,7 @@ local function parse(command)
             if c == '"' then
                 quote = nil
             elseif c == "$" or c == "`" then
-                return nil, "unsupported syntax '" .. c .. "'"
+                return nil, "unsupported syntax '" .. c .. "'", command_name
             elseif c == "\\" then
                 local next_c = command:sub(pos + 1, pos + 1)
                 if next_c == "" then
@@ -86,7 +89,15 @@ local function parse(command)
                c == ";" or c == "<" or c == ">" or c == "(" or
                c == ")" or c == "{" or c == "}" or
                (c == "~" and not word_started) then
-            return nil, "unsupported syntax '" .. c .. "'"
+            local parsed_command_name = command_name
+            if not parsed_command_name and word_started and
+               (c == "|" or c == "&" or c == ";" or
+                c == "<" or c == ">") then
+                parsed_command_name = table.concat(bytes)
+            end
+            return nil,
+                   "unsupported syntax '" .. c .. "'",
+                   parsed_command_name
         else
             append(c, c == "*" or c == "?" or c == "[")
         end
@@ -95,7 +106,7 @@ local function parse(command)
     end
 
     if quote then
-        return nil, "unterminated quote"
+        return nil, "unterminated quote", command_name
     end
 
     finish_word()
@@ -683,9 +694,9 @@ M.commands = {
 }
 
 -- Called from Lua as `status = require("shell").execute(command, scope)`
--- (normally through blud.shell.execute()). `command` must be one line. A
--- literal leading `shell` delegates its remainder to the OS shell; every other
--- command must use blud's parser and one of the handlers above.
+-- (normally through blud.shell.execute()). A literal leading `shell` delegates
+-- its remainder to the OS shell. Otherwise, recognized commands stay internal
+-- and unrecognized commands delegate the complete original line.
 function M.execute(command, scope)
     assert(not command:find("[\r\n]"))
 
@@ -694,8 +705,11 @@ function M.execute(command, scope)
         return shell(shell_text)
     end
 
-    local words, parse_error = parse(command)
+    local words, parse_error, command_name = parse(command)
     if not words then
+        if not command_name or not M.commands[command_name] then
+            return shell(command)
+        end
         return diagnostic("blud", parse_error)
     end
     if #words == 0 then
@@ -705,7 +719,7 @@ function M.execute(command, scope)
     local argv = expand_words(words)
     local command_function = M.commands[argv[1]]
     if not command_function or command_function == shell then
-        return diagnostic(argv[1], "command not implemented")
+        return shell(command)
     end
 
     return command_function(argv, scope)
