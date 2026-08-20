@@ -53,14 +53,15 @@ function Operator:BUILD(target_atom, parent)
             error("circular dependency on " .. target_atom.NAME)
         end
         target_atom.BUILDING   = true
+        -- An operator may need to finish constructing the rule before binding
+        -- decides whether the target belongs under OWD or SWD.
+        target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
         if not target_atom.RULE and timestamp == 0 then
             BLUD_EXIT(1000, target_atom.NAME)
         end
-        
-        -- Operators may materialize or rewrite prerequisites once build scope exists.
-        target_atom:PREPARE_PREREQUISITES()
+
         local newest_prerequisite_time, newest_prerequisite =
             target_atom.BUILD_PREREQUISITES(target_atom)
         -- print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
@@ -392,7 +393,6 @@ do  -- Source lists: compile each source through a reverse rule, then link.
 
         -- These prerequisites are already atoms, so bypass word expansion.
         for _, prerequisite in ipairs(prerequisites) do
-            prerequisite:BIND()
             local this_time = prerequisite:BUILD(target_atom)
             if this_time > newest_time then
                 newest_time = this_time
