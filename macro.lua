@@ -564,7 +564,9 @@ do
         M.parts_from_text("$(VALUE) two")
     )
     local recursive_parts = recursive_macro:get_parts()
-    local saved_name = recursive_parts[1][1][1][1]
+    local saved_name = recursive_parts[1][1][1]
+    assert(type(saved_name) == "string",
+           "self-reference rewrite nested the saved macro name")
     assert(installed[saved_name] == wrapped_macro)
     saved_value_count = count_before_test
 
