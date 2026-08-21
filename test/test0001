@@ -40,6 +40,10 @@ ASSIGN_APPEND_EMPTY =
 ASSIGN_APPEND_EMPTY += first
 assert($(ASSIGN_APPEND_EMPTY) == "first", "'+=' added whitespace when appending to an empty macro")
 
+ASSIGN_THEN_APPEND = first
+ASSIGN_THEN_APPEND += second
+assert($(ASSIGN_THEN_APPEND) == "first second", "'+=' failed after an ordinary '=' assignment")
+
 ASSIGN_SELF = first
 ASSIGN_SELF = $(ASSIGN_SELF) second
 assert($(ASSIGN_SELF) == "first second", "self-reference in '=' did not use the previous value")
@@ -47,11 +51,24 @@ assert($(ASSIGN_SELF) == "first second", "self-reference in '=' did not use the 
 ASSIGN_SELF = before $(ASSIGN_SELF)
 assert($(ASSIGN_SELF) == "before first second", "repeated self-assignment did not use the immediately previous value")
 
+ASSIGN_MULTI_SELF = old
+ASSIGN_MULTI_SELF = $(ASSIGN_MULTI_SELF) and $(ASSIGN_MULTI_SELF)
+assert($(ASSIGN_MULTI_SELF) == "old and old", "multiple self-references did not all use the previous value")
+
 ASSIGN_UNSPACED=unspaced
 assert($(ASSIGN_UNSPACED) == "unspaced", "assignment without whitespace around '=' failed")
 
 ASSIGN_SPACED   =   spaced
 assert($(ASSIGN_SPACED) == "spaced", "assignment with whitespace around '=' failed")
+
+ASSIGN_VALUE_SPACES = one  two   three
+assert($(ASSIGN_VALUE_SPACES) == "one  two   three", "assignment did not preserve internal whitespace")
+
+ASSIGN_OPERATOR_TEXT = one=two += three ?= four
+assert($(ASSIGN_OPERATOR_TEXT) == "one=two += three ?= four", "assignment misparsed operators in its value")
+
+ASSIGN_COMMENT = value-- $()
+assert($(ASSIGN_COMMENT) == "value", "assignment did not remove its Lua comment")
 
 CFLAGS += -g
 talk:
