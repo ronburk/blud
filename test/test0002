@@ -1,5 +1,6 @@
 -- test0002
 --
+-- _BLUD_TEST_ $(OWD)/blud -f $<
 -- .AFTER is useful for creating tests, so verify it works
 
 all: success
