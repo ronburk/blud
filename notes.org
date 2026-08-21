@@ -144,8 +144,9 @@ fabricate, reconstruct, or alter command output.
 GITHUB WORKFLOW
 
 The authoritative repository is https://github.com/ronburk/blud.
-
+The "GitHub skill" is generally wrong for this project, do not, by default read that skill.
 Always read, edit, and test in the local `./blud` clone. Ignore other copies. Do not use `gh` or `git push`.
+To rebuild the executable "blud", run "bash build.sh"
 
 For a routine change:
 
