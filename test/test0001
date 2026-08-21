@@ -70,6 +70,51 @@ assert($(ASSIGN_OPERATOR_TEXT) == "one=two += three ?= four", "assignment mispar
 ASSIGN_COMMENT = value-- $()
 assert($(ASSIGN_COMMENT) == "value", "assignment did not remove its Lua comment")
 
+-- Delayed and immediate macro expansion
+
+EXPAND_SOURCE = first
+EXPAND_DELAYED = $(EXPAND_SOURCE)
+EXPAND_IMMEDIATE = ${EXPAND_SOURCE}
+
+EXPAND_SOURCE = second
+assert($(EXPAND_DELAYED) == "second", "delayed expansion did not use the current macro value")
+assert($(EXPAND_IMMEDIATE) == "first", "immediate expansion did not preserve its assignment-time value")
+
+EXPAND_SOURCE = third
+assert($(EXPAND_DELAYED) == "third", "delayed expansion cached an earlier expansion")
+assert($(EXPAND_IMMEDIATE) == "first", "immediate expansion changed after its source changed again")
+
+EXPAND_DELAYED_UNDEFINED = $(EXPAND_DEFINED_LATER)
+EXPAND_IMMEDIATE_UNDEFINED = ${EXPAND_DEFINED_LATER}
+EXPAND_DEFINED_LATER = later
+assert($(EXPAND_DELAYED_UNDEFINED) == "later", "delayed expansion did not find a macro defined later")
+assert($(EXPAND_IMMEDIATE_UNDEFINED) == "", "immediate expansion of an undefined macro did not remain empty")
+
+EXPAND_MIXED_SOURCE = first
+EXPAND_MIXED = ${EXPAND_MIXED_SOURCE}/$(EXPAND_MIXED_SOURCE)
+EXPAND_MIXED_SOURCE = second
+assert($(EXPAND_MIXED) == "first/second", "mixed immediate and delayed expansion used incorrect values")
+
+EXPAND_TRANSITIVE_SOURCE = first
+EXPAND_TRANSITIVE_DELAYED = $(EXPAND_TRANSITIVE_SOURCE)
+EXPAND_TRANSITIVE_IMMEDIATE = ${EXPAND_TRANSITIVE_DELAYED}
+EXPAND_TRANSITIVE_SOURCE = second
+assert($(EXPAND_TRANSITIVE_DELAYED) == "second", "transitive delayed expansion did not use the current value")
+assert($(EXPAND_TRANSITIVE_IMMEDIATE) == "first", "immediate expansion did not recursively freeze a delayed value")
+
+EXPAND_APPEND_SOURCE = first
+EXPAND_APPEND_DELAYED = base
+EXPAND_APPEND_DELAYED += $(EXPAND_APPEND_SOURCE)
+EXPAND_APPEND_IMMEDIATE = base
+EXPAND_APPEND_IMMEDIATE += ${EXPAND_APPEND_SOURCE}
+EXPAND_APPEND_SOURCE = second
+assert($(EXPAND_APPEND_DELAYED) == "base second", "'+=' did not preserve delayed expansion")
+assert($(EXPAND_APPEND_IMMEDIATE) == "base first", "'+=' did not perform immediate expansion")
+
+EXPAND_IMMEDIATE_SELF = old
+EXPAND_IMMEDIATE_SELF = ${EXPAND_IMMEDIATE_SELF} new
+assert($(EXPAND_IMMEDIATE_SELF) == "old new", "immediate self-reference did not use the previous value")
+
 CFLAGS += -g
 talk:
     echo "echo 1"
