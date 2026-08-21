@@ -16,7 +16,7 @@ local function rewrite_self_references(parts, old_name, new_name)
             local argument = part[1]
             if #argument == 1 and argument[1] == old_name then
                 found = true
-                argument[1] = { new_name }
+                argument[1] = new_name
             end
         end
     end
