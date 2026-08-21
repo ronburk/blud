@@ -5,10 +5,53 @@
 -- _BLUD_TEST_ $(OWD)/blud -f $<
 
 
-A = first
-assert($(A) == "first")
-A = second
-assert($(A) == "second")
+-- Macro assignment
+
+ASSIGN_BASIC = first
+assert($(ASSIGN_BASIC) == "first", "'=' failed to assign an undefined macro")
+
+ASSIGN_BASIC = second
+assert($(ASSIGN_BASIC) == "second", "'=' failed to replace an existing macro")
+
+ASSIGN_EMPTY = nonempty
+ASSIGN_EMPTY =
+assert($(ASSIGN_EMPTY) == "", "'=' failed to replace a value with an empty value")
+
+ASSIGN_DEFAULT ?= first
+assert($(ASSIGN_DEFAULT) == "first", "'?=' failed to assign an undefined macro")
+
+ASSIGN_DEFAULT ?= second
+assert($(ASSIGN_DEFAULT) == "first", "'?=' replaced an existing macro")
+
+ASSIGN_DEFAULT_EMPTY =
+ASSIGN_DEFAULT_EMPTY ?= replacement
+assert($(ASSIGN_DEFAULT_EMPTY) == "", "'?=' replaced a defined but empty macro")
+
+ASSIGN_APPEND += first
+assert($(ASSIGN_APPEND) == "first", "'+=' added whitespace when assigning an undefined macro")
+
+ASSIGN_APPEND += second
+assert($(ASSIGN_APPEND) == "first second", "'+=' failed to append with one separating space")
+
+ASSIGN_APPEND +=
+assert($(ASSIGN_APPEND) == "first second", "'+=' with an empty value changed the existing value")
+
+ASSIGN_APPEND_EMPTY =
+ASSIGN_APPEND_EMPTY += first
+assert($(ASSIGN_APPEND_EMPTY) == "first", "'+=' added whitespace when appending to an empty macro")
+
+ASSIGN_SELF = first
+ASSIGN_SELF = $(ASSIGN_SELF) second
+assert($(ASSIGN_SELF) == "first second", "self-reference in '=' did not use the previous value")
+
+ASSIGN_SELF = before $(ASSIGN_SELF)
+assert($(ASSIGN_SELF) == "before first second", "repeated self-assignment did not use the immediately previous value")
+
+ASSIGN_UNSPACED=unspaced
+assert($(ASSIGN_UNSPACED) == "unspaced", "assignment without whitespace around '=' failed")
+
+ASSIGN_SPACED   =   spaced
+assert($(ASSIGN_SPACED) == "spaced", "assignment with whitespace around '=' failed")
 
 CFLAGS += -g
 talk:
