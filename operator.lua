@@ -671,6 +671,12 @@ do  -- Internal update behavior for individual tests.
             "test has no bound source: " .. tostring(target.NAME)
         )
 
+        for _, prerequisite in ipairs(
+            atomize_words(rule.order_only_prereq_words or {})
+        ) do
+            prerequisite:BUILD(target)
+        end
+
         -- Each test owns a directory below its suite in OWD. The source is
         -- copied there before execution; the source atom remains bound to the
         -- original path so timestamp caching never changes its identity.
@@ -681,19 +687,10 @@ do  -- Internal update behavior for individual tests.
         local pass_path = join_path(workspace, "bludtest.pass")
         local source_changed = not scompare(source, workspace)
 
-        -- A changed staged source invalidates a previous successful run. In
-        -- just-print mode the comparison still affects the decision, but no
-        -- workspace files or pass marker may be changed.
+        -- In just-print mode the comparison still affects the decision, but
+        -- no workspace files may be changed.
         if source_changed and not blud.just_print(target.SCOPE) then
             testupdate(source, workspace)
-
-            local pass_type = os_path_type(pass_path)
-            if pass_type == 2 then
-                error("test pass marker is a directory: " .. pass_path)
-            end
-            if pass_type ~= 0 and os_remove_file(pass_path) ~= 0 then
-                error("could not remove test pass marker: " .. pass_path)
-            end
         end
 
         -- There is no single filesystem timestamp for a test result. Combine
@@ -702,6 +699,18 @@ do  -- Internal update behavior for individual tests.
                         source_changed or
                         os_path_type(pass_path) ~= 1
         if mustrun then
+            -- Remove any previous success before running so failure cannot
+            -- leave a stale pass marker behind.
+            if not blud.just_print(target.SCOPE) then
+                local pass_type = os_path_type(pass_path)
+                if pass_type == 2 then
+                    error("test pass marker is a directory: " .. pass_path)
+                end
+                if pass_type ~= 0 and os_remove_file(pass_path) ~= 0 then
+                    error("could not remove test pass marker: " .. pass_path)
+                end
+            end
+
             local status = execute_test_action(
                 rule,
                 target,
