@@ -107,6 +107,16 @@ function blud.load_lua_source(text, chunk_name, sourcemap)
     return chunk, err
 end
 
+function blud.load_lua_bytecode(bytecode, text, chunk_name, sourcemap)
+    blud.register_lua_source(chunk_name, text, sourcemap)
+
+    local chunk, err = load(bytecode, chunk_name)
+    if not chunk then
+        err = blud.format_lua_error(err, chunk_name)
+    end
+    return chunk, err
+end
+
 -- Helper function to return the text of a specific line from a string
 -- @param source: The entire source string
 -- @param line_number: The desired line number (1-based index)
