@@ -190,7 +190,7 @@ do
             if not stop_pos then -- if remainder of string has no special chars
                 result   = { type="text", text=self.text:sub(start_pos) }
                 self.pos = self.len + 1
-            elseif stop_pos > self.pos then -- if there was literal text before the stop char
+            elseif stop_pos > start_pos then -- if there was literal text before the stop char
                 result   = { type="text", text=self.text:sub(start_pos, stop_pos-1) }
                 self.pos = stop_pos         -- git you next time, sucka!
             else  -- ok, we have a special char of some kind
@@ -268,6 +268,11 @@ do
         "single '-' is ordinary text",
         collect("a-b$c", "%$"),
         "text:a-b|stop:$|text:c"
+    )
+    assert_eq(
+        "single '-' before a stop character is preserved in Lua text",
+        collect("a-$b", nil, true),
+        "text:a|text:-|stop:$|text:b"
     )
     assert_eq(
         "adjacent stop chars should produce two stop tokens",
