@@ -14,6 +14,8 @@ test :TEST: test[0-9][0-9][0-9][0-9] | blud
 
 debug release :BUILD:
 debug: CFLAGS += -g
+debug: CSTRFLAGS = -d
+release: CSTRFLAGS =
 
 SRCS = blud.c bludlua.c oslinux.c
 
@@ -22,7 +24,7 @@ blud :: $(SRCS)
 -- use cstr to convert Lua source into a C string, they all will reside in bludlua.c
 STRFILES = *.lua builtin.blud
 bludlua.c :  cstr $(STRFILES)
-    shell $(OWD)/cstr $(STRFILES) >$@
+    shell $(OWD)/cstr $(CSTRFLAGS) $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)
 cstr :: cstr.cpp
