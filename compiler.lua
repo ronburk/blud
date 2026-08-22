@@ -136,7 +136,31 @@ local TC_WORD = {
 }
 
 local function parts_to_body_lua(parts)
-    return util.dump(parts)
+    local result = "{"
+
+    for i, part in ipairs(parts) do
+        if i > 1 then result = result .. ", " end
+
+        if type(part) == "string" then
+            result = result .. string.format("%q", part)
+        else
+            assert(type(part) == "table" and part.macro)
+            if part.eval == "immediate" then
+                result = result ..
+                    "blud.Macro.expand_tokens(blud.Scope.bludfile, " ..
+                    util.dump({ part }) .. ")"
+            else
+                assert(part.eval == "delay")
+                result = result .. "{macro=true, eval=\"delay\""
+                for _, argument_parts in ipairs(part) do
+                    result = result .. ", " .. parts_to_body_lua(argument_parts)
+                end
+                result = result .. "}"
+            end
+        end
+    end
+
+    return result .. "}"
 end
 
 function compile_macro_assign(compile_io, macro_name)
