@@ -20,9 +20,7 @@
     #include <unistd.h>
 #endif
 
-//#include "cstr.h"  // contains lua source code as C char array
-extern const char* CSTRGet(const char* filename);
-
+#include "cstr.h"
 #include "os.h"
 
 
@@ -319,6 +317,20 @@ int lua_CSTRGet(lua_State* L) {
     return 1;
 }
 
+int lua_CSTRGetCompiled(lua_State* L) {
+    const char* filename = luaL_checkstring(L, 1);
+    size_t size;
+    const char* result = CSTRGetCompiled(filename, &size);
+
+    if (result == NULL) {
+        lua_pushnil(L);
+    } else {
+        lua_pushlstring(L, result, size);
+    }
+
+    return 1;
+}
+
 static int lua_os_getcwd(lua_State *L) {
     char *cwd = os_getcwd();
     if (cwd == NULL) {
@@ -558,6 +570,7 @@ int luaopen_mylib(lua_State *L) {
     lua_pop(L, 1);
 
     lua_register(L, "CSTRGet", lua_CSTRGet);
+    lua_register(L, "CSTRGetCompiled", lua_CSTRGetCompiled);
     lua_register(L, "glob_expand", lua_glob_expand);
     lua_register(L, "os_getcwd", lua_os_getcwd);
     lua_register(L, "os_setcwd", lua_os_setcwd);
