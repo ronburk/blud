@@ -5,9 +5,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
+#include <cassert>
 #include <vector>
 #include <string>
 #include <filesystem>
+
+extern "C"
+    {
+#include <lua.h>
+#include <lauxlib.h>
+    }
+
 namespace fs = std::filesystem;
 
 using std::vector;
@@ -163,6 +171,33 @@ string LoadFile(const string& Filename)
         Usage();
         }
     return Contents;
+    }
+
+string CompileString(const string& Source, const string& Filename)
+    {
+    auto Lua = luaL_newstate();
+    assert(Lua != NULL);
+
+    auto ChunkName = "@" + Filename;
+    if(luaL_loadbuffer(Lua, Source.data(), Source.size(), ChunkName.c_str()) != 0)
+        {
+        fprintf(stderr, "Can't compile '%s': %s\n", Filename.c_str(),
+            lua_tostring(Lua, -1));
+        lua_close(Lua);
+        Usage();
+        }
+
+    string Bytecode;
+    auto Writer = [](lua_State*, const void* Data, size_t Size, void* Result)
+        {
+        static_cast<string*>(Result)->append(static_cast<const char*>(Data), Size);
+        return 0;
+        };
+    auto DumpResult = lua_dump(Lua, Writer, &Bytecode);
+    assert(DumpResult == 0);
+
+    lua_close(Lua);
+    return Bytecode;
     }
 
 const char* GetFuncText = R"END(
