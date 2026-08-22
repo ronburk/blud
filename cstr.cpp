@@ -170,6 +170,19 @@ string LoadFile(const string& Filename)
         fprintf(stderr, "Can't read '%s'!\n", Filename.c_str());
         Usage();
         }
+
+    size_t LineNumber = 1;
+    for(char C : Contents)
+        {
+        if(C == '\0')
+            {
+            fprintf(stderr, "NUL byte found in '%s' on line %zu!\n",
+                Filename.c_str(), LineNumber);
+            Usage();
+            }
+        if(C == '\n')
+            ++LineNumber;
+        }
     return Contents;
     }
 
