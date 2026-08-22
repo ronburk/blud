@@ -30,7 +30,7 @@ BUILD_ID=$(($(cat .build_id 2>/dev/null || echo 0) + 1))
 echo $BUILD_ID > .build_id
 CFLAGS="-Wall -Wextra -fmax-errors=2"
 # build cstr utility
-g++ -o cstr cstr.cpp $LUAJIT_FLAGS $CFLAGS
+g++ -o cstr cstr.cpp -I$LUAJIT_SRC $LUAJIT_LIB $CFLAGS
 # Embed the Lua modules so they can be loaded without source files at runtime.
 ./cstr runtime.lua dircache.lua aliasdir.lua shell.lua util.lua macro.lua error.lua main.lua init.lua blud.lua builtin.blud debugger.lua implicit.lua compiler.lua compile_io.lua operator.lua scope.lua atom.lua why.lua >./bludlua.c
 
