@@ -41,7 +41,7 @@ public:
     void    PutStr(const char* Str);
     void    PutQuotedStr(const char* Str);
     void    PutQuotedStr(string Str) { PutQuotedStr(Str.c_str()); }
-    void    PutFile(FILE* Input);
+    void    PutString(const string& Str);
     int     GetOffset() { return Offset; }
     void    EndLine();
 private:
@@ -51,11 +51,9 @@ private:
     bool    NeedComma;
     };
 
-void    Columnator::PutFile(FILE* Input)
+void    Columnator::PutString(const string& Str)
     {
-    int  C;
-
-    while(( C = fgetc(Input)) != EOF)
+    for(unsigned char C : Str)
         PutQuotedChar(C);
     }
 void Columnator::EndLine()
@@ -141,6 +139,32 @@ void    Usage()
     exit(EXIT_FAILURE);
     }
 
+string LoadFile(const string& Filename)
+    {
+    string Contents;
+    char Buffer[4096];
+    auto Input = fopen(Filename.c_str(), "r");
+
+    if(Input == NULL)
+        {
+        fprintf(stderr, "Can't open '%s' for reading!\n", Filename.c_str());
+        Usage();
+        }
+
+    size_t Count;
+    while((Count = fread(Buffer, 1, sizeof(Buffer), Input)) != 0)
+        Contents.append(Buffer, Count);
+
+    auto ReadFailed = ferror(Input);
+    fclose(Input);
+    if(ReadFailed)
+        {
+        fprintf(stderr, "Can't read '%s'!\n", Filename.c_str());
+        Usage();
+        }
+    return Contents;
+    }
+
 const char* GetFuncText = R"END(
 char* CSTRGet(const char* filename)
     {
@@ -195,29 +219,20 @@ int     main(int ArgCount, char**Args)
 
     for(const auto& InputName : InputNames)
         {
-        auto Input   = fopen(InputName.c_str(), "r");
-        if(Input == NULL)
-            {
-            fprintf(stderr, "Can't open '%s' for reading!\n", InputName.c_str());
-            Usage();
-            }
-        else
-            {
+        auto Contents = LoadFile(InputName);
 //            string simpleName {fs::path(InputName).filename().u8string()};
-            string simpleName {fs::path(InputName).filename()};
-            // fprintf(stderr, "name='%s'\n", simpleName.c_str());
-            // remember filename and its offset within big array.
-            Names.push_back(simpleName);
-            Offsets.push_back(Dest.GetOffset());
+        string simpleName {fs::path(InputName).filename()};
+        // fprintf(stderr, "name='%s'\n", simpleName.c_str());
+        // remember filename and its offset within big array.
+        Names.push_back(simpleName);
+        Offsets.push_back(Dest.GetOffset());
 
-            Dest.PutComment(InputName.c_str());
-            Dest.PutQuotedStr(simpleName);
-            Dest.PutQuotedChar('\0');
-            Dest.PutFile(Input);
-            Dest.PutQuotedChar('\0');
-            Dest.EndLine();
-            fclose(Input);
-            }
+        Dest.PutComment(InputName.c_str());
+        Dest.PutQuotedStr(simpleName);
+        Dest.PutQuotedChar('\0');
+        Dest.PutString(Contents);
+        Dest.PutQuotedChar('\0');
+        Dest.EndLine();
         }
     fprintf(Output, "    };\n");
     fprintf(Output, "char*  FileIndex[%zd] =\n    {\n", Names.size());
