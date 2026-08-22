@@ -2,7 +2,10 @@
 
 util = require("util")
 
-blud_module_code = CSTRGet("runtime.lua")
+local runtime_name = "[runtime.lua]"
+local runtime_source = assert(CSTRGet("runtime.lua"))
+blud_module_code = assert(CSTRGetCompiled("runtime.lua"))
+blud.register_lua_source(runtime_name, runtime_source)
 
 
 
@@ -109,7 +112,7 @@ if luac_needs_building then
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
 
     local compile_io = require("compile_io")
-    local chunk, err   = loadstring(blud_module_code, "<runtime>")
+    local chunk, err   = load(blud_module_code)
     if not chunk then error (err) end
     local runtime = string.format("loadstring(%s,\"<runtime>\")()\n",
                                   util.chunk_to_lua(chunk))
@@ -273,5 +276,4 @@ blud.debugger.probe({func="<update>"})
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
 blud.why.report()
-
 
