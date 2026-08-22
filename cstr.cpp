@@ -13,6 +13,22 @@ namespace fs = std::filesystem;
 using std::vector;
 using std::string;
 
+bool Debug = false;
+
+vector<string> ParseCommandLine(int ArgCount, char** Args)
+    {
+    vector<string> Result;
+
+    for(int iArg = 1; iArg < ArgCount; ++iArg)
+        {
+        if(strcmp(Args[iArg], "-d") == 0)
+            Debug = true;
+        else
+            Result.push_back(Args[iArg]);
+        }
+    return Result;
+    }
+
 
 class   Columnator
     {
@@ -156,8 +172,9 @@ int     main(int ArgCount, char**Args)
     vector<int>     Offsets;
     vector<string>  Names;
     Columnator      Dest(Output);
+    auto            InputNames = ParseCommandLine(ArgCount, Args);
     
-    if(ArgCount < 2)
+    if(InputNames.empty())
         Usage();
 
     fprintf(Output, "/* machine generated -- do not edit!\n");
@@ -176,24 +193,24 @@ int     main(int ArgCount, char**Args)
 
     fprintf(Output, "static char FileData[] =\n    {\n");
 
-    for(int iArg = 1; iArg < ArgCount; ++iArg)
+    for(const auto& InputName : InputNames)
         {
-        auto Input   = fopen(Args[iArg], "r");
+        auto Input   = fopen(InputName.c_str(), "r");
         if(Input == NULL)
             {
-            fprintf(stderr, "Can't open '%s' for reading!\n", Args[iArg]);
+            fprintf(stderr, "Can't open '%s' for reading!\n", InputName.c_str());
             Usage();
             }
         else
             {
-//            string simpleName {fs::path(Args[iArg]).filename().u8string()};
-            string simpleName {fs::path(Args[iArg]).filename()};
+//            string simpleName {fs::path(InputName).filename().u8string()};
+            string simpleName {fs::path(InputName).filename()};
             // fprintf(stderr, "name='%s'\n", simpleName.c_str());
             // remember filename and its offset within big array.
             Names.push_back(simpleName);
             Offsets.push_back(Dest.GetOffset());
 
-            Dest.PutComment(Args[iArg]);
+            Dest.PutComment(InputName.c_str());
             Dest.PutQuotedStr(simpleName);
             Dest.PutQuotedChar('\0');
             Dest.PutFile(Input);
