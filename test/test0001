@@ -179,8 +179,8 @@ assert($(PARAM_NAME ignored) == "PARAM_NAME", "'$(0)' did not expand to the invo
 
 PARAM_PAIR = $(1):$(2)
 assert($(PARAM_PAIR one,) == "one:", "empty final macro argument was not treated as supplied")
-assert(not pcall(function() return $(PARAM_PAIR one) end), "parameterized macro accepted too few arguments")
-assert(not pcall(function() return $(PARAM_PAIR one,two,three) end), "parameterized macro accepted too many arguments")
+assert($(PARAM_PAIR one) == "one:", "missing macro argument did not expand to empty text")
+assert($(PARAM_PAIR one,two,three) == "one:two", "unused excess macro argument changed the expansion")
 
 CFLAGS += -g
 talk:
