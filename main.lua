@@ -1,3 +1,4 @@
+blud.register_lua_source("[init.lua]", CSTRGet("init.lua"))
 blud.register_lua_source("[main.lua]", CSTRGet("main.lua"))
 
 -- let's catch bad global references
@@ -15,27 +16,38 @@ end
 
 
 
-table.insert(package.loaders, 1, function(modname)
-    local filename = modname .. ".lua"
+local function load_embedded_lua(filename)
     local source = CSTRGet(filename)
     if source == nil then
+        return nil
+    end
+
+    local bytecode = assert(
+        CSTRGetCompiled(filename),
+        "no compiled code for embedded Lua source: " .. filename
+    )
+    local safe_name = "[" .. filename .. "]"
+    return assert(blud.load_lua_bytecode(
+        bytecode,
+        source,
+        safe_name
+    ))
+end
+
+table.insert(package.loaders, 1, function(modname)
+    local filename = modname .. ".lua"
+    local chunk = load_embedded_lua(filename)
+    if chunk == nil then
         return nil, "\n\tmodule '" .. modname .. "' not found in embedded strings"
     end
 
-    local safe_name = "[" .. filename .. "]"
-    return assert(blud.load_lua_source(source, safe_name))
+    return chunk
 end)
 
 -- .require now only handles error handling via xpcall
 function blud.require(name)
-    local source = CSTRGet(name)
-    if source == nil then error("no such internal file: " .. name) end
-
-    local safe_name = "[" .. name .. "]"
-    local chunk, load_err = blud.load_lua_source(source, safe_name)
-    if not chunk then
-        error(load_err)  -- Raise the syntax error to be caught by xpcall
-    end
+    local chunk = load_embedded_lua(name)
+    if chunk == nil then error("no such internal file: " .. name) end
 
     return chunk()  -- Run the chunk (runtime errors will also be caught by xpcall)
 end
