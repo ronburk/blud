@@ -235,6 +235,36 @@ char* CSTRGet(const char* filename)
     return result;
     }
 
+const char* CSTRGetCompiled(const char* filename, size_t* size)
+    {
+    char* result = 0;
+    size_t iname = 0;
+
+    *size = 0;
+    if(filename && *filename != '\0')
+        {
+        for(iname=0; iname < sizeof(FileIndex)/sizeof(*FileIndex); ++iname)
+            if(!strcmp(filename, FileIndex[iname]))
+                {
+                result = FileIndex[iname];
+                break;
+                }
+        }
+    else
+        result = FileIndex[0];
+    if(result)
+        {
+        result = strchr(result, '\0')+1;  // skip over filename
+        result = strchr(result, '\0')+1;  // skip over source
+        char* end = iname+1 < sizeof(FileIndex)/sizeof(*FileIndex)
+            ? FileIndex[iname+1] : FileData+sizeof(FileData);
+        *size = end-result;
+        if(*size == 0)
+            result = 0;
+        }
+    return result;
+    }
+
 )END";
 
 
@@ -280,6 +310,8 @@ int     main(int ArgCount, char**Args)
         Dest.PutQuotedChar('\0');
         Dest.PutString(Contents);
         Dest.PutQuotedChar('\0');
+        if(fs::path(InputName).extension() == ".lua")
+            Dest.PutString(CompileString(Contents, InputName));
         Dest.EndLine();
         }
     fprintf(Output, "    };\n");
