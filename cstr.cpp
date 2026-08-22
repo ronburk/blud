@@ -206,7 +206,7 @@ string CompileString(const string& Source, const string& Filename)
     auto Lua = luaL_newstate();
     assert(Lua != NULL);
 
-    auto ChunkName = "@" + Filename;
+    auto ChunkName = "[" + fs::path(Filename).filename().string() + "]";
     if(luaL_loadbuffer(Lua, Source.data(), Source.size(), ChunkName.c_str()) != 0)
         {
         fprintf(stderr, "Can't compile '%s': %s\n", Filename.c_str(),
