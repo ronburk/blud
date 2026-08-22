@@ -479,20 +479,19 @@ static int lua_get_path_timestamp(lua_State* L) {
 }
 
 
-int initialize_lua(lua_State* L, const char* init_str) {
-    assert(init_str != NULL);
+int initialize_lua(lua_State* L, const char* init_code, size_t init_size) {
+    assert(init_code != NULL);
     // Create the "blud" table in the global Lua environment
     lua_newtable(L);           // Push a new empty table onto the stack
     lua_setglobal(L, "blud");  // Set the table as a global variable called "blud"
 
-    // Now compile and execute the init_str (should define error handling in the "blud" table)
-    if (luaL_loadbuffer(L, init_str, strlen(init_str), "init_code") != LUA_OK) {
+    // Load and execute init.lua so the error handler is available for main.lua.
+    if (luaL_loadbuffer(L, init_code, init_size, "[init.lua]") != LUA_OK) {
         fprintf(stderr, "Error loading init code: %s\n", lua_tostring(L, -1));
         lua_pop(L, 1);  // Pop the error message from the stack
         return -1;
     }
 
-    // Execute the loaded init code (init_str), which sets up things in the "blud" table
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
         fprintf(stderr, "Error running init code: %s\n", lua_tostring(L, -1));
         lua_pop(L, 1);  // Pop the error message
@@ -503,7 +502,12 @@ int initialize_lua(lua_State* L, const char* init_str) {
 }
 
 
-int execute_lua_code(lua_State* L, const char* code, const char* name) {
+int execute_lua_code(
+    lua_State* L,
+    const char* code,
+    size_t code_size,
+    const char* name
+) {
     // Get the error handler function (blud.error_handler) onto the stack
     lua_getglobal(L, "blud");
     if (!lua_istable(L, -1)) {
@@ -519,7 +523,7 @@ int execute_lua_code(lua_State* L, const char* code, const char* name) {
     }
     lua_remove(L, -2);  // Remove the 'blud' table from the stack, leaving only the error handler
 
-    int status = luaL_loadbuffer(L, code, strlen(code), name);
+    int status = luaL_loadbuffer(L, code, code_size, name);
     if (status != LUA_OK) {
         // If loading failed, error message is on top of the stack
         const char* error_msg = lua_tostring(L, -1);
@@ -595,8 +599,10 @@ int main(int argc, char** argv) {
     // printf("blud build %d\n", BUILD_ID);
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
-    // fprintf(stderr, "before initialize_lua\n");
-    if (initialize_lua(L, CSTRGet("init.lua")) != 0) {
+    size_t init_size;
+    const char* init_code = CSTRGetCompiled("init.lua", &init_size);
+    assert(init_code != NULL);
+    if (initialize_lua(L, init_code, init_size) != 0) {
         lua_close(L);
         return 1;
     }
@@ -604,9 +610,15 @@ int main(int argc, char** argv) {
 
     set_command_line(L, argc, argv);
 
-    // fprintf(stderr, "before execute_lua_code\n");
-//    execute_lua_code(L, CSTRGet("blud.lua"), "blud.lua");
-    int status = execute_lua_code(L, CSTRGet("main.lua"), "[main.lua]");
+    size_t main_size;
+    const char* main_code = CSTRGetCompiled("main.lua", &main_size);
+    assert(main_code != NULL);
+    int status = execute_lua_code(
+        L,
+        main_code,
+        main_size,
+        "[main.lua]"
+    );
 
     // Optional: Print the Lua table for verification
 //    luaL_dostring(L, "for i, v in ipairs(COMMAND_LINE) do print(i, v) end");
