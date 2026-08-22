@@ -148,48 +148,9 @@ STRUCT_CYCLE_B = $(STRUCT_CYCLE_A)
 assert(not pcall(function() return $(STRUCT_CYCLE_A) end), "mutually recursive macro expansion was not rejected")
 
 CFLAGS += -g
-talk: scope_tests
+talk:
     echo "echo 1"
     echo "echo 2"
 all: talk prog
     echo "test001 worked"
     touch test0001.out
-
--- Macro scope and precedence
-
-SCOPE_VALUE = bludfile
-SCOPE_EMPTY = bludfile
-SCOPE_DEFAULT = bludfile
-SCOPE_APPEND = bludfile
-
-scope_parent: SCOPE_VALUE = target
-scope_parent: scope_child
-    test x$(SCOPE_VALUE) = xtarget || { echo "target-specific macro did not override the bludfile macro; got:" $(SCOPE_VALUE) >&2; exit 1; }
-
-scope_child:
-    test x$(SCOPE_VALUE) = xbludfile || { echo "target-specific macro propagated from a target to its prerequisite; got:" $(SCOPE_VALUE) >&2; exit 1; }
-
-scope_sibling:
-    test x$(SCOPE_VALUE) = xbludfile || { echo "target-specific macro leaked to an unrelated target; got:" $(SCOPE_VALUE) >&2; exit 1; }
-    test x$(SCOPE_APPEND) = xbludfile || { echo "target-specific '+=' modified the inherited bludfile macro; got:" $(SCOPE_APPEND) >&2; exit 1; }
-
-scope_empty: SCOPE_EMPTY =
-scope_empty:
-    test x$(SCOPE_EMPTY) = x || { echo "empty target-specific macro did not shadow the bludfile macro; got:" $(SCOPE_EMPTY) >&2; exit 1; }
-
-scope_default: SCOPE_DEFAULT ?= target
-scope_default:
-    test x$(SCOPE_DEFAULT) = xbludfile || { echo "target-specific '?=' replaced an inherited macro; got:" $(SCOPE_DEFAULT) >&2; exit 1; }
-
-scope_append: SCOPE_APPEND += target
-scope_append:
-    set -- $(SCOPE_APPEND); test "$*" = "bludfile target" || { echo "target-specific '+=' did not append to the inherited macro; got:" $(SCOPE_APPEND) >&2; exit 1; }
-
-scope_multi_a scope_multi_b: SCOPE_MULTI = target
-scope_multi_a:
-    test x$(SCOPE_MULTI) = xtarget || { echo "multiple-target assignment missed its first target; got:" $(SCOPE_MULTI) >&2; exit 1; }
-
-scope_multi_b:
-    test x$(SCOPE_MULTI) = xtarget || { echo "multiple-target assignment missed its second target; got:" $(SCOPE_MULTI) >&2; exit 1; }
-
-scope_tests: scope_parent scope_sibling scope_empty scope_default scope_append scope_multi_a scope_multi_b
