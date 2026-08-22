@@ -615,22 +615,6 @@ blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
     return result, pos
 end
 
-blud.match_macro_assign = function(line)
-    local operators = {
-        ["="]   = true,
-        [":="]  = true,
-        ["+="]  = true,
-    }
-    local pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:]+)%s*(.*)$"
-    local macro_name, operator, remainder = line:match(pattern)
-    if macro_name and operator then
-        if operators[operator] == true then
-            return macro_name, operator, remainder
-        end
-    end
-    return nil
-end
-
 blud.build_init = function()
     blud.operators[":BUILD:"]:INIT()
 end
@@ -1073,44 +1057,6 @@ function blud.phase3:parse()
     -- print(table.concat(self.text))
 end
 --]=]
-
---[=[
-blud.phase3       = function ()
-    -- print(blud.phase2_text)
-    local get_line          = blud.lines(blud.phase2_text)
-    local action_legal_here = false
-    local line              = get_line()
-    while line do
-        if looks_like_macro_assign(line) then
-            
-
-        local char = input_stack:get_char()
-        if not char then break end
-        if state == "START" then
-            if 
-        end
-    end
-    while input_stack do
-        local input = input
-    end
-
-    for i = 1, #blud.phase2_text do
-        local c = blud.phase2_text:sub(i, 1)
---        if c == '$' then
-    end
-
-    for line in blud.lines(blud.phase2_text) do
-        print("Line is: " .. line )
-        local macro_name, operator, text = blud.match_macro_assign(line)
-        if macro_name then
-            blud.macro_assign(macro_name, operator, text)
-            print(macro_name .. operator .. text)
-        elseif blud.match_dependency(line) then
-            
-        end
-    end
-end
-]=]
 
 blud.current_time = os.time()
 blud.why = require("why")
