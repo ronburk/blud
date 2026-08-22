@@ -125,34 +125,6 @@ end
 
 ]]--
 
---[[
-local macro_name_pattern = "([%a_][%w_%.]*)"
-
--- parse a line that looks like macro assign, or return nil
-local match_macro_assign
-do
-    local operators = {
-        ["="]   = true,
-        [":="]  = true,
-        ["+="]  = true,
-        ["?="]  = true,
-    }
-    function match_macro_assign(line, skip_leading_white)
-        -- print("match_macro_assign(\"" .. line .. "\")")
-        local anchor = "^"
-        if skip_leading_white then anchor = "" end
-        local pattern = anchor .. macro_name_pattern .. "%s*([=+:?]+)%s*(.*)$"
-        local macro_name, operator, remainder = line:match(pattern)
-        if macro_name and operator then
-            if operators[operator] == true then
-                return { name=macro_name, operator=operator, value=remainder }
-            end
-        end
-        return nil
-    end
-end
---]]
-
 local TC_WORD = {
     LUASTART = true,
     LUAONELINE = true,
