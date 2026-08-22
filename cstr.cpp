@@ -186,6 +186,21 @@ string LoadFile(const string& Filename)
     return Contents;
     }
 
+void ExcludeUnitTests(string& Source)
+    {
+    const string Marker = "---[=[UNIT_TESTS";
+
+    for(size_t LineStart = 0; LineStart < Source.size();)
+        {
+        if(Source.compare(LineStart, Marker.size(), Marker) == 0)
+            Source.erase(LineStart, 1);
+        auto Newline = Source.find('\n', LineStart);
+        if(Newline == string::npos)
+            break;
+        LineStart = Newline+1;
+        }
+    }
+
 string CompileString(const string& Source, const string& Filename)
     {
     auto Lua = luaL_newstate();
@@ -298,6 +313,9 @@ int     main(int ArgCount, char**Args)
     for(const auto& InputName : InputNames)
         {
         auto Contents = LoadFile(InputName);
+        auto IsLua = fs::path(InputName).extension() == ".lua";
+        if(IsLua && !Debug)
+            ExcludeUnitTests(Contents);
 //            string simpleName {fs::path(InputName).filename().u8string()};
         string simpleName {fs::path(InputName).filename()};
         // fprintf(stderr, "name='%s'\n", simpleName.c_str());
@@ -310,7 +328,7 @@ int     main(int ArgCount, char**Args)
         Dest.PutQuotedChar('\0');
         Dest.PutString(Contents);
         Dest.PutQuotedChar('\0');
-        if(fs::path(InputName).extension() == ".lua")
+        if(IsLua)
             Dest.PutString(CompileString(Contents, InputName));
         Dest.EndLine();
         }
