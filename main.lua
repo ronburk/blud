@@ -132,8 +132,13 @@ function blud.parse_command_line()
         elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
         else
-            options.target_names = options.target_names or {}
-            table.insert(options.target_names, arg)
+            local macro = require("macro").match_macro_assign(arg)
+            if macro then
+                print("command-line macro assignment: " .. arg)
+            else
+                options.target_names = options.target_names or {}
+                table.insert(options.target_names, arg)
+            end
         end
         i = i + 1
     end
