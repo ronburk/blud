@@ -165,26 +165,6 @@ local TC_WORD = {
 
 local function parts_to_body_lua(parts)
     return util.dump(parts)
---[[
-    local result = "{"
-    for i, part in ipairs(parts) do
-        if i > 1 then
-            result = result .. ", "
-        end
-        if part.type == "text" or part.type == "quote" or part.type == "comment" then
-            result = result .. string.format("%q", part.text)
-        elseif part.type == "macro" then
-            result = result .. "{macro=true"
-            for _, arg in ipairs(part) do
-                result = result .. ", " .. parts_to_body_lua({ arg })
-            end
-            result = result .. "}"
-        else
-            error("unknown macro part type: " .. tostring(part.type))
-        end
-    end
-    return result .. "}"
---]]
 end
 
 function compile_macro_assign(compile_io, macro_name)
