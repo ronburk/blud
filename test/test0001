@@ -147,6 +147,41 @@ STRUCT_CYCLE_A = $(STRUCT_CYCLE_B)
 STRUCT_CYCLE_B = $(STRUCT_CYCLE_A)
 assert(not pcall(function() return $(STRUCT_CYCLE_A) end), "mutually recursive macro expansion was not rejected")
 
+-- Parameterized macros
+
+PARAM_IDENTITY = <$(1)>
+assert($(PARAM_IDENTITY value) == "<value>", "single parameterized macro argument was not substituted")
+
+PARAM_REORDER = $(2)/$(1)/$(2)
+assert($(PARAM_REORDER first,second) == "second/first/second", "parameterized macro did not preserve argument order and repeated use")
+
+PARAM_EMPTY = [$(1)]/[$(2)]/[$(3)]
+assert($(PARAM_EMPTY ,middle,) == "[]/[middle]/[]", "parameterized macro did not retain empty arguments")
+
+PARAM_INNER = <$(1)>
+PARAM_OUTER = $(1)/$(PARAM_INNER $(2))/$(1)
+assert($(PARAM_OUTER first,second) == "first/<second>/first", "nested parameterized macro corrupted the outer arguments")
+
+PARAM_SEPARATOR = :
+PARAM_JOIN = $(1)$(PARAM_SEPARATOR)$(2)
+assert($(PARAM_JOIN left,right) == "left:right", "parameter scope hid an ordinary macro")
+
+PARAM_SOURCE = first
+PARAM_ECHO = $(1)
+PARAM_DELAYED_CALL = $(PARAM_ECHO $(PARAM_SOURCE))
+PARAM_IMMEDIATE_CALL = ${PARAM_ECHO $(PARAM_SOURCE)}
+PARAM_SOURCE = second
+assert($(PARAM_DELAYED_CALL) == "second", "delayed parameterized call did not expand its argument at invocation time")
+assert($(PARAM_IMMEDIATE_CALL) == "first", "immediate parameterized call did not preserve its assignment-time result")
+
+PARAM_NAME = $(0)
+assert($(PARAM_NAME ignored) == "PARAM_NAME", "'$(0)' did not expand to the invoked macro name")
+
+PARAM_PAIR = $(1):$(2)
+assert($(PARAM_PAIR one,) == "one:", "empty final macro argument was not treated as supplied")
+assert(not pcall(function() return $(PARAM_PAIR one) end), "parameterized macro accepted too few arguments")
+assert(not pcall(function() return $(PARAM_PAIR one,two,three) end), "parameterized macro accepted too many arguments")
+
 CFLAGS += -g
 talk:
     echo "echo 1"
