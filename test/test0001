@@ -115,6 +115,38 @@ EXPAND_IMMEDIATE_SELF = old
 EXPAND_IMMEDIATE_SELF = ${EXPAND_IMMEDIATE_SELF} new
 assert($(EXPAND_IMMEDIATE_SELF) == "old new", "immediate self-reference did not use the previous value")
 
+-- Macro composition and indirection
+
+STRUCT_WORD = middle
+STRUCT_EMBEDDED = before-$(STRUCT_WORD)-after
+assert($(STRUCT_EMBEDDED) == "before-middle-after", "embedded macro expansion did not preserve surrounding text; got " .. string.format("%q", $(STRUCT_EMBEDDED)))
+
+STRUCT_LEVEL_1 = final
+STRUCT_LEVEL_2 = $(STRUCT_LEVEL_1)
+STRUCT_LEVEL_3 = $(STRUCT_LEVEL_2)
+assert($(STRUCT_LEVEL_3) == "final", "transitive macro expansion did not reach the final value")
+
+STRUCT_NAME = STRUCT_VALUE
+STRUCT_VALUE = found
+STRUCT_INDIRECT = $($(STRUCT_NAME))
+assert($(STRUCT_INDIRECT) == "found", "indirect macro name did not select the named macro")
+
+STRUCT_SUFFIX = TWO
+STRUCT_VALUE_TWO = found
+STRUCT_COMPUTED = $(STRUCT_VALUE_$(STRUCT_SUFFIX))
+assert($(STRUCT_COMPUTED) == "found", "computed macro name did not select the assembled name")
+
+STRUCT_UNDEFINED = before$(STRUCT_MISSING)after
+assert($(STRUCT_UNDEFINED) == "beforeafter", "undefined macro did not expand to empty text")
+
+STRUCT_REPEAT = word
+STRUCT_REPEATED = $(STRUCT_REPEAT)/$(STRUCT_REPEAT)
+assert($(STRUCT_REPEATED) == "word/word", "repeated macro references did not expand independently")
+
+STRUCT_CYCLE_A = $(STRUCT_CYCLE_B)
+STRUCT_CYCLE_B = $(STRUCT_CYCLE_A)
+assert(not pcall(function() return $(STRUCT_CYCLE_A) end), "mutually recursive macro expansion was not rejected")
+
 CFLAGS += -g
 talk:
     echo "echo 1"
