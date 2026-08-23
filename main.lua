@@ -71,7 +71,7 @@ Options:
   -?, -h, --help        Show this help and exit.]])
 end
 
-function blud.parse_command_line()
+local function parse_command_line(args)
     local debugger
     local options = {
         bludfile_path = "bludfile",
@@ -79,7 +79,6 @@ function blud.parse_command_line()
         always_make = false,
         commandline_booleans = {},
     }
-    local args = _G.COMMAND_LINE
     local i = 2     -- skip command-name
     while i <= #args do
         local arg = args[i]
@@ -157,10 +156,10 @@ function blud.parse_command_line()
 
     debugger = debugger or require("debugger")
     debugger.probe({func="<start>"})
-    blud.command_line_options = options
+    return options
 end
 
-blud.parse_command_line()
+blud.command_line_options = parse_command_line(_G.COMMAND_LINE)
 
 function get_bludfile_path()
     return blud.command_line_options.bludfile_path
