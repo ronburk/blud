@@ -68,7 +68,7 @@ end
 --     rule, match, prereq_atoms
 --
 -- or nil if no implicit rule applies.
-function implicit.find_forward(target_name, exists)
+function implicit.find_forward(target_name)
     for i = 1, #rules do
         local rule = rules[i]
 --        util.print("implicit, rule is %s", util.dump(rule))
