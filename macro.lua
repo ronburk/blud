@@ -444,7 +444,7 @@ M.expand_call = function(scope, macro_call, stack)
 
     table.insert(stack, name)
     local macro = scope:get_macro(name)
-    local result = { macro and macro:expand(scope, actuals, stack) or "" }
+    local result = macro and macro:expand(scope, actuals, stack) or ""
     table.remove(stack)
     return result
 end
@@ -463,7 +463,7 @@ M.expand_tokens = function(scope, tokens, stack)
         if type(token) == "string" then
             table.insert(result, token)
         elseif type(token) == "table" then
-            util.array_append(result, M.expand_call(scope, token, stack))
+            table.insert(result, M.expand_call(scope, token, stack))
         else
             error("Illegal token in token array: " .. util.dump(token))
         end
