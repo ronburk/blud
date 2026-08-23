@@ -313,7 +313,7 @@ test_parse("src/%%/build%", "src/", "", "build", "")
 test_parse("singlefile.txt", "", "", "singlefile.txt", "")
 test_parse("folder/%%", "folder/", "", "") -- Edge case for empty directory match
 
-function test_pattern(pattern, path, dir_stem_expected, file_stem_expected)
+local function test_pattern(pattern, path, dir_stem_expected, file_stem_expected)
     local parsed, msg, dir_stem, file_stem        
     parsed, msg = parse_pattern(pattern)
     if not parsed then
