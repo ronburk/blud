@@ -621,6 +621,8 @@ do
         'scope:get_text("PAIR", "", "two", "")'
     )
 
+    local parts_to_string
+
     local function part_to_string(part)
         if type(part) == "string" then
             return "text:" .. string.format("%q", part)
@@ -645,7 +647,7 @@ do
         error("unknown part: " .. util.dump(part))
     end
 
-    function parts_to_string(parts)
+    parts_to_string = function(parts)
         local result = {}
         for i = 1, #parts do
             table.insert(result, part_to_string(parts[i]))
