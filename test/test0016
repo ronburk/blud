@@ -8,7 +8,6 @@ all:
 
 do
     local action_filename = "test0016.action"
-    local commands = blud.shell.commands
     local original_sourcemap = blud.sourcemap
 
     local function write_action(text)
@@ -25,17 +24,17 @@ do
                "source did not pass its caller scope")
         return 7
     end
-    commands.test0016_status = return_test_status
+    blud.shell.register_command("test0016_status", return_test_status)
     write_action("test0016_status\n")
-    assert(commands.source({"source", action_filename}, scope) == 7,
+    assert(blud.shell.execute("source " .. action_filename, scope) == 7,
            "source did not return its action status")
 
     write_action([[ignored prefix
 #__SOURCE__    test0016_status
 this line must not be parsed
 ]])
-    assert(commands.source(
-               {"source", action_filename, "--boundary", "__SOURCE__"},
+    assert(blud.shell.execute(
+               "source " .. action_filename .. " --boundary __SOURCE__",
                scope
            ) == 7,
            "source did not execute an inline boundary action")
@@ -45,8 +44,8 @@ this line must not be parsed
 ignored suffix
 ]])
     local function run_failing_inline_source()
-        commands.source(
-            {"source", action_filename, "--boundary", "__SOURCE__"},
+        blud.shell.execute(
+            "source " .. action_filename .. " --boundary __SOURCE__",
             scope
         )
     end
@@ -61,7 +60,6 @@ ignored suffix
                "test0016 inline source failure", 1, true),
            "inline sourced Lua error lost its message: " .. inline_diagnostic)
 
-    commands.test0016_status = nil
     assert(blud.sourcemap == original_sourcemap,
            "source replaced the main sourcemap")
 
@@ -74,8 +72,8 @@ ignored suffix
 ignored suffix
 ]])
     local function run_failing_source()
-        commands.source(
-            {"source", "--boundary", "__SOURCE__", action_filename},
+        blud.shell.execute(
+            "source --boundary __SOURCE__ " .. action_filename,
             scope
         )
     end
@@ -98,10 +96,9 @@ ignored suffix
         assert(blud.sourcemap == original_sourcemap,
                "successful source replaced the main sourcemap")
         blud.test0016_sourcemap = nil
-        commands.test0016_check_scope = nil
         return 0
     end
-    commands.test0016_check_scope = check_source_scope
+    blud.shell.register_command("test0016_check_scope", check_source_scope)
     write_action([[ignored prefix
 #__SOURCE__
 #: do
