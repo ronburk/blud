@@ -4,8 +4,12 @@ local debugger = require("debugger")
 local Operator= {} -- default behavior inherited by concrete operators
 Operator.__index = Operator
 
-local function target_needs_building(newest_prerequisite, timestamp)
-    return blud.command_line_options.always_make or
+local function target_needs_building(
+    always_make,
+    newest_prerequisite,
+    timestamp
+)
+    return always_make or
            timestamp == 0 or
            newest_prerequisite > timestamp
 end
@@ -66,8 +70,11 @@ function Operator:BUILD(target_atom, parent)
             target_atom.BUILD_PREREQUISITES(target_atom)
         -- print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
         -- print("    versus ", newest_prerequisite_time)
-        local needs_building =
-            target_needs_building(newest_prerequisite_time, timestamp)
+        local needs_building = target_needs_building(
+            blud.command_line_options.always_make,
+            newest_prerequisite_time,
+            timestamp
+        )
         blud.why.considered(
             target_atom,
             timestamp,
@@ -274,8 +281,11 @@ do  -- Ordinary explicit dependency rules.
             target_atom.BUILD_PREREQUISITES(target_atom)
 --        print("timestamp for '" .. target_atom.BOUND_NAME .. "' is " .. timestamp)
 --        print("    versus ", newest_prerequisite_time)
-        local needs_building =
-            target_needs_building(newest_prerequisite_time, timestamp)
+        local needs_building = target_needs_building(
+            blud.command_line_options.always_make,
+            newest_prerequisite_time,
+            timestamp
+        )
         blud.why.considered(
             target_atom,
             timestamp,
@@ -416,8 +426,11 @@ do  -- Source lists: compile each source through a reverse rule, then link.
 
         local newest_prerequisite_time, newest_prerequisite =
             build_prepared_prerequisites(target_atom)
-        local needs_building =
-            target_needs_building(newest_prerequisite_time, timestamp)
+        local needs_building = target_needs_building(
+            blud.command_line_options.always_make,
+            newest_prerequisite_time,
+            timestamp
+        )
         blud.why.considered(
             target_atom,
             timestamp,
