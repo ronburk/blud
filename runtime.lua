@@ -1,6 +1,3 @@
---blud_module_code = [==[
-
-
 -- parts      := { part* }
 -- part       := string | macro_call
 -- macro_call := { macro=true, eval="delay"|"immediate" stack_frame }
@@ -33,35 +30,12 @@ atom
     May also contain PREREQUISITES, ACTION, TYPE, BOUND_NAME, etc.
 --]]
 
-local function dump(o, seen)
-    seen = seen or {}  -- Initialize the seen table if it's not passed in
-    if type(o) == 'table' then
-        if seen[o] then  -- Check if this table has already been processed
-            return '"<circular reference>"'
-        end
-        seen[o] = true  -- Mark this table as processed
-        local s = '{ '
-        for k,v in pairs(o) do
-            if type(k) ~= 'number' then k = '"'..k..'"' end
-            if v ~= "__index" then
-                s = s .. '['..k..'] = ' .. dump(v, seen) .. ','
-            end
-        end
-        seen[o] = nil  -- Allow this table to be processed again in other contexts
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-end
-
-
 local function dump1(o)
     if type(o) == 'table' then
         local s = '{ '
         for k,v in pairs(o) do
             if type(k) ~= 'number' then k = '"'..k..'"' end
             if v ~= "__index" then
---                s = s .. '['..k..'] = ' .. dump(v) .. ','
                 s = s .. '['..k..'] = ' .. tostring(v) .. ','
             end
         end
@@ -82,7 +56,6 @@ local function formatValue(value)
     elseif type(value) == "number" or type(value) == "boolean" then
         return tostring(value)
     elseif type(value) == "table" then
---        return "{table}"
         return dump1(value)
     else
         return tostring(value)
@@ -141,14 +114,11 @@ function errorf(format_string, ...)
         io.stderr:write(message)
     end
     io.stderr:write("\n")
---    io.stderr:write(debug.traceback("", 2))
     io.stderr:write(getDetailedTraceback())
     error("", 2)
---    os.exit(1)
 end
 
 function glob_words(input)  -- ?? must it be global???
---    util.print("glob_words(%s)", util.dump(input))
     local output = {}
 
     for _, word in ipairs(input) do
@@ -161,13 +131,6 @@ function glob_words(input)  -- ?? must it be global???
 
     return output
 end
-
---[[
-    build_stack - stack of targets currently being built
-
-    .target - target (atom) being built in this frame
-blud.build_stack = {}
---]]
 
 
 blud.debugger = require("debugger")
@@ -196,24 +159,18 @@ end
 
 
 blud.execute = function(scope, text)
-    -- util.print("blud.execute(text=%s)", util.dump(text))
     assert(type(text) == "string")
     local status
-    if text then
-        local just_print = blud.just_print(scope)
-        if just_print or not blud.silent(scope) then
-            print(text)
-        end
-        if just_print then
-            status = 0
-        else
-            -- Preserve the action text/status contract while shell.lua
-            -- enforces explicit selection of the platform shell.
-            status = blud.shell.execute(text, scope)
-        end
-        -- print("    status = ", status)
+    local just_print = blud.just_print(scope)
+    if just_print or not blud.silent(scope) then
+        print(text)
+    end
+    if just_print then
+        status = 0
     else
-        -- print("<no action>")
+        -- Preserve the action text/status contract while shell.lua
+        -- enforces explicit selection of the platform shell.
+        status = blud.shell.execute(text, scope)
     end
 
     return status
@@ -234,8 +191,6 @@ blud.eval_target_assign_rule = function(left_parts, macro, action)
     local target_names = tokenize_dependency_line(left)
 
     for i = 1, #target_names do
---        util.print("%s: %q %s %q",
---                   target_names[i], macro.name, macro.operator, macro.macro_text)
         local target = blud.get_or_create_target(target_names[i])
         target:set_variable(macro)
     end
@@ -259,12 +214,6 @@ end
 
 -- eval_rule does minimal processing then goes into the operator hook system
 blud.eval_rule = function(operator_name, left_parts, right_parts, action)
---[[
-    util.print("blud.eval_rule, %s, %s, %s, action",
-               util.dump(operator_name),
-               util.dump(left_parts),
-               util.dump(right_parts))
---]]
     -- now is the time to identify implicit rules
     -- note that "%" hidden inside macro call is a literal
     if operator_name == ":" then
@@ -302,30 +251,8 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     )
 end
 
-function blud.macro(name, ...)
-    local macro_call = { { tostring(name) } }
-
-    for i = 1, select("#", ...) do
-        table.insert(macro_call, { tostring(select(i, ...)) })
-    end
-
-    return blud.Macro.expand_call(blud.scope_bludfile, macro_call)
-end
-
-M = blud.macro
-
 blud.implicit        = require("implicit")
---blud.sourcemap       = require("sourcemap")
 blud.error           = errorf
-blud.assert          = function(condition, format, ...)
-    if not condition then
-        if format then
-            blud.error(format, ...)
-        else
-            blud.error("assertion failed.")
-        end
-    end
-end
 blud.glob            = blud.require("dircache.lua")
 blud.operators       = {}
 blud.build_atom      = nil
@@ -343,191 +270,10 @@ blud.array_append    = function(array, more)
     end
 end
 
-blud.insert_stem = function(pattern, stem)
-    return pattern:gsub("%%", stem)
-end
-blud.match_rule = function(pattern, target)
-    -- Escape any special Lua pattern characters, except for '%'
-    local escaped_pattern = pattern:gsub("([%.%^%$%(%)%%%[%]%+%-%?])", "%%%1")
-
-    -- Replace '%' in the pattern with '(.*)' to capture the stem
-    local lua_pattern = escaped_pattern:gsub("%%", "(.*)")
-
-    -- Use string.match to attempt to match the target with the modified pattern
-    local stem = string.match(target, lua_pattern)
-    
-    -- Return the stem if found, otherwise return nil
-    return stem
-end
-blud.implicit_rules = {}
-blud.find_reverse_rule = function(prerequisite_name)
-    for i = #blud.implicit_rules, 1, -1 do
-        local rule = blud.implicit_rules[i]
-        local stem = blud.match_rule(rule.prerequisites[1].NAME, prerequisite_name)
-        if stem then
-            return stem, rule
-        end
-    end
-    return nil
-end
-
---blud.macros          = {}
--- macro scopes
 blud.Scope = require("scope")
 
 for name, value in pairs(blud.command_line_options.commandline_booleans) do
     blud.Scope.commandline:set_boolean(name, value)
-end
-
-
---[[
-function blud.Scope:set(name, value)
-    self.variables[name] = value
-end
-
-function blud.Scope:get(name)
-    if self == blud.Scope then
-        return nil
-    end
-    if not self.variables then blud.error("fail on get(#1) scope: #2 ", name, dump(self)) end
-    if self.variables[name] ~= nil then
-        return self.variables[name]
-    elseif self.parent then
-        return self.parent:get(name)
-    else
-        return nil
-    end
-end
-
-function blud.Scope:get_text(name)
-    local tokens = self:get(name)
-    local result = ""
-    if tokens then
-        result = blud.Macro.expand_tokens(self, tokens)
-    end
-    return result
-end
-
-
--- per-target scope
--- This handles automatic macros in its "get" function
-blud.ScopeTarget         = setmetatable({}, {__index = blud.Scope})
-blud.ScopeTarget.__index = blud.ScopeTarget
-function blud.ScopeTarget.new(target)
-    blud.assert(target)
-    local scope  = blud.Scope:new(blud.scope_build)
-    scope.target = target
-    setmetatable(scope, blud.ScopeTarget)
-    return scope
-end
-function blud.ScopeTarget:get(name)
-    local result
-    local bound_name = ""
-    if name == "<" then
-        local first_prereq = self.target.PREREQUISITES[1]
-        if first_prereq then
-            result =  first_prereq.BOUND_NAME
-        end
-    elseif name == "^" then
-        result = {}
-        local seen = {}
-        for _, prereq in ipairs(self.target.PREREQUISITES) do
-            local bound_name = prereq.BOUND_NAME
-            if not seen[bound_name] then
-                seen[bound_name] = true
-                table.insert(result, prereq.BOUND_NAME)
-                table.insert(result,  " " )
-            end
-        end
-        result = table.concat(result)
-    elseif name == "@" then
-        result = self.target.BOUND_NAME
-    else
-        result = self.variables[name]
-        if result == nil and self.parent then
-            result = self.parent:get(name)
-        end
-    end
-    return result
-end
-
-blud.scope_base        = blud.Scope:new()
-blud.scope_environment = blud.Scope:new(blud.scope_base)
-blud.scope_bludfile    = blud.Scope:new(blud.scope_environment)
-blud.scope_commandline = blud.Scope:new(blud.scope_bludfile)
-blud.scope_build       = blud.Scope:new(blud.scope_commandline)
-
-function blud.scope_environment:get(name)
-    local value = os.getenv(name)
-    if value ~= nil then
-        return { value }
-    end
-    return self.parent:get(name)
-end
-
--- macro class
-blud.Macro = {}
-blud.Macro.__index = blud.Macro
-function blud.Macro:new(body)
-    assert(type(body) == "string" or type(body) == "table")
-    local instance = {
-        body      = body
-    }
-    setmetatable(instance, blud.Macro)
-    return instance
-end
---]]
-
-
-function blud.Macro:assign_early(scope, new_body)
-    if type(new_body) == "table" then -- if we are being given macro tokens
-        new_body = self.expand(scope, new_body)  -- expand into string
-    end
-    assert(type(new_body) == "string")
-    self.body = new_body
-end
-
--- note that caller has already handled any self references
-function blud.Macro:assign_late(new_body)
-    if type(new_body) == "table" then -- if we are being given macro tokens
-        self.body = new_body
-    elseif type(new_body) == "string" then
-        self.body = { new_body }      -- store string as array of macro tokens
-    else
-        error("assign_late was passed a " .. type(new_body) .. "instead of a string or table")
-    end
-end
-
--- append to an existing macro of either type
--- caller has already handled any self references
-function blud.Macro:append(scope, more_body)
-    if type(self.body) == "table" then  -- if I am a late-binding macro
-        if type(new_body) == "string" then
-            more_body = { more_body }  -- turn string into array of macro tokens
-        end
-        for _, token in ipairs(more_body) do
-            table.insert(self.body, token)
-        end
-    elseif type(self.body) == "string" then -- else if I am an early-binding macro
-        if type(more_body) == "table" then
-            more_body = self.expand(scope, more_body)
-        end
-    else
-        error("Macro:append was passed a " .. type(more_body) .. "instead of a string or table")
-    end
-end
-
-
-blud.macro_simple_name_match = function(token, name)
-    if token and type(token) == "table" and token.macro == true then
-        -- it's a macro call stack, and [1] will be the tokens making up the name
-        local name_tokens = token[1]
-        -- we detect FOO = $(FOO) + 1, not FOO = $(F$(OO)) + 1
-        if #name_tokens == 1 then
-            return name_tokens[1][1] == name
-        end
-    end
-    return false
 end
 
 -- macro_extract_call:
@@ -569,10 +315,6 @@ blud.macro_extract_call = function(text, pos, self_reference)
     return arg_stack, pos
 end
 
-blud.macro_tokens_from_string = function(name, str)
-    return {name=name, [1] = str}
-end
-
 -- macro_tokens_from_text: compile a macro body into a table
 --    A macro body is stored as a table. Each entry in the table
 -- is either a substring that contains no macro invocations,
@@ -598,7 +340,6 @@ blud.macro_tokens_from_text = function(text, stop_chars, pos, self_reference)
                 table.insert(result, text:sub(pos, stop_pos - 1))
             end
             local macro_call, new_pos = blud.macro_extract_call(text, stop_pos, self_reference)
---            table.insert(result, macro_call)
             blud.array_append(result, macro_call)
             pos = new_pos
         -- else it's a char that stops our scan (space, comma, right paren)
@@ -667,72 +408,6 @@ blud.build_targets = function(targets)
         end
     end
 end
-
---[[
--- blud.lines: return an iterator that returns one line of the string at a time
-blud.lines = function(str)
-    local pos = 1
-    return function()
-        if pos > #str then return nil end
-        local nl = str:find("\n", pos, true)
-        local line
-        if nl then
-            line = str:sub(pos, nl - 1)
-            pos = nl + 1
-        else
-            line = str:sub(pos)
-            pos = #str + 1
-        end
-        if line:sub(-1) == "\r" then
-            line = line:sub(1, -2)
-        end
-        return line
-    end
-end
---]]
-
-blud.is_positive_integer = function(n)
-    if type(n) == "string" then
-        n = tonumber(n)
-    end
-    return type(n) == "number" and n >= 0 and n%1 == 0
-end
-
--- $(1) is an arg reference; $(-5) is not; $(FOO) is not.
--- $($(FOO)) is not an arg reference, 
-blud.macro_is_arg_reference = function(macro_token)
-    local result = -1 -- -1 means "no", other positive integers indicate arg #
-    if type(macro_token) == "table" and macro_token.macro then
-        local macro_name_tokens = macro_token[1]
-        if #macro_name_tokens == 1 then
-            local macro_name_token = macro_name_tokens[1]
-            if blud.is_positive_integer(macro_name_token) then
-                result = tonumber(macro_name_token)+1
-            end
-        end
-    end
-    return result
-end
-
--- given:
---     FOO = $(FOO a,b) xxx
--- we must expand the self-reference using the body of FOO
--- only arguments will be expanded (so usually nothing gets expanded at all!)
-blud.macro_expand_self_reference = function(macro_call, macro_tokens)
-    local result = {}
-    -- copy tokens, looking for $(N args) macro invocations
-    for _, element in ipairs(macro_tokens) do
-        local arg_number = blud.macro_is_arg_reference(element)
-        if arg_number > 0 then
-            error("can't handle self-ref args yet!")
-        else
-            table.insert(result, element)
-        end
-    end
-    return result
-end
-
-
 blud.macro_assign_parts = function(scope, macro_name, operator, parts)
     local macro = scope:get_macro(macro_name)
 
@@ -748,222 +423,6 @@ blud.macro_assign_parts = function(scope, macro_name, operator, parts)
         scope:set_macro(macro_name, replacement)
     end
 end
-
---[[
--- macro_assign: assign a body to a macro
--- the value of a macro will always be a function which returns either
--- a string, or the macro-expanded value of a string.
-blud.macro_assign = function(line, scope, macro)
-    local referenced_macro = scope:get(macro.name)
-    local self_reference = function(macro_call)
-        print("self-reference wrapper on macro ", macro.name, dump(macro_call))
-        local macro_name_tokens = macro_call[1]
-        if #macro_name_tokens == 1 and macro_name_tokens[1] == macro.name then
-            return blud.macro_expand_self_reference(macro_call, referenced_macro)
-        else
-            return macro_call
-        end
-    end
-    local macro_body = blud.macro_tokens_from_text(line, nil, macro.body_pos, self_reference);
-    local result   = line
-    local operator = macro.operator
-    
-    if operator == "=" then
-        -- do nothing
-    elseif operator == ":=" then
-        macro_body = blud.Macro.expand_text(scope, input)
-    else
-        error("Unknown assignment operator '" .. macro.operator .. "':" .. line)
-        assert(false)
-    end
-    scope:set(macro.name, macro_body)
-    return result
-end
-
---]]
-
-
-blud.phase2_append= function(str)
-    blud.phase2_text = blud.phase2_text .. str .. "\n"
-end
-blud.phase3_text  = ""
-blud.phase3_append= function(str)
-    if str == nil then str = "" end
-    blud.phase3_text = blud.phase3_text .. str .. "\n"
-end
-
-blud.string_stack = function(str, pos)
-    return {
-        { str, pos },
-        push = function(str, pos)
-            table.insert(this, {str=str,pos=pos})
-        end,
-        pop = function()
-            table.remove(this)
-            return #this
-        end,
-        get_char = function(expanding)
-            while #this do
-                local finger = this[#this]
-                if finger.pos >= #finger.str then
-                    table.remove(this)
-                else
-                    while true do
-                        local result = finger.str:sub(finger.pos, 1)
-                        finger.pos = finger.pos + 1
-                        if result ~= '$' then return result end
-                        if not expanding then return result end
-                        -- oh oh, possible macro invocation
-                        local next_char = this:get_char(false)
-                        if next_char == nil or next_char == '$' then return '$' end
-                        error("need to handle macro invocation!")
-                    end
-                end
-            end
-            return nil
-        end
-    }
-end
-
-blud.phase3 = {}
-function blud.phase3:looks_like_macro_assign(line)
-    local assign_pattern = "^" .. blud.macro_name_pattern .. "%s*([=+:])()"
-    local name, operator, body_pos = line:match(assign_pattern)
-    if name and operator and body_pos then
-        local next_char = line:sub(body_pos, body_pos)
-        if operator == ":" then
-            if next_char ~= '=' then return nil end
-            operator = ":="
-            body_pos = body_pos + 1
-        elseif operator == "+" then
-            if next_char ~= '=' then
-                 error("Unexpected '+': " .. line )
-            end
-            operator = "+="
-            body_pos = body_pos + 1
-        elseif operator == '=' then
-            -- it's just a simple '=' operator (anything after is part of body!)
-        else
-            assert(false)
-        end
-        local _, _, body_pos = line:find("^[ \t]*()", body_pos)
-        return { line=line, name=name, operator=operator, body_pos=body_pos }
-    end
-    return nil
-end
-
-
-function blud.phase3:looks_like_dependency_line(text)
-    -- ??? make better!
-    local match = text:match("^[^%s].*:")
-    return match ~= nil
-end
-
-function blud.phase3:looks_like_empty_line(text)
-    -- handle comments
-    local match = string.find(text, "^%s*$")
-    return match ~= nil
-end
-
-function blud.phase3:looks_like_action_line(text)
-    -- handle comments
-    local match = string.find(text, "^%s+")
-    return match ~= nil
-end
-
-
-function match_quoted_string(text, start_pos)
-    local quote_char = text:sub(start_pos, start_pos)
-    if quote_char ~= '"' and quote_char ~= "'" then
-        return nil, "Not a quote character at start_pos"
-    end
-
-    local i = start_pos + 1
-    local len = #text
-    local escaped = false
-
-    while i <= len do
-        local char = text:sub(i, i)
-        if char == "\\" and not escaped then
-            escaped = true
-        elseif char == quote_char and not escaped then
-            return text:sub(start_pos, i), i + 1
-        else
-            escaped = false
-        end
-        i = i + 1
-    end
-
-    return nil, "Unterminated quoted string"
-end
-
-function match_colon_operator(text, pos)
-    local match = text:match("^:%a*:", pos)
-    if match then
-        return text:sub(pos, pos + #match - 1)
-    end
-    return ":"
-end
-
-function blud.phase3:tokenize(line)
-    local pos = 0
-    local token
-    local tokens = {}    
-    while pos < #line do
-        pos = pos + 1
-        local char = line:sub(pos, pos)
-        if char:find("%s") then   -- if char is white space
-            token = " "
-        elseif char:find("[\'\"]") then -- if char is a quote
-            token = match_quoted_string(line, pos)
-            table.insert(tokens, token)
-        elseif char == ":" then
-            token = match_colon_operator(line, pos)
-            table.insert(tokens, token)
-        else
-            local pattern = "^[^%s:\"\']*"  -- match an atom/path
-            token   = line:match(pattern, pos)
-            table.insert(tokens, token)
-            assert(#token > 0)
-        end
-        pos = pos + #token - 1
-    end
-    return tokens
-end
-
--- variables have been expanded, we have line of the form <targets> <colon_operator> <prerequisites>
-function blud.phase3:compile_rule(dependency_line, action)
--- print("********************* compile_rule")
-    local tokens = blud.phase3:tokenize(dependency_line)
-    local targets = {}
-    local prerequisites = {}
-    local token_pos = 1
-    local token     = ""
-    while token_pos <= #tokens do   -- for each token on dependency line
-        token = tokens[token_pos]
-        if token:sub(1,1) == ':' then
-            break
-        else
-            table.insert(targets, token)
-        end
-        token_pos = token_pos + 1
-    end
-    assert(token:sub(1,1) == ":")
-    local colon_operator = token
-    token_pos = token_pos + 1
-    while token_pos <= #tokens do
-        token = tokens[token_pos]
-        if token:sub(1,1) == ":" then
-            error("more than one colon operator on line!")
-        else
-            table.insert(prerequisites, token)
-        end
-        token_pos = token_pos + 1
-    end
-    blud.add_rules(colon_operator, targets, prerequisites, action)
-end
-
-
 function is_pattern(word)
     if word:sub(1,2) == "[[" then
         return false
@@ -973,89 +432,6 @@ function is_pattern(word)
         return true
     end
 end
-
---[=[
--- only handle '*', only handle current directory
--- Take glob pattern and add to table all the matching names in current directory
-function expand_pattern(words, pattern)
-    local path = path_split(pattern)
-
-
-    local dir = "."
-    local dir_cache = blud.dir_cache[dir]
-    if dir_cache == nil then
-        dir_cache = get_dir_cache(dir)
-        assert(dir_cache)
-        blud.dir_cache[dir] = dir_cache
-    end
-    error("dir_cache is " .. dump(dir_cache))
-    local names = dir_cache["."]
-    local word_count = #words
-    glob_expand(words, pattern, names)
-    -- if pattern matched nothing, leave it as literal target
-    if word_count == #words then
-        table.insert(words, pattern)  -- no match, so treat pattern as literal
-    end
-end
---]=]
-
---[=[
-function blud.phase3:parse()
-    -- print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    -- print(blud.phase2_text)
-    -- print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!END phase2_text!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    local get_line          = blud.lines(blud.phase2_text)
-    local action_legal_here = false
-    local line              = get_line()
-    self.text = {}
-    while line do
-        assert(line ~= nil)
-        local macro = self:looks_like_macro_assign(line)
-        if macro then
-            line = blud.macro_assign(line, blud.Scope.bludfile, macro)
-            table.insert(self.text, line .. "\n")
-            line = get_line()
-        elseif self:looks_like_dependency_line(line) then
-
--- print("unexpanded = ", dump(line))
-            local dependency_line = blud.Macro.expand_text(blud.Scope.bludfile, line)
--- print("expanded = ", dump(dependency_line))
-            local parsed = tokenize_dependency_line(dependency_line)
--- print("parsed = ", dump(parsed))
-            local expanded = {}
-            for _, word in ipairs(parsed) do
-                if is_pattern(word) then
-                    blud.glob.expand_pattern(expanded, word)
-                else
-                    table.insert(expanded, word)
-                end
-            end
--- print("expanded = ", dump(expanded))
--- ???
-            dependency_line = table.concat(expanded, " ")
-            table.insert(self.text, dependency_line .. "\n")
-            local action = ""
-            line = get_line()
-            if line then
-                while self:looks_like_action_line(line) do
-                    action = action .. line .. "\n"
-                    table.insert(self.text, line .. "\n")
-                    line = get_line()
-                    if not line then break end
-                end
-            end
-            blud.phase3:compile_rule(dependency_line, action)
---            line = get_line()
-        elseif self:looks_like_empty_line(line) then
-            table.insert(self.text, line .. "\n")
-            line = get_line()
-        else
-            error("wtf: '" .. line .. "'")
-        end
-    end
-    -- print(table.concat(self.text))
-end
---]=]
 
 blud.current_time = os.time()
 blud.why = require("why")
@@ -1077,7 +453,7 @@ blud.dump_atom = function (atom)
     return str
 end
 
-blud.super_atom = require("atom")
+require("atom")
 
 blud.get_fs_timestamp = function (filepath)
     local command = string.format("stat -c %%Y '%s' 2>/dev/null", filepath)
@@ -1088,85 +464,21 @@ blud.get_fs_timestamp = function (filepath)
     -- Convert the timestamp to a number
     local timestamp = tonumber(output)
     if not timestamp then
---        print("Failed to get timestamp for file: " .. filepath)
         timestamp = 0
     end
     return timestamp
 end
 
-blud.operator_super = require("operator")
-
--- we have a dependency rule, possibly with multiple targets
--- for each target create the rule
-blud.add_rules = function(colon_operator, targets, prerequisites, action)
-
--- print("blud.add_rules targets = " .. dump(targets) .. tostring(colon_operator) .. dump(prerequisites))
-
-    local prereq_atoms = {}
-    for _, prereq_name in ipairs(prerequisites) do
-        local prerequisite = blud.get_or_create_target(prereq_name)
-        table.insert(prereq_atoms, prerequisite)
-    end
-    for _, target_name in ipairs(targets) do
-        local target = blud.get_or_create_target(target_name)
-        if not target.IMPLICIT and colon_operator ~= ':BUILD:' then
-            if blud.default_target == nil then
-                blud.default_target = target
-            end
-        end
-        local operator = blud.operators[colon_operator]
-        if operator == nil then
-            errorf("'#1': undefined operator.", colon_operator)
-        end
-        action = action or blud.default_action
-        -- util.print("    calling operator %s with prereqs %s", colon_operator, util.dump(prereq_atoms))
-        operator(colon_operator, target, prereq_atoms, action)
---        target.ADD_RULE(target, prereq_atoms, action)
-    end
-end
-
+require("operator")
 
 blud.get_or_create_target = function(target_name)
     local target = blud.TARGETS[target_name]
     if target == nil then
         target = blud.new_atom(target_name)
         blud.TARGETS[target_name] = target
-        blud.PREREQUISITES = {}
-        target.SCOPE = blud.Scope:new_target_scope(target)
         if target_name:find("%%") then
             target.IMPLICIT = true
         end
     end
     return target
 end
-
--- build
---[[
-blud.run_build = function(primary_target)
-    error("run_build")
-    local targets = {}
---    print("blud " .. primary_target)
-    table.insert(targets, blud.get_or_create_target(primary_target))
---    print("before for: Type of blud.build:", type(blud.build)) 
-    for _, target in ipairs(targets) do
-        target:BUILD()
-    end
-end
---]]
-
---[[UNIT_TESTS
-do
-print("runtime.lua unit tests")
-
-blud.macro_assign_parts(blud.scope_bludfile, "TEST", "=",
-                        { [1] = "gcc" ,[2] = { [1] = { [1] = "EMPTY",} ,["macro"] = true,} ,} )
-local value = blud.macro("TEST")
-print("TEST = '" .. value .. "'")
-assert(value == "gcc")
-blud.macro_assign_parts(blud.scope_bludfile, "EMPTY", "=", { [1] = "NOTEMPTY" })
-local value = blud.macro("TEST")
-print("TEST = '" .. value .. "'")
-assert(value == "gccNOTEMPTY")
-
-end
---]]
