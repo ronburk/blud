@@ -264,8 +264,7 @@ end
 
 local compile_directives
 
-local function pop_lookahead(compile_io, record)
-    assert(record.change == compile_io.POP)
+local function pop_lookahead(record)
     if record.text == nil then
         return nil
     end
@@ -283,7 +282,7 @@ local function compile_action_body(compile_io, record)
 
         if record.change == compile_io.POP then
             return action_to_lua(statements),
-                   pop_lookahead(compile_io, record)
+                   pop_lookahead(record)
         elseif record.change == compile_io.PUSHCOLON then
             record.change = nil
             record = compile_directives(compile_io, record, true)
@@ -446,7 +445,7 @@ compile_directives = function(compile_io, first_record, nested)
             if not nested then
                 compile_io.error("Unexpected structural pop")
             end
-            return pop_lookahead(compile_io, record)
+            return pop_lookahead(record)
         elseif record.change == compile_io.PUSHCOLON then
             record.change = nil
             record = compile_directives(compile_io, record, true)
