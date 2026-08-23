@@ -482,15 +482,22 @@ local function q(s)
 end
 
 
+local function macro_call_to_lua_expression(part)
+    local arguments = {}
+    for _, argument_parts in ipairs(part) do
+        table.insert(arguments, M.parts_to_lua_expression(argument_parts))
+    end
+    return "scope:get_text(" .. table.concat(arguments, ", ") .. ")"
+end
+
+
 M.part_to_lua = function(part)
     if type(part) == "string" then
         return part
     end
 
     if part.macro then
-        assert(part[1])
-        local name_expression = M.parts_to_lua_expression(part[1])
-        return "scope:get_text(" .. name_expression .. ")"
+        return macro_call_to_lua_expression(part)
     end
 
     assert(false, "unknown part type!")
@@ -512,9 +519,7 @@ M.part_to_lua_expression = function(part)
     end
     
     if part.macro then
-        assert(part[1])
-        local result = "scope:get_text(" .. M.parts_to_lua_expression(part[1])
-        return result .. ")"
+        return macro_call_to_lua_expression(part)
     else
         assert(false, "unknown part type!")
     end
@@ -522,6 +527,8 @@ M.part_to_lua_expression = function(part)
 end
 
 M.parts_to_lua_expression = function(parts)
+    if #parts == 0 then return "\"\"" end
+
     local result = ""
     for _, part in ipairs(parts) do
         if result ~= "" then result = result .. " .. " end
@@ -602,6 +609,16 @@ do
         "parts_to_lua nested macro name",
         M.parts_to_lua(M.parts_from_text('$($(NAME))')),
         'scope:get_text(scope:get_text("NAME"))'
+    )
+    assert_eq(
+        "parts_to_lua parameterized macro",
+        M.parts_to_lua(M.parts_from_text('$(PAIR one,two)')),
+        'scope:get_text("PAIR", "one", "two")'
+    )
+    assert_eq(
+        "parts_to_lua empty macro arguments",
+        M.parts_to_lua(M.parts_from_text('$(PAIR ,two,)')),
+        'scope:get_text("PAIR", "", "two", "")'
     )
 
     local function part_to_string(part)
