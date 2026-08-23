@@ -31,8 +31,7 @@ local call_result = Macro.expand_call(scope, {
     { "FUNCTION" },
     { "argument" },
 })
-assert(#call_result == 1)
-assert(call_result[1] == "FUNCTION:argument")
+assert(call_result == "FUNCTION:argument")
 
 scope:set_boolean(".JUST_PRINT", true)
 assert(scope:get_macro(".JUST_PRINT"):get_parts()[1] == "true")
