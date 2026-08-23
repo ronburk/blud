@@ -2,13 +2,6 @@
 
 util = require("util")
 
-local runtime_name = "[runtime.lua]"
-local runtime_source = assert(CSTRGet("runtime.lua"))
-blud_module_code = assert(CSTRGetCompiled("runtime.lua"))
-blud.register_lua_source(runtime_name, runtime_source)
-
-
-
 blud_primary_target_name = ""
 
 
@@ -112,11 +105,6 @@ if luac_needs_building then
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
 
     local compile_io = require("compile_io")
-    local chunk, err   = load(blud_module_code)
-    if not chunk then error (err) end
-    local runtime = string.format("loadstring(%s,\"<runtime>\")()\n",
-                                  util.chunk_to_lua(chunk))
-    compile_io.emit_file("<runtime>", runtime)
 
     compile_io.push_input("builtin.blud", CSTRGet("builtin.blud"))
     compiler.compile(compile_io)
@@ -125,15 +113,11 @@ if luac_needs_building then
     compile_io.emit_sourcemap()
     compiler.compile(compile_io)
     compile_io.emit_line("end")
---    compile_io.emit_file("<blud_module_code>", blud_module_code)
     
     f:close()
---    print(blud_module_code)
     -- print("phase 1 complete")
     
 --    print(phase1_text)
-
---    local code_to_compile = blud_module_code .. "\n" .. phase1_text .. "\n" .. final_code
 
     if not blud_primary_target_name  then
         print("No target given to build")
@@ -243,6 +227,7 @@ return
 --]]
 end
 
+blud.require("runtime.lua")
 execute_bytecode(luac_path)
 -- print("now run user code")
 blud.bludfile_code()
@@ -276,4 +261,3 @@ blud.debugger.probe({func="<update>"})
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
 blud.why.report()
-
