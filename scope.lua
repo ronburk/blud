@@ -19,9 +19,9 @@ end
 
 -- The scope selects a macro; the macro object decides how to produce text.
 -- This keeps lookup independent of the macro's backing representation.
-Scope.get_text = function(self, name)
+Scope.get_text = function(self, name, ...)
     local macro = self:get_macro(name)
-    return macro and macro:expand(self, { name }, {}) or ""
+    return macro and macro:expand(self, { name, ... }, {}) or ""
 end
 
 
@@ -98,8 +98,9 @@ Scope.new_param_scope = function(self, actuals)
     local scope = Scope:new(self)
     scope.macro_actual = actuals
     function scope:get_macro(name)
-        if name:match("^%-?%d+$") then
-            blud.error(" don't handle numerics yet!")
+        if name:match("^%d+$") then
+            local value = self.macro_actual[tonumber(name) + 1] or ""
+            return Macro.from_parts({ value })
         else
             return self.parent:get_macro(name)
         end
