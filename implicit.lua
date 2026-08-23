@@ -50,6 +50,8 @@ local function parse_pattern(pattern)
     return result, msg
 end
 
+local match_parsed_pattern
+
 
 
 -- find_forward: find pattern rule whose target matches this target
@@ -248,7 +250,7 @@ end
 
 
 
-function match_parsed_pattern(pattern, path)
+match_parsed_pattern = function(pattern, path)
     local dir_stem, file_stem
 
     -- Separate the path into directory and filename components
