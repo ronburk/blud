@@ -283,7 +283,7 @@ end
 
 ---[=[UNIT_TESTS
 
-function test_parse(pattern, pre_dir, post_dir, pre_file, post_file)
+local function test_parse(pattern, pre_dir, post_dir, pre_file, post_file)
     local parsed,msg = parse_pattern(pattern)
     if not parsed then
         -- util.print("test_parse of %q failed: %s", pattern, msg)
