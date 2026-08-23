@@ -347,11 +347,11 @@ local function compile_rule_or_target_assignment(compile_io)
     return lookahead
 end
 
-local function emit_lua_line(compile_io, line)
+local function lua_line_to_lua(line)
     -- Strip source comments before expanding macros so comment contents are
     -- never parsed and expansions yielding "--" remain ordinary Lua text.
     local parts = m.parts_from_lua_text(line)
-    compile_io.emit_line("%s", m.parts_to_lua(parts))
+    return m.parts_to_lua(parts)
 end
 
 local function lua_opener(token_text)
@@ -412,7 +412,10 @@ local function compile_lua(compile_io, first_record,
             end
 
             update_lua_blocks(compile_io, blocks, token_type, token_text)
-            emit_lua_line(compile_io, compile_io.get_current_line())
+            compile_io.emit_line(
+                "%s",
+                lua_line_to_lua(compile_io.get_current_line())
+            )
 
             if token_type == "LUAONELINE" then
                 assert(
