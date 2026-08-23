@@ -262,17 +262,14 @@ local function action_to_lua(statements)
         " end "
 end
 
-local function append_action_line(statements, macro_text)
+local function action_line_to_lua(macro_text)
     -- Action lines are command text. In particular, "--option" must reach the
     -- command parser unchanged rather than being treated as a Lua comment.
     local parts = m.parts_from_text(macro_text)
     local command = m.parts_to_lua_expression(parts)
 
-    table.insert(
-        statements,
-        "status =  blud.execute(scope, " .. command .. ")" ..
-        "; if status ~= 0 then return status end"
-    )
+    return "status =  blud.execute(scope, " .. command .. ")" ..
+           "; if status ~= 0 then return status end"
 end
 
 local compile_directives
@@ -305,7 +302,7 @@ local function compile_action_body(compile_io, record)
         elseif record.text == "" then
             return action_to_lua(statements), record
         else
-            append_action_line(statements, record.text)
+            statements[#statements + 1] = action_line_to_lua(record.text)
             record = nil
         end
     end
