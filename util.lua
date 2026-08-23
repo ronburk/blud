@@ -1,6 +1,5 @@
 -- Utility helpers for blud.
 local M = {}
-string_buf = require("string.buffer")
 
 
 
@@ -71,20 +70,6 @@ M.match_or = function(text, pattern, init)
             return unpack(result)
         end
     end
-end
-
--- turn a chunk into a string constant that can later be
--- turned back into a chunk by loadstring()
-M.chunk_to_lua = function(chunk)
-    local bytecode = string.dump(chunk)
-    -- preallocate, add 10 bytes for slop
-    local buf = string_buf.new((#bytecode * 4) + 10)
-    buf:put("\"")
-    for i = 1, #bytecode do
-        buf:putf("\\x%02x", bytecode:byte(i))
-    end
-    buf:put("\"")
-    return buf:tostring()
 end
 
 -- dump: simple Lua dumper
