@@ -679,10 +679,9 @@ local function source(argv, scope)
     return action(scope, 0)
 end
 
--- Public registry of commands understood by blud. Ordinary handlers receive
--- argv and scope; `shell` is selected before parsing and receives the verbatim
--- remainder.
-M.commands = {
+-- Ordinary handlers receive argv and scope; `shell` is selected before
+-- parsing and receives the verbatim remainder.
+local commands = {
     cd = cd,
     cp = cp,
     echo = echo,
@@ -692,6 +691,13 @@ M.commands = {
     source = source,
     touch = touch,
 }
+
+function M.register_command(name, command_function)
+    assert(type(name) == "string" and name ~= "")
+    assert(type(command_function) == "function")
+    assert(commands[name] == nil, "command already registered: " .. name)
+    commands[name] = command_function
+end
 
 -- Called from Lua as `status = require("shell").execute(command, scope)`
 -- (normally through blud.shell.execute()). A literal leading `shell` delegates
@@ -707,7 +713,7 @@ function M.execute(command, scope)
 
     local words, parse_error, command_name = parse(command)
     if not words then
-        if not command_name or not M.commands[command_name] then
+        if not command_name or not commands[command_name] then
             return shell(command)
         end
         return diagnostic("blud", parse_error)
@@ -717,7 +723,7 @@ function M.execute(command, scope)
     end
 
     local argv = expand_words(words)
-    local command_function = M.commands[argv[1]]
+    local command_function = commands[argv[1]]
     if not command_function or command_function == shell then
         return shell(command)
     end
