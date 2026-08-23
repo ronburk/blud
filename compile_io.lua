@@ -80,10 +80,10 @@ event:
     POP         leave one boundary
     nil         no boundary changed
 
-The public call returns `line, change, again`. When `again` is true, the
-reported structural event is not yet accompanied by a line that the new
-parser context may tokenize; the caller must call get_line() again. When it
-is false, any returned line is ready for the parser selected by `change`.
+The public call returns a record containing `text` and `change`. When a
+structural event is not yet accompanied by a line that the new parser context
+may tokenize, `text` is absent. Otherwise, `text` contains the line ready for
+the parser selected by `change`.
 
 Only two things are structural prefixes:
 
@@ -449,8 +449,16 @@ function M.get_line(after_dependency)
         if at_input_eof and #input_stack > 0 then
             current_input = table.remove(input_stack)
         else
-            set_current_line(input, line, source_ln, at_input_eof)
-            return line, change, again
+            local text = line
+            if again then
+                text = nil
+            end
+
+            set_current_line(input, text, source_ln, at_input_eof)
+            return {
+                text = text,
+                change = change,
+            }
         end
     end
 end
@@ -803,8 +811,8 @@ do
         current_input = nil
         input_stack = {}
         M.push_input("<compile_io token test>", text)
-        local line, change = M.get_line(false)
-        assert(change == nil and line ~= "")
+        local record = M.get_line(false)
+        assert(record.change == nil and record.text ~= "")
     end
 
     local function assert_first_token(text, expected_type, expected_text,
@@ -875,23 +883,28 @@ do
     current_input = nil
     input_stack = {}
     M.push_input("<virtual line boundary>", "first: one\nsecond: two")
-    assert(M.get_line(false) == "first: one")
+    local record = M.get_line(false)
+    assert(record.text == "first: one" and record.change == nil)
     assert(M.get_current_line() == "first: one")
     assert(M.get_token() == "EOL")
     assert(M.get_token() == "EOF")
-    assert(M.get_line(false) == "second: two")
+    record = M.get_line(false)
+    assert(record.text == "second: two" and record.change == nil)
     assert(M.get_current_line() == "second: two")
     assert(M.get_token() == "EOL")
-    assert(M.get_line(false) == "")
+    record = M.get_line(false)
+    assert(record.text == "" and record.change == nil)
     assert(M.get_token() == "EOF")
 
     current_input = nil
     input_stack = {}
     M.push_input("<outer>", "outer")
     M.push_input("<inner>", "inner")
-    assert(M.get_line(false) == "inner")
+    record = M.get_line(false)
+    assert(record.text == "inner" and record.change == nil)
     assert(current_input.name == "<inner>" and current_input.source_ln == 1)
-    assert(M.get_line(false) == "outer")
+    record = M.get_line(false)
+    assert(record.text == "outer" and record.change == nil)
     assert(current_input.name == "<outer>" and current_input.source_ln == 1)
 
     current_input = nil
@@ -900,17 +913,43 @@ do
         "<structural source lines>",
         "prog: prog.o\n  : nested:\n  :   touch result\nouter:"
     )
-    assert(M.get_line(false) == "prog: prog.o")
+    record = M.get_line(false)
+    assert(record.text == "prog: prog.o" and record.change == nil)
     assert(current_input.source_ln == 1)
-    local line, change = M.get_line(true)
-    assert(line == nil and change == PUSH)
+    record = M.get_line(true)
+    assert(record.text == nil and record.change == PUSH)
     assert(current_input.source_ln == 2)
-    line, change = M.get_line(false)
-    assert(line == "nested:" and change == PUSHCOLON)
+    record = M.get_line(false)
+    assert(record.text == "nested:" and record.change == PUSHCOLON)
     assert(current_input.source_ln == 2)
-    line, change = M.get_line(true)
-    assert(line == "touch result" and change == PUSH)
+    record = M.get_line(true)
+    assert(record.text == "touch result" and record.change == PUSH)
     assert(current_input.source_ln == 3)
+
+    record = M.get_line(false)
+    assert(record.text == nil and record.change == POP)
+    record = M.get_line(false)
+    assert(record.text == nil and record.change == POP)
+    record = M.get_line(false)
+    assert(record.text == "outer:" and record.change == POP)
+    record = M.get_line(false)
+    assert(record.text == "" and record.change == nil)
+
+    current_input = nil
+    input_stack = {}
+    M.push_input("<structural EOF>", "prog:\n  : nested:")
+    record = M.get_line(false)
+    assert(record.text == "prog:" and record.change == nil)
+    record = M.get_line(true)
+    assert(record.text == nil and record.change == PUSH)
+    record = M.get_line(false)
+    assert(record.text == "nested:" and record.change == PUSHCOLON)
+    record = M.get_line(false)
+    assert(record.text == nil and record.change == POP)
+    record = M.get_line(false)
+    assert(record.text == "" and record.change == POP)
+    record = M.get_line(false)
+    assert(record.text == "" and record.change == nil)
 
     current_input = saved_current_input
     input_stack = saved_input_stack
