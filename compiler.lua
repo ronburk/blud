@@ -242,16 +242,6 @@ local function split_parts_at_colon_operator(parts)
     return nil
 end
 
-local function get_line_record(compile_io, after_dependency)
-    local text, change, again = compile_io.get_line(after_dependency)
-    return {
-        text = text,
-        change = change,
-        again = again,
-    }
-end
-
-
 local function action_to_lua(statements)
     if #statements == 0 then
         return "nil"
@@ -276,7 +266,7 @@ local compile_directives
 
 local function pop_lookahead(compile_io, record)
     assert(record.change == compile_io.POP)
-    if record.again then
+    if record.text == nil then
         return nil
     end
     record.change = nil
@@ -288,7 +278,7 @@ local function compile_action_body(compile_io, record)
 
     while true do
         if record == nil then
-            record = get_line_record(compile_io, false)
+            record = compile_io.get_line(false)
         end
 
         if record.change == compile_io.POP then
@@ -309,7 +299,7 @@ local function compile_action_body(compile_io, record)
 end
 
 local function compile_rule_action(compile_io)
-    local record = get_line_record(compile_io, true)
+    local record = compile_io.get_line(true)
 
     if record.change ~= compile_io.PUSH then
         return "nil", record
@@ -437,7 +427,7 @@ local function compile_lua(compile_io, first_record,
                 return nil
             end
 
-            record = get_line_record(compile_io, false)
+            record = compile_io.get_line(false)
             token_type = nil
             token_text = nil
         end
@@ -449,7 +439,7 @@ compile_directives = function(compile_io, first_record, nested)
 
     while true do
         if record == nil then
-            record = get_line_record(compile_io, false)
+            record = compile_io.get_line(false)
         end
 
         if record.change == compile_io.POP then
