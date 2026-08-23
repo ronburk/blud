@@ -1,7 +1,6 @@
 local debugger = {}
 local lua_debug = _G.debug
 
-local debug_info
 local source_cache = {}
 local step_mode
 local step_target_depth
@@ -133,10 +132,10 @@ local function call_depth(start_level)
     return depth
 end
 
-local function print_current_line()
-    if debug_info then
-        local source = normalize_source_name(debug_info)
-        local line = debug_info.currentline
+local function print_current_line(info)
+    if info then
+        local source = normalize_source_name(info)
+        local line = info.currentline
         local lines = get_source_lines(source)
 
         print(string.format("%s:%d:", source, line))
@@ -173,11 +172,11 @@ local function stop_at_operator_breakpoint(
         member_name
     ))
 
-    debug_info = assert(
+    local info = assert(
         lua_debug.getinfo(implementation, "S"),
         "could not get debug information for operator member: " .. member_name
     )
-    debug_info.currentline = debug_info.linedefined
+    info.currentline = info.linedefined
     stopped_depth = call_depth(2)
     local caller_frames = capture_paused_frames(2)
     paused_frames = {
@@ -186,7 +185,7 @@ local function stop_at_operator_breakpoint(
     for _, frame in ipairs(caller_frames) do
         table.insert(paused_frames, frame)
     end
-    print_current_line()
+    print_current_line(info)
     debugger.interactive("debug> ")
 end
 
@@ -296,9 +295,9 @@ end
 
 local function step_hook(event, line)
     if event == "line" then
-        debug_info = lua_debug.getinfo(2)
+        local info = lua_debug.getinfo(2)
 
-        if normalize_source_name(debug_info):match("debugger%.lua$") then
+        if normalize_source_name(info):match("debugger%.lua$") then
             return
         end
 
@@ -312,7 +311,7 @@ local function step_hook(event, line)
         step_target_depth = nil
         stopped_depth = depth
         paused_frames = capture_paused_frames(2)
-        print_current_line()
+        print_current_line(info)
         debugger.interactive("debug> ")
     end
 end
@@ -690,10 +689,10 @@ function debugger.probe()
 end
 
 function debugger.real_probe(args)
-    debug_info = lua_debug.getinfo(2)
+    local info = lua_debug.getinfo(2)
     stopped_depth = call_depth(2)
     paused_frames = capture_paused_frames(2)
-    print_current_line()
+    print_current_line(info)
     debugger.interactive("debug> ")
 end
 
