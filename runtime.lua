@@ -309,8 +309,7 @@ function blud.macro(name, ...)
         table.insert(macro_call, { tostring(select(i, ...)) })
     end
 
-    local result = blud.Macro.expand_call(blud.scope_bludfile, macro_call)
-    return table.concat(result)
+    return blud.Macro.expand_call(blud.scope_bludfile, macro_call)
 end
 
 M = blud.macro
