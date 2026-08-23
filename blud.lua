@@ -191,8 +191,8 @@ function blud.report_runtime_error(err, map)
 end
 
 
--- execute the bytecode residing in an external file
-function execute_bytecode(file_path)
+-- load the bytecode residing in an external file
+local function load_bytecode(file_path)
     -- Open the bytecode file
     local file, err = io.open(file_path, "rb")
     if not file then
@@ -211,24 +211,15 @@ function execute_bytecode(file_path)
         return
     end
 
-    blud.sourcemap_chunk_name = debug.getinfo(func, "S").source
-    func()
-return
---[[
-    -- Execute the bytecode and trap errors
-    local status, exec_err = pcall(func)
-    if not status then
-        if not blud.sourcemap then
-            print("sourcemap not found, line numbers may be wrong.")
-        end
-        print("Error executing bytecode: " .. exec_err)
-        blud.report_runtime_error(exec_err, blud.sourcemap)
-    end
---]]
+    return func
 end
 
 blud.require("runtime.lua")
-execute_bytecode(luac_path)
+local bytecode_function = load_bytecode(luac_path)
+if bytecode_function then
+    blud.sourcemap_chunk_name = debug.getinfo(bytecode_function, "S").source
+    bytecode_function()
+end
 -- print("now run user code")
 blud.bludfile_code()
 if blud.command_line_options.assume_new_names then
