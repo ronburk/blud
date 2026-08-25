@@ -1,5 +1,6 @@
 local M    = {}
 -- XXX local sourcemap = require("sourcemap").new()
+local dircache   = require("dircache")
 local m         = require("macro")
 local util      = require("util")
 
@@ -264,6 +265,57 @@ end
 
 local compile_directives
 
+local function compile_include(compile_io)
+    compile_io.skip_white()
+    local text = compile_io.get_line_remainder()
+    local comment_start = text:find("--", 1, true)
+    if comment_start then
+        text = text:sub(1, comment_start - 1)
+    end
+
+    local patterns = tokenize_dependency_line(text)
+    if #patterns == 0 then
+        compile_io.error("include requires at least one filename")
+    end
+
+    local filenames = {}
+    for _, pattern in ipairs(patterns) do
+        if dircache.expand_pattern(filenames, pattern) == 0 then
+            compile_io.error("include did not match any files: %s", pattern)
+        end
+    end
+
+    local inputs = {}
+    for _, filename in ipairs(filenames) do
+        local file, open_error = io.open(filename, "rb")
+        if not file then
+            compile_io.error(
+                "could not open included file %s: %s",
+                filename,
+                open_error
+            )
+        end
+
+        local included_text, read_error = file:read("*a")
+        file:close()
+        if not included_text then
+            compile_io.error(
+                "could not read included file %s: %s",
+                filename,
+                read_error
+            )
+        end
+        inputs[#inputs + 1] = {
+            name = filename,
+            text = included_text,
+        }
+    end
+
+    for i = #inputs, 1, -1 do
+        compile_io.push_input(inputs[i].name, inputs[i].text)
+    end
+end
+
 local function pop_lookahead(record)
     if record.text == nil then
         return nil
@@ -465,6 +517,9 @@ compile_directives = function(compile_io, first_record, nested)
                 compile_io.error("Line looks like action, but is not part of rule")
             elseif TC_WORD[token_type] and compile_io.peek_assign() then
                 compile_macro_assign(compile_io, token_text)
+                record = nil
+            elseif token_type == "WORD" and token_text == "include" then
+                compile_include(compile_io)
                 record = nil
             elseif token_type == "LUASTART"
                     or token_type == "LUAONELINE" then
