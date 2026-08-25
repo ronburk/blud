@@ -235,7 +235,8 @@ local super_atom = {
         local exit_code = action(target_atom.SCOPE)
 
         if exit_code and exit_code ~= 0 then
-            error("command failed[" .. exit_code .. "]: ")
+            assert(exit_code >= 1 and exit_code <= 256)
+            BLUD_EXIT(exit_code, target_atom.NAME)
         end
         return 0
     end,
