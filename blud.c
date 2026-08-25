@@ -595,7 +595,7 @@ int luaopen_mylib(lua_State *L) {
     return 0;
 }
 
-int main(int argc, char** argv) {
+static int run_lua_vm(int argc, char** argv) {
     // printf("blud build %d\n", BUILD_ID);
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
@@ -625,4 +625,8 @@ int main(int argc, char** argv) {
 
     lua_close(L);
     return status == LUA_OK ? 0 : 1;
+}
+
+int main(int argc, char** argv) {
+    return run_lua_vm(argc, argv);
 }
