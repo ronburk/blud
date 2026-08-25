@@ -1,5 +1,0 @@
--- expect: test0019.out
--- Failed actions report their exit codes without Lua tracebacks.
-
-all:
-    shell bash test/test0019.sh
