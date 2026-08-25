@@ -1,9 +1,19 @@
 -- test0003
 --
--- set a variable and use it in action
+-- Rules escaped from action mode must be registered before updating starts.
+--
+-- _BLUD_TEST_
+-- rm -f test0003.leaf test0003.left test0003.right test0003.out
+-- $(OWD)/blud -f $<
+-- _BLUD_TEST_
 
-CMD = touch test0003.out
+test0003.default: all
 
-all: 
-    $(CMD)
-
+all: test0003.left test0003.right
+    cp $< test0003.out
+    : test0003.left: test0003.leaf
+    :     cp $< $@
+    :     : test0003.leaf: test0003
+    :     :     cp $< $@
+    : test0003.right: test0003
+    :     cp $< $@
