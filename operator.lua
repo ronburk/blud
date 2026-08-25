@@ -731,7 +731,8 @@ do  -- Internal update behavior for individual tests.
                 test_basename
             )
             if status and status ~= 0 then
-                error("command failed[" .. status .. "]: ")
+                assert(status >= 1 and status <= 256)
+                BLUD_EXIT(status, target.NAME)
             end
             if not blud.just_print(target.SCOPE) then
                 util.string_to_file(pass_path, "")
