@@ -232,8 +232,9 @@ static int lua_glob_to_lua(lua_State* L){
 #endif
 
 
-/* we are called only after macro expansion and operators are removed,
- * so all we care about are sequences of non-white characters
+/* We are called only after macro expansion and operators are removed,
+ * so all we care about are sequences of non-white characters.
+ * Also used for arguments of 'include' directive.
  */
 static int lua_tokenize_dependency_line(lua_State *L) {
     const char* input       = luaL_checkstring(L, 1);
@@ -241,13 +242,13 @@ static int lua_tokenize_dependency_line(lua_State *L) {
     int         index       = 0;
     const char* start;
 
-    lua_newtable(L);  // create table to return
+    lua_newtable(L);   // create table to return
     for(;;){
         while(*rover && isspace((unsigned char)*rover))
             ++rover;
-        if(!*rover) // if end of string
+        if(!*rover)    // if end of string
             break;
-        start = rover;      // mark possible start of word
+        start = rover; // mark possible start of word
         while(*rover && !isspace((unsigned char)*rover))
             ++rover;
         // printf("token='%*.*s'\n", (int)(rover-start), (int)(rover-start), start);
