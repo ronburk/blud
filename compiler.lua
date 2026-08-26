@@ -265,7 +265,7 @@ end
 
 local compile_directives
 
-local function compile_include(compile_io)
+local function compile_include(compile_io, allow_missing)
     compile_io.skip_white()
     local text = compile_io.get_line_remainder()
     local comment_start = text:find("--", 1, true)
@@ -280,7 +280,8 @@ local function compile_include(compile_io)
 
     local filenames = {}
     for _, pattern in ipairs(patterns) do
-        if dircache.expand_pattern(filenames, pattern) == 0 then
+        local match_count = dircache.expand_pattern(filenames, pattern)
+        if match_count == 0 and not allow_missing then
             compile_io.error("include did not match any files: %s", pattern)
         end
     end
@@ -518,8 +519,10 @@ compile_directives = function(compile_io, first_record, nested)
             elseif TC_WORD[token_type] and compile_io.peek_assign() then
                 compile_macro_assign(compile_io, token_text)
                 record = nil
-            elseif token_type == "WORD" and token_text == "include" then
-                compile_include(compile_io)
+            elseif token_type == "WORD"
+                    and (token_text == "include"
+                         or token_text == "-include") then
+                compile_include(compile_io, token_text == "-include")
                 record = nil
             elseif token_type == "LUASTART"
                     or token_type == "LUAONELINE" then
