@@ -26,6 +26,9 @@ extern int os_mkdir_one(const char* path);
 // Return 0 for missing, 1 for non-directory, or 2 for a real directory.
 extern int os_path_type(const char* path);
 
+// Return Unix-epoch microseconds from the system clock, or -1 on failure.
+extern int64_t os_get_system_timestamp(void);
+
 // Remove one empty directory; return 0 on success and -1 on failure.
 extern int os_remove_dir(const char* path);
 
