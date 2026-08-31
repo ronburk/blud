@@ -20,8 +20,55 @@
     #include <unistd.h>
 #endif
 
+#include "blud.h"
 #include "cstr.h"
 #include "os.h"
+
+
+static const char blud_timestamp_metatable[] = "blud.timestamp";
+
+static BLUD_TIMESTAMP* check_blud_timestamp(lua_State* L, int index) {
+    return (BLUD_TIMESTAMP*)luaL_checkudata(
+        L,
+        index,
+        blud_timestamp_metatable
+    );
+}
+
+static int compare_blud_timestamps(
+    const BLUD_TIMESTAMP* left,
+    const BLUD_TIMESTAMP* right
+) {
+    if(left->seconds != right->seconds)
+        return left->seconds < right->seconds ? -1 : 1;
+    if(left->nanoseconds != right->nanoseconds)
+        return left->nanoseconds < right->nanoseconds ? -1 : 1;
+    return 0;
+}
+
+static int lua_blud_timestamp_equal(lua_State* L) {
+    const BLUD_TIMESTAMP* left = check_blud_timestamp(L, 1);
+    const BLUD_TIMESTAMP* right = check_blud_timestamp(L, 2);
+
+    lua_pushboolean(L, compare_blud_timestamps(left, right) == 0);
+    return 1;
+}
+
+static int lua_blud_timestamp_less_than(lua_State* L) {
+    const BLUD_TIMESTAMP* left = check_blud_timestamp(L, 1);
+    const BLUD_TIMESTAMP* right = check_blud_timestamp(L, 2);
+
+    lua_pushboolean(L, compare_blud_timestamps(left, right) < 0);
+    return 1;
+}
+
+static int lua_blud_timestamp_less_equal(lua_State* L) {
+    const BLUD_TIMESTAMP* left = check_blud_timestamp(L, 1);
+    const BLUD_TIMESTAMP* right = check_blud_timestamp(L, 2);
+
+    lua_pushboolean(L, compare_blud_timestamps(left, right) <= 0);
+    return 1;
+}
 
 
 #if 0
@@ -569,6 +616,17 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    luaL_newmetatable(L, blud_timestamp_metatable);
+    lua_pushcfunction(L, lua_blud_timestamp_equal);
+    lua_setfield(L, -2, "__eq");
+    lua_pushcfunction(L, lua_blud_timestamp_less_than);
+    lua_setfield(L, -2, "__lt");
+    lua_pushcfunction(L, lua_blud_timestamp_less_equal);
+    lua_setfield(L, -2, "__le");
+    lua_pushliteral(L, "blud timestamp");
+    lua_setfield(L, -2, "__metatable");
+    lua_pop(L, 1);
+
     lua_getglobal(L, "blud");
     lua_pushinteger(L, BUILD_ID);
     lua_setfield(L, -2, "build_id");
