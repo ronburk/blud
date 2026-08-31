@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <time.h>
 #include <utime.h>
 #include "os.h"
 
@@ -27,6 +28,14 @@ static int make_one_dir(const char* path) {
     if (errno == EEXIST && dir_exists(path))
         return 1;
     return 2;
+}
+
+int64_t os_get_system_timestamp(void) {
+    struct timespec now;
+
+    if (clock_gettime(CLOCK_REALTIME, &now) != 0)
+        return -1;
+    return (int64_t)now.tv_sec * 1000000LL + now.tv_nsec / 1000;
 }
 
 static char* join_path(const char* parent, const char* child, size_t child_len) {

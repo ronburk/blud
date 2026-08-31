@@ -26,6 +26,18 @@ static int make_one_dir(const char* path) {
     return 2;
 }
 
+int64_t os_get_system_timestamp(void) {
+    FILETIME now;
+    ULARGE_INTEGER timestamp;
+
+    GetSystemTimeAsFileTime(&now);
+    timestamp.LowPart = now.dwLowDateTime;
+    timestamp.HighPart = now.dwHighDateTime;
+    if (timestamp.QuadPart < 116444736000000000ULL)
+        return -1;
+    return (int64_t)((timestamp.QuadPart - 116444736000000000ULL) / 10);
+}
+
 // Create only path; unlike os_mkdir(), do not synthesize parent directories.
 int os_mkdir_one(const char* path) {
     if (path == NULL || path[0] == '\0')

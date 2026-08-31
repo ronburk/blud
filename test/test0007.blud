@@ -1,3 +1,6 @@
+assert(type(get_system_timestamp()) == "number", "system timestamp is not a number")
+assert(math.abs(get_system_timestamp() / 1000000 - os.time()) < 1, "system timestamp has the wrong epoch or units")
+
 all: test/test0007.first test/test0007.second
 
 test/test0007.virtual : test/test0007.source
