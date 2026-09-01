@@ -131,6 +131,7 @@ static int copy_file_exact(const char* from, const char* to) {
     } else {
         if (errno != ENOENT)
             goto done;
+        // O_EXCL makes failure cleanup safe: only this call can have created to.
         to_fd = open(to, O_WRONLY | O_CREAT | O_EXCL,
                      from_stat.st_mode & 0777);
         created = to_fd != -1;
@@ -142,6 +143,7 @@ static int copy_file_exact(const char* from, const char* to) {
         ssize_t count;
 
         do {
+            // Linux limits one sendfile() transfer to 0x7ffff000 bytes.
             count = sendfile(to_fd, from_fd, NULL, 0x7ffff000);
         } while (count == -1 && errno == EINTR);
 
@@ -151,6 +153,7 @@ static int copy_file_exact(const char* from, const char* to) {
             goto done;
     }
 
+    // Some write errors are reported only when the destination is closed.
     if (close(to_fd) == -1) {
         to_fd = -1;
         goto done;
@@ -197,6 +200,7 @@ static int copy_dir_exact(const char* from, const char* to) {
         return -1;
     }
 
+    // Validate access before creating a destination we might leave behind.
     directory = opendir(from);
     if (directory == NULL)
         return -1;
@@ -209,6 +213,8 @@ static int copy_dir_exact(const char* from, const char* to) {
     } else {
         if (errno != ENOENT)
             goto done;
+        // Keep the directory traversable while populating it, even if its
+        // source permissions are read-only. Restore those permissions below.
         if (mkdir(to, 0700) == -1)
             goto done;
         created = 1;
@@ -241,6 +247,8 @@ static int copy_dir_exact(const char* from, const char* to) {
             break;
         }
 
+        // stat() intentionally follows links: copying operates on the linked
+        // regular file or directory rather than reproducing the link itself.
         if (stat(from_child, &child_stat) == -1) {
             free(from_child);
             free(to_child);
@@ -274,6 +282,7 @@ done:
         saved_errno = errno;
         result = -1;
     }
+    // Remove only an empty directory; never roll back copied or prior content.
     if (created && result != 0)
         rmdir(to);
     errno = saved_errno;
@@ -281,6 +290,8 @@ done:
     return result;
 }
 
+// realpath() requires its operand to exist. Canonicalize the existing parent
+// and append the missing final component so self-copy checks still work.
 static char* canonical_missing_path(const char* path) {
     const char* slash = strrchr(path, '/');
     const char* name;
@@ -373,6 +384,8 @@ int os_copy_dir(const char* from, const char* to) {
         return -1;
     }
 
+    // Otherwise recursion would eventually encounter the new destination and
+    // copy it into itself without bound.
     if (same_or_child_path(canonical_from, canonical_to)) {
         free(canonical_to);
         free(canonical_from);
@@ -534,6 +547,7 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
             continue;
 
         if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
+            // A concurrent removal between readdir() and fstatat() is benign.
             if(errno == ENOENT)
                 continue;
             error_number = errno;
