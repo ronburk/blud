@@ -197,24 +197,24 @@ static int copy_dir_exact(const char* from, const char* to) {
         return -1;
     }
 
-    if (stat(to, &to_stat) == 0) {
-        if (!S_ISDIR(to_stat.st_mode)) {
-            errno = ENOTDIR;
-            return -1;
-        }
-    } else {
-        if (errno != ENOENT)
-            return -1;
-        if (mkdir(to, 0700) == -1)
-            return -1;
-        created = 1;
-        if (chmod(to, 0700) == -1)
-            return -1;
-    }
-
     directory = opendir(from);
     if (directory == NULL)
         return -1;
+
+    if (stat(to, &to_stat) == 0) {
+        if (!S_ISDIR(to_stat.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+    } else {
+        if (errno != ENOENT)
+            goto done;
+        if (mkdir(to, 0700) == -1)
+            goto done;
+        created = 1;
+        if (chmod(to, 0700) == -1)
+            goto done;
+    }
 
     for (;;) {
         char* from_child;
@@ -264,6 +264,7 @@ static int copy_dir_exact(const char* from, const char* to) {
             break;
     }
 
+done:
     saved_errno = errno;
     if (closedir(directory) == -1 && result == 0) {
         saved_errno = errno;
@@ -273,6 +274,8 @@ static int copy_dir_exact(const char* from, const char* to) {
         saved_errno = errno;
         result = -1;
     }
+    if (created && result != 0)
+        rmdir(to);
     errno = saved_errno;
 
     return result;
