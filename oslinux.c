@@ -5,6 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <time.h>
@@ -101,12 +102,10 @@ static char* copy_destination(const char* from, const char* to) {
 static int copy_file_exact(const char* from, const char* to) {
     struct stat from_stat;
     struct stat to_stat;
-    char buffer[64 * 1024];
-    int from_fd = -1;
+    int from_fd;
     int to_fd = -1;
     int created = 0;
     int result = -1;
-    int saved_errno;
 
     from_fd = open(from, O_RDONLY);
     if (from_fd == -1)
@@ -141,33 +140,15 @@ static int copy_file_exact(const char* from, const char* to) {
 
     for (;;) {
         ssize_t count;
-        ssize_t written = 0;
 
         do {
-            count = read(from_fd, buffer, sizeof(buffer));
+            count = sendfile(to_fd, from_fd, NULL, 0x7ffff000);
         } while (count == -1 && errno == EINTR);
 
         if (count == 0)
             break;
         if (count == -1)
             goto done;
-
-        while (written < count) {
-            ssize_t amount;
-
-            do {
-                amount = write(to_fd, buffer + written,
-                               (size_t)(count - written));
-            } while (amount == -1 && errno == EINTR);
-
-            if (amount == -1)
-                goto done;
-            if (amount == 0) {
-                errno = EIO;
-                goto done;
-            }
-            written += amount;
-        }
     }
 
     if (close(to_fd) == -1) {
@@ -178,16 +159,11 @@ static int copy_file_exact(const char* from, const char* to) {
     result = 0;
 
 done:
-    saved_errno = errno;
-    if (to_fd != -1 && close(to_fd) == -1 && result == 0) {
-        saved_errno = errno;
-        result = -1;
-    }
-    if (from_fd != -1)
-        close(from_fd);
+    if (to_fd != -1)
+        close(to_fd);
+    close(from_fd);
     if (created && result != 0)
         unlink(to);
-    errno = saved_errno;
 
     return result;
 }
@@ -195,15 +171,12 @@ done:
 int os_copy_file(const char* from, const char* to) {
     char* destination = copy_destination(from, to);
     int result;
-    int saved_errno;
 
     if (destination == NULL)
         return -1;
 
     result = copy_file_exact(from, destination);
-    saved_errno = errno;
     free(destination);
-    errno = saved_errno;
 
     return result;
 }
