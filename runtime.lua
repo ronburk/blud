@@ -176,7 +176,7 @@ blud.execute = function(scope, text)
     return status
 end
 
-blud.eval_target_assign_rule = function(left_parts, macro, action)
+blud.eval_target_assign_rule = function(left_parts, macro, assigned_parts, action)
     if macro.modifier then
         blud.error(
             "The '#1' target-assignment modifier is obsolete; " ..
@@ -187,12 +187,17 @@ blud.eval_target_assign_rule = function(left_parts, macro, action)
     if action then
         error("Can't have action on target-specific assignment")
     end
-    local left  = blud.Macro.expand_tokens(blud.Scope.bludfile, left_parts)
+    local left  = blud.Macro.expand_tokens(blud.Scope.build, left_parts)
     local target_names = tokenize_dependency_line(left)
 
     for i = 1, #target_names do
         local target = blud.get_or_create_target(target_names[i])
-        target:set_variable(macro)
+        blud.macro_assign_parts(
+            target.SCOPE,
+            macro.name,
+            macro.operator,
+            assigned_parts
+        )
     end
 end
 
@@ -227,7 +232,14 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
         if operator_name == ":" and #right_parts > 0 then
             local macro = blud.Macro.match_macro_assign(right_parts[1], true)
             if macro then
-                return blud.eval_target_assign_rule(left_parts, macro, action)
+                local assigned_parts = util.deep_copy(right_parts)
+                assigned_parts[1] = macro.macro_text
+                return blud.eval_target_assign_rule(
+                    left_parts,
+                    macro,
+                    assigned_parts,
+                    action
+                )
             end
         end
     end
@@ -235,9 +247,11 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     if not operator then
         blud.error("Unknown operator: #1", operator_name)
     end
-    -- everybody wants their macros expanded, you can't override this
-    local left  = blud.Macro.expand_tokens(blud.Scope.bludfile, left_parts)
-    local right = blud.Macro.expand_tokens(blud.Scope.bludfile, right_parts)
+    -- Dependency declarations use the selected build context. This lets one
+    -- rule choose build-specific target names and prerequisites while keeping
+    -- the graph concrete before the update starts.
+    local left  = blud.Macro.expand_tokens(blud.Scope.build, left_parts)
+    local right = blud.Macro.expand_tokens(blud.Scope.build, right_parts)
 
     -- seems sketchy for some operators to tokenize differently, so do that here
     local target_names = tokenize_dependency_line(left)

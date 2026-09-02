@@ -181,6 +181,18 @@ directory, so a target named `program` is bound as `debug/program` in the
 `debug` context while source prerequisites continue to bind to their source
 paths.
 
+Macros in rule targets and prerequisites expand in the selected build context.
+Declare build-specific assignments before rules that use them:
+
+```
+debug windows :BUILD:
+debug: OS_SRCS = oslinux.c
+windows: OS_SRCS = oswindows.c
+
+SRCS = main.c $(OS_SRCS)
+program :: $(SRCS)
+```
+
 With the declarations above:
 
 ```
