@@ -33,6 +33,7 @@ luajit/**
 !luajit/src/lauxlib.h
 !luajit/src/lualib.h
 !luajit/src/libluajit.a
+!luajit/src/libluajit-win64.a
 # meta-source info for ChatGPT
 lua-index.json
 
