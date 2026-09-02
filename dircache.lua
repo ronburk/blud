@@ -1,8 +1,9 @@
+local AliasDir = require("aliasdir")
 local DirCache = {}
 
 --[[
 directory_cache = {
-    ["path/to/dir"] = {
+    ["/absolute/path/to/dir"] = {
         ["."]       = <entry for the directory itself>,
         ["foo.c"]   = { name = ..., is_dir = ... },
         ["include"] = { name = ..., is_dir = ... },
@@ -19,11 +20,13 @@ local directory_cache = {}
 
 -- Helper function to get or create the directory cache
 local function get_cached_dir(directory)
-    local cache = directory_cache[directory]
+    -- Cache identity must not depend on the process current directory.
+    local absolute_directory = AliasDir.to_absolute(directory)
+    local cache = directory_cache[absolute_directory]
     if cache == nil then
-        cache = get_dir_cache(directory)
+        cache = get_dir_cache(absolute_directory)
         assert(cache)
-        directory_cache[directory] = cache
+        directory_cache[absolute_directory] = cache
     end
     return cache
 end
