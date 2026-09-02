@@ -350,12 +350,13 @@ break <operator_name>
 
     Example: b :TEST:]],
 
-    e = [[e <lua chunk>
-eval <lua chunk>
-    Execute a Lua chunk in the global environment and print its first return
-    value.
+    e = [[e <lua>
+eval <lua>
+    Evaluate a Lua expression, or execute a Lua chunk, in the global
+    environment and print its first return value.
 
-    Example: e return blud.current_time]],
+    Examples: e get_system_timestamp()
+              e local x = 3]],
 
     x = [[x <lua expression>
 x #frame [<lua expression>]
@@ -684,6 +685,15 @@ local function parse_explore_argument(arg)
     return frame_number, expression
 end
 
+local function compile_eval(input)
+    local chunk = load("return " .. input)
+    if chunk then
+        return chunk
+    end
+
+    return load(input)
+end
+
 function debugger.probe()
     return true
 end
@@ -761,7 +771,7 @@ function debugger.interactive(prompt, handler)
                 set_operator_breakpoint(operator_name)
             end
         elseif command == "e" or command == "eval" then
-            local chunk, err = load(arg)
+            local chunk, err = compile_eval(arg)
             if chunk then
                 local status, result = pcall(chunk)
                 if status then
