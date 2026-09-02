@@ -3,6 +3,7 @@
 #include <lualib.h>
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <limits.h>
 
 
@@ -67,6 +68,22 @@ static int lua_blud_timestamp_less_equal(lua_State* L) {
     const BLUD_TIMESTAMP* right = check_blud_timestamp(L, 2);
 
     lua_pushboolean(L, compare_blud_timestamps(left, right) <= 0);
+    return 1;
+}
+
+static int lua_blud_timestamp_tostring(lua_State* L) {
+    const BLUD_TIMESTAMP* timestamp = check_blud_timestamp(L, 1);
+    char text[64];
+    int length = snprintf(
+        text,
+        sizeof text,
+        "timestamp(%" PRId64 ".%09" PRIu32 ")",
+        timestamp->seconds,
+        timestamp->nanoseconds
+    );
+
+    assert(length >= 0 && (size_t)length < sizeof text);
+    lua_pushlstring(L, text, (size_t)length);
     return 1;
 }
 
@@ -634,6 +651,8 @@ int luaopen_mylib(lua_State *L) {
     lua_setfield(L, -2, "__lt");
     lua_pushcfunction(L, lua_blud_timestamp_less_equal);
     lua_setfield(L, -2, "__le");
+    lua_pushcfunction(L, lua_blud_timestamp_tostring);
+    lua_setfield(L, -2, "__tostring");
     lua_pushliteral(L, "blud timestamp");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
