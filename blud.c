@@ -28,6 +28,18 @@
 
 static const char blud_timestamp_metatable[] = "blud.timestamp";
 
+static BLUD_TIMESTAMP* new_blud_timestamp(lua_State* L) {
+    BLUD_TIMESTAMP* timestamp = (BLUD_TIMESTAMP*)lua_newuserdata(
+        L,
+        sizeof *timestamp
+    );
+
+    luaL_getmetatable(L, blud_timestamp_metatable);
+    assert(lua_istable(L, -1));
+    lua_setmetatable(L, -2);
+    return timestamp;
+}
+
 static BLUD_TIMESTAMP* check_blud_timestamp(lua_State* L, int index) {
     return (BLUD_TIMESTAMP*)luaL_checkudata(
         L,
@@ -489,13 +501,12 @@ static int lua_os_touch(lua_State *L) {
 }
 
 // Lua: timestamp = get_system_timestamp()
-// timestamp is Unix-epoch microseconds.
+// timestamp is a blud timestamp userdata value.
 static int lua_get_system_timestamp(lua_State* L) {
-    int64_t timestamp = os_get_system_timestamp();
+    BLUD_TIMESTAMP* timestamp = new_blud_timestamp(L);
 
-    if (timestamp == -1)
+    if (os_get_system_timestamp(timestamp) != 0)
         return luaL_error(L, "could not read system clock");
-    lua_pushinteger(L, timestamp);
     return 1;
 }
 
