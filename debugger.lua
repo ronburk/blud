@@ -355,7 +355,7 @@ eval <lua>
     Evaluate a Lua expression, or execute a Lua chunk, in the global
     environment and print its first return value.
 
-    Examples: e get_system_timestamp()
+    Examples: e blud.timestamp.get_system()
               e local x = 3]],
 
     x = [[x <lua expression>
