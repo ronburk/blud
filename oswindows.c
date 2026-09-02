@@ -1,5 +1,6 @@
 #include "os.h"
 
+#include <assert.h>
 #include <windows.h>  // For GetCurrentDirectory()
 #include <stdlib.h>    // For malloc(), realloc(), and free()
 #include <string.h>
@@ -26,16 +27,21 @@ static int make_one_dir(const char* path) {
     return 2;
 }
 
-int64_t os_get_system_timestamp(void) {
+int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     FILETIME now;
-    ULARGE_INTEGER timestamp;
+    ULARGE_INTEGER file_time;
+    uint64_t ticks;
 
+    assert(timestamp != NULL);
     GetSystemTimeAsFileTime(&now);
-    timestamp.LowPart = now.dwLowDateTime;
-    timestamp.HighPart = now.dwHighDateTime;
-    if (timestamp.QuadPart < 116444736000000000ULL)
+    file_time.LowPart = now.dwLowDateTime;
+    file_time.HighPart = now.dwHighDateTime;
+    if (file_time.QuadPart < 116444736000000000ULL)
         return -1;
-    return (int64_t)((timestamp.QuadPart - 116444736000000000ULL) / 10);
+    ticks = file_time.QuadPart - 116444736000000000ULL;
+    timestamp->seconds = (int64_t)(ticks / 10000000ULL);
+    timestamp->nanoseconds = (uint32_t)(ticks % 10000000ULL) * 100;
+    return 0;
 }
 
 // Create only path; unlike os_mkdir(), do not synthesize parent directories.

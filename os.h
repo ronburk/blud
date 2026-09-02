@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "blud.h"
+
 
 typedef void (*BLUD_DIR_CALLBACK)(void*, const char*, int64_t, int is_dir);
 
@@ -26,8 +28,8 @@ extern int os_mkdir_one(const char* path);
 // Return 0 for missing, 1 for non-directory, or 2 for a real directory.
 extern int os_path_type(const char* path);
 
-// Return Unix-epoch microseconds from the system clock, or -1 on failure.
-extern int64_t os_get_system_timestamp(void);
+// Store the Unix-epoch system time in timestamp; return 0 or -1.
+extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
 
 // Remove one empty directory; return 0 on success and -1 on failure.
 extern int os_remove_dir(const char* path);
