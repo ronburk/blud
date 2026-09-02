@@ -27,6 +27,7 @@
 
 
 static const char blud_timestamp_metatable[] = "blud.timestamp";
+static const char blud_timestamp_api_metatable[] = "blud.timestamp_api";
 
 static BLUD_TIMESTAMP* new_blud_timestamp(lua_State* L) {
     BLUD_TIMESTAMP* timestamp = (BLUD_TIMESTAMP*)lua_newuserdata(
@@ -500,7 +501,7 @@ static int lua_os_touch(lua_State *L) {
     return 1;
 }
 
-// Lua: timestamp = get_system_timestamp()
+// Lua: timestamp = blud.timestamp.get_system()
 // timestamp is a blud timestamp userdata value.
 static int lua_get_system_timestamp(lua_State* L) {
     BLUD_TIMESTAMP* timestamp = new_blud_timestamp(L);
@@ -508,6 +509,26 @@ static int lua_get_system_timestamp(lua_State* L) {
     if (os_get_system_timestamp(timestamp) != 0)
         return luaL_error(L, "could not read system clock");
     return 1;
+}
+
+static int lua_blud_timestamp_api_index(lua_State* L) {
+    const char* key;
+
+    luaL_checkudata(L, 1, blud_timestamp_api_metatable);
+    key = luaL_checkstring(L, 2);
+    if (strcmp(key, "oldest") == 0) {
+        lua_pushvalue(L, lua_upvalueindex(1));
+        return 1;
+    }
+    if (strcmp(key, "get_system") == 0) {
+        lua_pushcfunction(L, lua_get_system_timestamp);
+        return 1;
+    }
+    return 0;
+}
+
+static int lua_blud_timestamp_api_newindex(lua_State* L) {
+    return luaL_error(L, "blud.timestamp is read-only");
 }
 
 
@@ -655,6 +676,8 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    BLUD_TIMESTAMP* oldest_timestamp;
+
     luaL_newmetatable(L, blud_timestamp_metatable);
     lua_pushcfunction(L, lua_blud_timestamp_equal);
     lua_setfield(L, -2, "__eq");
@@ -668,7 +691,23 @@ int luaopen_mylib(lua_State *L) {
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
 
+    luaL_newmetatable(L, blud_timestamp_api_metatable);
+    oldest_timestamp = new_blud_timestamp(L);
+    oldest_timestamp->seconds = 0;
+    oldest_timestamp->nanoseconds = 0;
+    lua_pushcclosure(L, lua_blud_timestamp_api_index, 1);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, lua_blud_timestamp_api_newindex);
+    lua_setfield(L, -2, "__newindex");
+    lua_pushliteral(L, "blud timestamp API");
+    lua_setfield(L, -2, "__metatable");
+    lua_pop(L, 1);
+
     lua_getglobal(L, "blud");
+    lua_newuserdata(L, 1);
+    luaL_getmetatable(L, blud_timestamp_api_metatable);
+    lua_setmetatable(L, -2);
+    lua_setfield(L, -2, "timestamp");
     lua_pushinteger(L, BUILD_ID);
     lua_setfield(L, -2, "build_id");
     lua_pop(L, 1);
@@ -690,7 +729,6 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_remove_file", lua_os_remove_file);
     lua_register(L, "os_touch", lua_os_touch);
     lua_register(L, "get_executable_path", lua_get_executable_path);
-    lua_register(L, "get_system_timestamp", lua_get_system_timestamp);
     lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "tokenize_dependency_line", lua_tokenize_dependency_line);
     return 0;
