@@ -51,7 +51,7 @@ local function recursive_glob_match(words, pattern_components, index, current_pa
         -- 2. Match one or more directories: iterate through directories in dir_cache and recurse
         for name, entry in pairs(dir_cache) do
             if entry.is_dir then
-                local subdir_cache = DirCache.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
+                local subdir_cache = get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
                 -- Root components already end in a separator; avoid producing //.
                 local separator = current_path:sub(-1) == "/" and "" or "/"
                 local subdir_path = current_path ~= "" and
@@ -221,4 +221,3 @@ function DirCache.expand_pattern(words, pattern)
 end
 
 return DirCache
-
