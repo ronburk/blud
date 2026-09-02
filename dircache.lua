@@ -1,47 +1,37 @@
-local M = {}
+local DirCache = {}
+
+--[[
+directory_cache = {
+    ["path/to/dir"] = {
+        ["."]       = <entry for the directory itself>,
+        ["foo.c"]   = { name = ..., is_dir = ... },
+        ["include"] = { name = ..., is_dir = ... },
+        ...
+    },
+    ...
+}
+
+Each value is the table returned by get_dir_cache() for that directory.
+The special "." entry describes the directory itself rather than one of
+its children; glob_expand() is given that entry as its directory context.
+]]
 local directory_cache = {}
 
--- Main function to expand the glob pattern
-function M.expand_pattern(words, pattern)
-    -- Split the pattern into path components
-    local path_components = M.path_split(pattern)
-    local dir = path_components[1]  -- Start with the root directory (or "." for current directory)
-
-    -- Create a temporary table to store the new results
-    local new_words = {}
-
-    -- Call the recursive helper function to match the pattern, starting with an empty path
-    local initial_cache = M.get_cached_dir(dir)  -- Cache for the root directory
-    -- Preserve an absolute or drive/UNC root in emitted matches; only the
-    -- synthetic current-directory root is omitted from relative results.
-    local initial_path = dir == "." and "" or dir
-    local match_count = M.recursive_glob_match(
-        new_words,
-        path_components,
-        2,
-        initial_path,
-        initial_cache
-    )
-
-    -- If no matches were found, treat the pattern as a literal and add it to 'new_words'
---    if match_count == 0 then
---        table.insert(new_words, pattern)
---    end
-
-    if match_count > 0 then
-        -- Sort the new words
-        table.sort(new_words)
-
-        -- Append the sorted new_words to words
-        for _, word in ipairs(new_words) do
-            table.insert(words, word)
-        end
+-- Helper function to get or create the directory cache
+local function get_cached_dir(directory)
+    local cache = directory_cache[directory]
+    if cache == nil then
+        cache = get_dir_cache(directory)
+        assert(cache)
+        directory_cache[directory] = cache
     end
-    return match_count
+    return cache
 end
 
+
+
 -- Recursive function to handle glob pattern matching
-function M.recursive_glob_match(words, pattern_components, index, current_path, dir_cache)
+local function recursive_glob_match(words, pattern_components, index, current_path, dir_cache)
     local match_count = 0  -- Keep track of matches
 
     -- Base case: if we've matched all components, add the full path to words
@@ -56,17 +46,17 @@ function M.recursive_glob_match(words, pattern_components, index, current_path, 
     if part == "**" then
         -- "**" can match zero or more directories, so we need to try all possibilities:
         -- 1. Match zero directories: call recursively with the next pattern component
-        match_count = match_count + M.recursive_glob_match(words, pattern_components, index + 1, current_path, dir_cache)
+        match_count = match_count + recursive_glob_match(words, pattern_components, index + 1, current_path, dir_cache)
 
         -- 2. Match one or more directories: iterate through directories in dir_cache and recurse
         for name, entry in pairs(dir_cache) do
             if entry.is_dir then
-                local subdir_cache = M.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
+                local subdir_cache = DirCache.get_cached_dir(entry.name)  -- Recursively fetch the subdir cache
                 -- Root components already end in a separator; avoid producing //.
                 local separator = current_path:sub(-1) == "/" and "" or "/"
                 local subdir_path = current_path ~= "" and
                     (current_path .. separator .. name) or name
-                match_count = match_count + M.recursive_glob_match(words, pattern_components, index, subdir_path, subdir_cache)
+                match_count = match_count + recursive_glob_match(words, pattern_components, index, subdir_path, subdir_cache)
             end
         end
     else
@@ -88,8 +78,8 @@ function M.recursive_glob_match(words, pattern_components, index, current_path, 
                 table.insert(words, full_path)
                 match_count = match_count + 1
             else
-                local next_dir_cache = M.get_cached_dir(full_path)
-                match_count = match_count + M.recursive_glob_match(
+                local next_dir_cache = get_cached_dir(full_path)
+                match_count = match_count + recursive_glob_match(
                     words,
                     pattern_components,
                     index + 1,
@@ -103,21 +93,18 @@ function M.recursive_glob_match(words, pattern_components, index, current_path, 
     return match_count  -- Return the number of matches found
 end
 
--- Helper function to get or create the directory cache
-function M.get_cached_dir(directory)
-    local cache = directory_cache[directory]
-    if cache == nil then
-        cache = get_dir_cache(directory)
-        assert(cache)
-        directory_cache[directory] = cache
-    end
-    return cache
-end
 
+--[[
+path_split() returns path_components:
 
+    relative:  { ".", "src", "**", "*.c" }
+    Unix:      { "/", "usr", "include", "*.h" }
+    Windows:   { "C:", "src", "*.c" }
 
-
-function M.path_split(path)
+The first component identifies the starting directory/root. Remaining
+components are pathname/glob components consumed by recursive_glob_match().
+]]
+local function path_split(path)
     local components = {}
     local is_absolute = false
 
@@ -194,4 +181,44 @@ function M.path_split(path)
     return components
 end
 
-return M
+-- Main function to expand the glob pattern
+function DirCache.expand_pattern(words, pattern)
+    -- Split the pattern into path components
+    local path_components = path_split(pattern)
+    local dir = path_components[1]  -- Start with the root directory (or "." for current directory)
+
+    -- Create a temporary table to store the new results
+    local new_words = {}
+
+    -- Call the recursive helper function to match the pattern, starting with an empty path
+    local initial_cache = get_cached_dir(dir)  -- Cache for the root directory
+    -- Preserve an absolute or drive/UNC root in emitted matches; only the
+    -- synthetic current-directory root is omitted from relative results.
+    local initial_path = dir == "." and "" or dir
+    local match_count = recursive_glob_match(
+        new_words,
+        path_components,
+        2,
+        initial_path,
+        initial_cache
+    )
+
+    -- If no matches were found, treat the pattern as a literal and add it to 'new_words'
+--    if match_count == 0 then
+--        table.insert(new_words, pattern)
+--    end
+
+    if match_count > 0 then
+        -- Sort the new words
+        table.sort(new_words)
+
+        -- Append the sorted new_words to words
+        for _, word in ipairs(new_words) do
+            table.insert(words, word)
+        end
+    end
+    return match_count
+end
+
+return DirCache
+
