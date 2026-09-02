@@ -24,16 +24,6 @@ out.bin
 src/
 tic.lua
 codex_auth_token.txt
-# handle luajit selective include
-luajit/**
-!luajit/
-!luajit/src
-!luajit/src/lua.h
-!luajit/src/luaconf.h
-!luajit/src/lauxlib.h
-!luajit/src/lualib.h
-!luajit/src/libluajit.a
-!luajit/src/libluajit-win64.a
 # meta-source info for ChatGPT
 lua-index.json
 
@@ -73,3 +63,14 @@ lua-index.json
 # blud
 test/*.out
 test/*.lua
+
+# handle luajit selective include
+luajit/**
+!luajit/
+!luajit/src
+!luajit/src/lua.h
+!luajit/src/luaconf.h
+!luajit/src/lauxlib.h
+!luajit/src/lualib.h
+!luajit/src/libluajit.a
+!luajit/src/libluajit-win64.a
