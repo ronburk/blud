@@ -1,29 +1,35 @@
 -- bludfile for building/testing blud
-CC  = gcc 
 CXX = g++
-CFLAGS = -g
 CPPFLAGS += -I./luajit/src
-LUAJIT_LDFLAGS ?= ./luajit/src/libluajit.a -lm -ldl
+HOST_LUAJIT_LDFLAGS = ./luajit/src/libluajit.a -lm -ldl
 LDFLAGS = $(LUAJIT_LDFLAGS)
 CFLAGS  = $(CFLAGS) -Wall -Wextra -fmax-errors=2 -DBUILD_ID=666
 
-all : blud test
-
-test :TEST: test[0-9][0-9][0-9][0-9] | blud
-    source --boundary _BLUD_TEST_ $<
-
 debug release windebug :BUILD:
+debug release: CC = gcc
+debug release: OS_SRCS = oslinux.c
+debug release: BLUD_TARGET = blud
+debug release: LUAJIT_LDFLAGS = $(HOST_LUAJIT_LDFLAGS)
+debug release: ALL_TARGETS = $(BLUD_TARGET) test
+
+windebug: CC = x86_64-w64-mingw32-gcc
+windebug: OS_SRCS = oswindows.c
+windebug: BLUD_TARGET = blud.exe
+windebug: LUAJIT_LDFLAGS = ./luajit/src/libluajit-win64.a
+windebug: ALL_TARGETS = $(BLUD_TARGET)
+
 debug windebug: CFLAGS += -g
 debug windebug: CSTRFLAGS = -d
 release: CSTRFLAGS =
-windebug: CC = x86_64-w64-mingw32-gcc
 
-SRCS = blud.c bludlua.c oslinux.c
-WIN_SRCS = blud.c bludlua.c oswindows.c
+all : $(ALL_TARGETS)
 
-blud :: $(SRCS)
-blud.exe: LUAJIT_LDFLAGS = ./luajit/src/libluajit-win64.a
-blud.exe :: $(WIN_SRCS)
+test :TEST: test[0-9][0-9][0-9][0-9] | $(BLUD_TARGET)
+    source --boundary _BLUD_TEST_ $<
+
+SRCS = blud.c bludlua.c $(OS_SRCS)
+
+$(BLUD_TARGET) :: $(SRCS)
 
 -- use cstr to convert Lua source into a C string, they all will reside in bludlua.c
 STRFILES = *.lua builtin.blud
@@ -31,6 +37,7 @@ bludlua.c :  cstr $(STRFILES)
     shell $(OWD)/cstr $(CSTRFLAGS) $(STRFILES) >$@
 
 -- build cstr utility (writen in C++)
+cstr: LDFLAGS = $(HOST_LUAJIT_LDFLAGS)
 cstr :: cstr.cpp
 
 testsource:

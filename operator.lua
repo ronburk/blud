@@ -946,10 +946,35 @@ do
     -- whenever it is expanded rather than stored separately in each scope.
     local owd_macro = blud.Macro.from_function(expand_owd)
 
+    local function activate_build(target)
+        assert(target.SCOPE and target.SCOPE.target == target,
+               "build has no owning target scope: " .. tostring(target.NAME))
+        assert(target.RULE and target.RULE.operator == opBuild,
+               "target does not belong to the :BUILD: operator: " ..
+               tostring(target.NAME))
+
+        blud.build_atom = target
+        target.SCOPE:set_macro("OWD", owd_macro)
+        blud.Scope.build.variables = target.SCOPE.variables
+    end
+
+    local function select_declared_build()
+        for _, name in ipairs(blud.command_line_options.target_names or {}) do
+            local target = blud.TARGETS[name]
+            if target and target.RULE and target.RULE.operator == opBuild then
+                return target
+            end
+        end
+        return blud.default_build
+    end
+
     function opBuild:INIT()
-        blud.build_atom = nil
-        blud.Scope.build.variables = {}
-        blud.Scope.build:set_macro("OWD", owd_macro)
+        if blud.build_atom then
+            activate_build(blud.build_atom)
+        else
+            blud.Scope.build.variables = {}
+            blud.Scope.build:set_macro("OWD", owd_macro)
+        end
     end
 
     -- a build name cannot be a primary target
@@ -964,7 +989,11 @@ do
         assert(#right_tokens == 0,
                ":BUILD: prerequisites are not supported for: " ..
                table.concat(left_tokens, ", "))
-        return Operator.EVAL_RULE(self, left_tokens, right_tokens, action)
+        Operator.EVAL_RULE(self, left_tokens, right_tokens, action)
+
+        -- Rules following the declaration expand in the build selected on the
+        -- command line, or in the first declared build when none was selected.
+        activate_build(assert(select_declared_build()))
     end
 
     function opBuild:ADD_RULE(target, prereqs, action)
@@ -999,8 +1028,7 @@ do
         assert(target.RULE and target.RULE.operator == self,
                "build target does not belong to the :BUILD: operator: " ..
                tostring(target.NAME))
-        blud.build_atom = target
-        target.SCOPE:set_macro("OWD", owd_macro)
+        activate_build(target)
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
             local mkdir_result = os_mkdir(owd)
@@ -1008,8 +1036,6 @@ do
                 error("could not create build directory: " .. owd)
             end
         end
-        -- Activate this context as the build-scope parent for ordinary targets.
-        blud.Scope.build.variables = target.SCOPE.variables
         return 0
     end
 end

@@ -1,0 +1,15 @@
+-- expect: graphbuild/test0019.out
+-- Rule targets and prerequisites expand in the selected build scope.
+
+graphbuild :BUILD:
+graphbuild: BUILD_TARGET = test0019.out
+graphbuild: BUILD_INPUT = $(GLOBAL_INPUT)
+
+GLOBAL_INPUT = test0019
+INPUTS = $(BUILD_INPUT)
+
+all: $(BUILD_TARGET)
+
+$(BUILD_TARGET): $(INPUTS)
+    shell test $< = test0019
+    touch $@
