@@ -55,15 +55,6 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     return filetime_to_timestamp(timestamp, now);
 }
 
-int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path) {
-    WIN32_FILE_ATTRIBUTE_DATA attributes;
-
-    assert(timestamp != NULL);
-    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &attributes))
-        return -1;
-    return filetime_to_timestamp(timestamp, attributes.ftLastWriteTime);
-}
-
 // Create only path; unlike os_mkdir(), do not synthesize parent directories.
 int os_mkdir_one(const char* path) {
     if (path == NULL || path[0] == '\0')
