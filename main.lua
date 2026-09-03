@@ -35,7 +35,12 @@ local function load_embedded_lua(filename)
 end
 
 table.insert(package.loaders, 1, function(modname)
-    local filename = modname .. ".lua"
+    local prefix = "blud."
+    if modname:sub(1, #prefix) ~= prefix then
+        return nil
+    end
+
+    local filename = modname:sub(#prefix + 1) .. ".lua"
     local chunk = load_embedded_lua(filename)
     if chunk == nil then
         return nil, "\n\tmodule '" .. modname .. "' not found in embedded strings"
@@ -44,15 +49,7 @@ table.insert(package.loaders, 1, function(modname)
     return chunk
 end)
 
--- .require now only handles error handling via xpcall
-function blud.require(name)
-    local chunk = load_embedded_lua(name)
-    if chunk == nil then error("no such internal file: " .. name) end
-
-    return chunk()  -- Run the chunk (runtime errors will also be caught by xpcall)
-end
-
-blud.require("error.lua")
+require("blud.error")
 
 local function print_help()
     print([[Usage: blud [OPTION]... [TARGET]...
@@ -115,7 +112,7 @@ local function parse_command_line(args)
             os.exit(0)
         elseif arg == "-d" then
             options.debug = true
-            debugger = debugger or require("debugger")
+            debugger = debugger or require("blud.debugger")
             debugger.probe = debugger.real_probe
         elseif arg == "-B" then
             options.always_make = true
@@ -143,7 +140,7 @@ local function parse_command_line(args)
         elseif arg:sub(1, 1) == "-" then
             error("unknown command-line option: " .. arg)
         else
-            local macro = require("macro").match_macro_assign(arg)
+            local macro = require("blud.macro").match_macro_assign(arg)
             if macro then
                 print("command-line macro assignment: " .. arg)
             else
@@ -154,7 +151,7 @@ local function parse_command_line(args)
         i = i + 1
     end
 
-    debugger = debugger or require("debugger")
+    debugger = debugger or require("blud.debugger")
     debugger.probe({func="<start>"})
     return options
 end
@@ -171,7 +168,7 @@ function blud.luac_needs_building()
     local luac_path = bludfile_path .. ".luac"
     local blud_exe_path = get_executable_path()
     assert(blud_exe_path ~= nil)
-    local dircache = blud.require("dircache.lua")
+    local dircache = require("blud.dircache")
     local blud_exe_timestamp = dircache.get_timestamp(blud_exe_path)
     local bludfile_timestamp = dircache.get_timestamp(bludfile_path)
     local luac_timestamp     = dircache.get_timestamp(luac_path)
@@ -190,6 +187,5 @@ end
 -- blud.printf("luac_needs_building == %s", blud.luac_needs_building())
 
 -- Example test
-blud.require("blud.lua")
+require("blud.blud")
 BLUD_EXIT(0)
-
