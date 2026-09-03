@@ -2,6 +2,7 @@ local AliasDir = require("blud.aliasdir")
 local debugger = require("blud.debugger")
 local dircache = require("blud.dircache")
 local oldest_timestamp = blud.timestamp.oldest
+local newest_timestamp = blud.timestamp.newest
 
 local Operator= {} -- default behavior inherited by concrete operators
 Operator.__index = Operator
@@ -91,7 +92,7 @@ function Operator:BUILD(target_atom, parent)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
                 -- Record successful actions even when they do not create a file.
-                target_atom.TIMESTAMP = blud.current_time
+                target_atom.TIMESTAMP = newest_timestamp
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == oldest_timestamp and not target_atom.RULE then
                 BLUD_EXIT(1000, target_atom.NAME);
@@ -301,7 +302,7 @@ do  -- Ordinary explicit dependency rules.
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
-                target_atom.TIMESTAMP = blud.current_time
+                target_atom.TIMESTAMP = newest_timestamp
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == oldest_timestamp and not target_atom.RULE then
                 BLUD_EXIT(1000, target_atom.NAME);
@@ -446,7 +447,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
-                target_atom.TIMESTAMP = blud.current_time
+                target_atom.TIMESTAMP = newest_timestamp
                 timestamp = target_atom.TIMESTAMP
             elseif timestamp == oldest_timestamp then
                 BLUD_EXIT(1000, target_atom.NAME)
