@@ -1,4 +1,4 @@
-local AliasDir = require("aliasdir")
+local AliasDir = require("blud.aliasdir")
 local DirCache = {}
 
 --[[
