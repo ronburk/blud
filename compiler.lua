@@ -1,8 +1,8 @@
 local M    = {}
 -- XXX local sourcemap = require("sourcemap").new()
-local dircache   = require("dircache")
-local m         = require("macro")
-local util      = require("util")
+local dircache   = require("blud.dircache")
+local m         = require("blud.macro")
+local util      = require("blud.util")
 
 
 --[[
