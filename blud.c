@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <limits.h>
 
 
 #include <ctype.h>
@@ -13,11 +12,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-    #include <windows.h>
-#else
-    #include <unistd.h>
-#endif
 
 #include "blud.h"
 #include "cstr.h"
@@ -402,40 +396,17 @@ static int lua_tokenize_dependency_line(lua_State *L) {
 }
 
 static int lua_get_executable_path(lua_State *L) {
-    int         result_count = 2;
-    size_t      size         = PATH_MAX;
-    ssize_t     bytes_read   = 0;
-    char*       path;
-    const char* error_message = "Failed to get executable path for some reason.";
+    char* path = os_get_executable_path();
 
-#ifdef _WIN32
-    path            = _strdup(_pgmptr);
-    result_count    = 1;
-#else
-    for(;;){
-        path = (char*)malloc(size);
-        assert(path != 0);
-        bytes_read = readlink("/proc/self/exe", path, size);
-        if (bytes_read == -1) // if error
-            break;
-        else if(bytes_read < (ssize_t)(size)){
-            path[bytes_read] = '\0';
-            result_count     = 1;
-            break;
-        } else{
-            size *= 2;
-            free(path);
-        }
-    }
-#endif
-
-    if(result_count == 2){
+    if (path == NULL) {
         lua_pushnil(L);
-        lua_pushstring(L, error_message);
-    } else
-        lua_pushstring(L, path);
+        lua_pushstring(L, "Failed to get executable path for some reason.");
+        return 2;
+    }
+
+    lua_pushstring(L, path);
     free(path);
-    return result_count;
+    return 1;
 }
 
 

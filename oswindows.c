@@ -10,6 +10,10 @@ static int is_separator(char c) {
     return c == '/' || c == '\\';
 }
 
+char* os_get_executable_path(void) {
+    return _strdup(_pgmptr);
+}
+
 // Test for an existing directory when distinguishing collision from failure.
 static int dir_exists(const char* path) {
     DWORD attributes = GetFileAttributesA(path);

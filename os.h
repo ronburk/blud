@@ -40,6 +40,9 @@ extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
 // Store path's Unix-epoch modification time in timestamp; return 0 or -1.
 extern int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path);
 
+// Return the executable path in a heap-allocated string, or NULL on failure.
+extern char* os_get_executable_path(void);
+
 // Remove one empty directory; return 0 on success and -1 on failure.
 extern int os_remove_dir(const char* path);
 
