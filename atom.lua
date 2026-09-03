@@ -1,5 +1,6 @@
 -- Atom defaults and atom creation.
 local dump = util.dump
+local oldest_timestamp = blud.timestamp.oldest
 
 -- define super atom (a metatable), which contains defaults for all atoms
 local super_atom = {
@@ -153,7 +154,8 @@ local super_atom = {
         if atom.SCOPE:get_boolean(".ASSUME_NEW") then
             atom.TIMESTAMP = blud.current_time
         elseif atom.TIMESTAMP == nil then
-            atom.TIMESTAMP = blud.get_fs_timestamp(atom.BOUND_NAME)
+            atom.TIMESTAMP = blud.glob.get_timestamp(atom.BOUND_NAME) or
+                             oldest_timestamp
         end
 
         return atom.TIMESTAMP
@@ -196,10 +198,16 @@ local super_atom = {
 
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
-        if timestamp == 0 then
+        if timestamp == oldest_timestamp then
             BLUD_EXIT(1000, target_atom.NAME)
         end
-        blud.why.considered(target_atom, timestamp, 0, nil, false)
+        blud.why.considered(
+            target_atom,
+            timestamp,
+            oldest_timestamp,
+            nil,
+            false
+        )
         return timestamp, false
     end,
     BUILD_PREREQUISITES = function(atom)
@@ -209,7 +217,7 @@ local super_atom = {
         end
         local prerequisites = atom.PREREQUISITES;
 --        print("prereqs: " .. dump(prerequisites))
-        local newest_time = 0
+        local newest_time = oldest_timestamp
         local newest_prerequisite
         if prerequisites and #prerequisites > 0 then
             -- util.print("%d BUILD_PREREQUISITES(%s)", #prerequisites, blud.dump_atom(atom))
