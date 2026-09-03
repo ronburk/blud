@@ -218,6 +218,23 @@ is `atom.lua:149: attempt to index field 'SCOPE' (a nil value)`. This predates
 and is unrelated to `source`; do not claim the full suite passed until the
 harness or contract is fixed.
 
+## Installing packages in this environment (2026-09-03)
+
+When `apt-get` fails because its `_apt` sandbox cannot change users/groups or
+write `/var/cache/apt/archives`, use a writable archive cache and disable the
+package sandbox user:
+
+```
+mkdir -p /tmp/xsltproc-apt-cache/partial
+apt-get -o APT::Sandbox::User=root \
+        -o Dir::Cache::archives=/tmp/xsltproc-apt-cache/ install -y xsltproc
+```
+
+This successfully installed `/usr/bin/xsltproc`. The package-index update also
+needed `APT::Sandbox::User=root`; the archive-cache override was needed for the
+package download. The install may still report harmless cleanup/log warnings
+about restricted ownership changes.
+
 ## Do not resurrect
 
 The following belong to retired workflows, completed work, or superseded
