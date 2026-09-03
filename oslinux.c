@@ -45,17 +45,6 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     return 0;
 }
 
-int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path) {
-    struct stat statbuf;
-
-    assert(timestamp != NULL);
-    if (stat(path, &statbuf) != 0)
-        return -1;
-    timestamp->seconds = (int64_t)statbuf.st_mtim.tv_sec;
-    timestamp->nanoseconds = (uint32_t)statbuf.st_mtim.tv_nsec;
-    return 0;
-}
-
 char* os_get_executable_path(void) {
     size_t size = PATH_MAX;
 
