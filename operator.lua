@@ -1,5 +1,6 @@
-local AliasDir = require("aliasdir")
-local debugger = require("debugger")
+local AliasDir = require("blud.aliasdir")
+local debugger = require("blud.debugger")
+local dircache = require("blud.dircache")
 local oldest_timestamp = blud.timestamp.oldest
 
 local Operator= {} -- default behavior inherited by concrete operators
@@ -476,7 +477,7 @@ do  -- Internal update behavior for individual tests.
     end
 
     local function source_entries(directory)
-        local entries = blud.glob.get_cached_dir(directory)
+        local entries = dircache.get_entries(directory)
         local names = {}
 
         -- Use the same cached view of the source tree as wildcard expansion.
@@ -1089,15 +1090,15 @@ blud.operators[":TEST:"] = function(colon_operator, target, prereq_atoms, action
 
     if prereq_atoms ==nil or not next(prereq_atoms) then
         local entries = {}
---        blud.glob.expand_pattern(entries, target.NAME, "*")
-        blud.glob.expand_pattern(entries, "./test/*")
+--        dircache.expand_pattern(entries, target.NAME, "*")
+        dircache.expand_pattern(entries, "./test/*")
         util.print("glob: %s", util.dump(entries))
         error("die")
     else
         for i= 1, #prereq_atoms do
             local entries = {}
             local atom = prereq_atoms[i]
-            blud.glob.expand_pattern(entries, prereq_atoms[i])
+            dircache.expand_pattern(entries, prereq_atoms[i])
             util.print("glob: %s", util.dump(entries))
         end
         error("die glob")
