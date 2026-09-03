@@ -120,20 +120,26 @@ local function path_split(path)
         is_absolute = true
     -- Handle special paths: "\\.\", "\\?\"
     elseif string.match(path, "^\\\\%.") or string.match(path, "^\\\\%?") then
-        local first_component = string.match(path, "^(\\\\[^\\]+\\?.-\\?\\?.*)")
+        local first_component = string.match(path, "^\\\\[^\\]+\\[^\\/]+")
         if first_component then
             table.insert(components, first_component)
             path = string.sub(path, #first_component + 1)
+            if path:sub(1, 1) == "\\" or path:sub(1, 1) == "/" then
+                path = path:sub(2)
+            end
             is_absolute = true
         end
     -- Handle UNC paths: "\\server\share"
     elseif string.match(path, "^\\\\") then
         local unc_prefix = string.match(path, "^\\\\[^\\]+\\[^\\]+")
-        if unc_prefix then
-            table.insert(components, unc_prefix)
-            path = string.sub(path, #unc_prefix + 1)
-            is_absolute = true
+    if unc_prefix then
+        table.insert(components, unc_prefix)
+        path = string.sub(path, #unc_prefix + 1)
+        if path:sub(1, 1) == "\\" or path:sub(1, 1) == "/" then
+            path = path:sub(2)
         end
+        is_absolute = true
+    end
     -- Handle Drive letter paths (e.g., "C:" or "C:\")
     else
         local drive, rest_of_path = string.match(path, "^([a-zA-Z]:)(.*)")
@@ -255,6 +261,109 @@ end
 -- not an entry, and callers must not treat it as one.
 function DirCache.get_entries(directory)
     return get_cached_dir(directory)
+end
+
+---[=[UNIT_TESTS
+do
+    local function test(name, function_to_test)
+        local ok, message = pcall(function_to_test)
+        assert(ok, "dircache: " .. name .. ": " .. tostring(message))
+    end
+
+    local function equal(actual, expected)
+        assert(
+            actual == expected,
+            string.format("expected %q, got %q", expected, actual)
+        )
+    end
+
+    local function equal_parts(actual, expected)
+        equal(#actual, #expected)
+        for index, component in ipairs(expected) do
+            equal(actual[index], component)
+        end
+    end
+
+    test("split_parent", function()
+        local parent, name = split_parent("/tmp/foo.txt")
+        equal(parent, "/tmp")
+        equal(name, "foo.txt")
+
+        parent, name = split_parent("/foo.txt")
+        equal(parent, "/")
+        equal(name, "foo.txt")
+
+        parent, name = split_parent("C:/foo.txt")
+        equal(parent, "C:/")
+        equal(name, "foo.txt")
+
+        local ok = pcall(split_parent, "foo.txt")
+        assert(not ok)
+    end)
+
+    test("path_split relative", function()
+        equal_parts(
+            path_split("src/**/*.c"),
+            { ".", "src", "**", "*.c" }
+        )
+    end)
+
+    test("path_split Unix absolute", function()
+        equal_parts(
+            path_split("/usr/include/*.h"),
+            { "/", "usr", "include", "*.h" }
+        )
+    end)
+
+    test("path_split drive absolute", function()
+        equal_parts(
+            path_split("C:/src/*.c"),
+            { "C:", "src", "*.c" }
+        )
+    end)
+
+    test("path_split normalizes backslashes", function()
+        equal_parts(
+            path_split("src\\*.c"),
+            { ".", "src", "*.c" }
+        )
+    end)
+
+    test("path_split drive with backslashes", function()
+        equal_parts(
+            path_split("C:\\src\\*.c"),
+            { "C:", "src", "*.c" }
+        )
+    end)
+
+    test("path_split UNC", function()
+        equal_parts(
+            path_split("\\\\server\\share\\src\\*.c"),
+            { "\\\\server\\share", "src", "*.c" }
+        )
+    end)
+
+    test("path_split Windows special prefix", function()
+        equal_parts(
+            path_split("\\\\.\\C:\\src\\*.c"),
+            { "\\\\.\\C:", "src", "*.c" }
+        )
+        equal_parts(
+            path_split("\\\\?\\C:\\src\\*.c"),
+            { "\\\\?\\C:", "src", "*.c" }
+        )
+    end)
+
+    test("path_split literal", function()
+        equal_parts(path_split("dir/file.txt"), { ".", "dir", "file.txt" })
+    end)
+
+    test("path_split preserves bracketed separators", function()
+        equal_parts(
+            path_split("src/[a/b]/file"),
+            { ".", "src", "[a/b]", "file" }
+        )
+    end)
 end
 
 return DirCache
