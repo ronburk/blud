@@ -5,7 +5,7 @@ local DirCache = {}
 directory_cache = {
     ["/absolute/path/to/dir"] = {
         ["."]       = <NUL-separated child names>,
-        ["foo.c"]   = { name = ..., is_dir = ... },
+        ["foo.c"]   = { name = ..., is_dir = ..., timestamp = <userdata> },
         ["include"] = {
             name = ..., is_dir = true, path = "/absolute/path/to/dir/include"
         },
@@ -15,6 +15,7 @@ directory_cache = {
 }
 
 Each value is the table returned by get_dir_cache() for that directory.
+On Linux, an entry's timestamp field is loaded and cached on first access.
 The special "." entry is a NUL-separated string of child names used by
 glob_expand(), not a filesystem entry.
 ]]

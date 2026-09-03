@@ -6,7 +6,13 @@
 #include "blud.h"
 
 
-typedef void (*BLUD_DIR_CALLBACK)(void*, const char*, int64_t, int is_dir);
+// A NULL timestamp means the entry timestamp was deliberately left unloaded.
+typedef void (*BLUD_DIR_CALLBACK)(
+    void*,
+    const char*,
+    const BLUD_TIMESTAMP*,
+    int is_dir
+);
 
 // Enumerate dir and invoke callback once for each child. Returns 0 on success.
 extern int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir);
@@ -30,6 +36,9 @@ extern int os_path_type(const char* path);
 
 // Store the Unix-epoch system time in timestamp; return 0 or -1.
 extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
+
+// Store path's Unix-epoch modification time in timestamp; return 0 or -1.
+extern int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path);
 
 // Remove one empty directory; return 0 on success and -1 on failure.
 extern int os_remove_dir(const char* path);

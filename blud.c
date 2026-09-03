@@ -114,6 +114,7 @@ static int  is_pattern(const char* pattern, int len){
 typedef struct BLUD_DIR_INFO {
     lua_State*    L;
     int           table_index;
+    int           entry_metatable_index;
     const char*   directory;
     luaL_Buffer   buffer;
 } BLUD_DIR_INFO;
@@ -127,10 +128,41 @@ static void push_child_path(lua_State* L, const char* directory, const char* nam
     lua_pushfstring(L, "%s%s%s", directory, has_separator ? "" : "/", name);
 }
 
-static void callback(void* data, const char* name, int64_t timestamp, int is_dir){
+static int lua_dir_entry_index(lua_State* L) {
+    const char* key = lua_tostring(L, 2);
+    BLUD_TIMESTAMP value;
+    BLUD_TIMESTAMP* timestamp;
+
+    if (key == NULL || strcmp(key, "timestamp") != 0)
+        return 0;
+
+    lua_pushliteral(L, "name");
+    lua_rawget(L, 1);
+    push_child_path(
+        L,
+        lua_tostring(L, lua_upvalueindex(1)),
+        luaL_checkstring(L, -1)
+    );
+    if (os_get_path_timestamp(&value, lua_tostring(L, -1)) != 0)
+        return 0;
+
+    timestamp = new_blud_timestamp(L);
+    *timestamp = value;
+    lua_pushliteral(L, "timestamp");
+    lua_pushvalue(L, -2);
+    lua_rawset(L, 1);
+    return 1;
+}
+
+static void callback(
+    void* data,
+    const char* name,
+    const BLUD_TIMESTAMP* timestamp,
+    int is_dir
+) {
     BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
     size_t          name_len = strlen(name);
-    
+
     luaL_addlstring(&info->buffer, name, name_len + 1); // add name & null byte
     lua_pushlstring(info->L, name, name_len);           // put in position for later lua_rawset()
     {
@@ -140,9 +172,10 @@ static void callback(void* data, const char* name, int64_t timestamp, int is_dir
         lua_pushlstring(info->L, name, name_len);
         lua_settable(info->L, -3);
 
-        lua_pushstring(info->L, "timestamp");
-        lua_pushinteger(info->L, timestamp);
-        lua_settable(info->L, -3);
+        if (timestamp != NULL) {
+            *new_blud_timestamp(info->L) = *timestamp;
+            lua_setfield(info->L, -2, "timestamp");
+        }
 
         lua_pushstring(info->L, "is_dir");
         lua_pushboolean(info->L, is_dir);
@@ -153,6 +186,9 @@ static void callback(void* data, const char* name, int64_t timestamp, int is_dir
             push_child_path(info->L, info->directory, name);
             lua_settable(info->L, -3);
         }
+
+        lua_pushvalue(info->L, info->entry_metatable_index);
+        lua_setmetatable(info->L, -2);
     }
     // now stack is [name][table_of_attributes]
     assert(lua_istable(info->L, info->table_index));
@@ -167,6 +203,11 @@ static int lua_get_dir_cache(lua_State *L) {
     info.directory      = dir;
     lua_newtable(L);        // table return value
     info.table_index    = lua_gettop(L);
+    lua_newtable(L);        // shared metatable for this directory's entries
+    info.entry_metatable_index = lua_gettop(L);
+    lua_pushstring(L, dir);
+    lua_pushcclosure(L, lua_dir_entry_index, 1);
+    lua_setfield(L, -2, "__index");
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
     {
         int status;
@@ -186,7 +227,8 @@ static int lua_get_dir_cache(lua_State *L) {
         }
     }
     luaL_pushresult(&info.buffer);
-    lua_rawset(L, -3); // table["."] = %z-separated buffer of all dir entry names
+    lua_rawset(L, info.table_index); // table["."] = %z-separated child names
+    lua_settop(L, info.table_index); // discard the entry metatable
 
     return 1;
 }

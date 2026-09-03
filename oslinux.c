@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #define _XOPEN_SOURCE 700
 
 #include <assert.h>
@@ -40,6 +41,17 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
         return -1;
     timestamp->seconds = (int64_t)now.tv_sec;
     timestamp->nanoseconds = (uint32_t)now.tv_nsec;
+    return 0;
+}
+
+int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path) {
+    struct stat statbuf;
+
+    assert(timestamp != NULL);
+    if (stat(path, &statbuf) != 0)
+        return -1;
+    timestamp->seconds = (int64_t)statbuf.st_mtim.tv_sec;
+    timestamp->nanoseconds = (uint32_t)statbuf.st_mtim.tv_nsec;
     return 0;
 }
 
@@ -550,19 +562,25 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
         if(strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
             continue;
 
-        if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
-            // A concurrent removal between readdir() and fstatat() is benign.
-            if(errno == ENOENT)
-                continue;
-            error_number = errno;
-            break;
-        }
-
         {
-            int64_t mod_time = (int64_t)statbuf.st_mtime;
-            int is_dir = S_ISDIR(statbuf.st_mode);
+            int is_dir;
 
-            callback(data, name, mod_time, is_dir);
+            if(entry->d_type == DT_DIR) {
+                is_dir = 1;
+            } else if(entry->d_type == DT_UNKNOWN || entry->d_type == DT_LNK) {
+                if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
+                    // A concurrent removal between readdir() and fstatat() is benign.
+                    if(errno == ENOENT)
+                        continue;
+                    error_number = errno;
+                    break;
+                }
+                is_dir = S_ISDIR(statbuf.st_mode);
+            } else {
+                is_dir = 0;
+            }
+
+            callback(data, name, NULL, is_dir);
         }
     }
 
