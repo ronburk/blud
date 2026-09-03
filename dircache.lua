@@ -15,9 +15,8 @@ directory_cache = {
 }
 
 Each value is the table returned by get_dir_cache() for that directory.
-File timestamps are eager on Windows and loaded on first access on Linux.
-Directory timestamps remain absent until get_timestamp() calculates and caches
-the newest timestamp in the entire subtree.
+Every entry has its own filesystem timestamp. Directory entries also retain a
+separate virtual timestamp, computed and cached only when requested.
 The special "." entry is a NUL-separated string of child names used by
 glob_expand(), not a filesystem entry.
 ]]
@@ -213,12 +212,12 @@ local function get_entry_timestamp(entry)
         return entry.timestamp
     end
 
-    local timestamp = rawget(entry, "timestamp")
+    local timestamp = rawget(entry, "virtual_timestamp")
     if timestamp ~= nil then
         return timestamp
     end
 
-    local newest = entry.timestamp
+    local newest = entry.filesystem_timestamp
     for name, child in pairs(get_cached_dir(entry.path)) do
         if name ~= "." then
             timestamp = get_entry_timestamp(child)
@@ -230,7 +229,7 @@ local function get_entry_timestamp(entry)
     end
 
     if newest ~= nil then
-        rawset(entry, "timestamp", newest)
+        rawset(entry, "virtual_timestamp", newest)
     end
     return newest
 end
