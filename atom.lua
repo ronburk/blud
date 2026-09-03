@@ -1,6 +1,7 @@
 -- Atom defaults and atom creation.
 local dump = util.dump
 local oldest_timestamp = blud.timestamp.oldest
+local dircache = require("blud.dircache")
 
 -- define super atom (a metatable), which contains defaults for all atoms
 local super_atom = {
@@ -154,7 +155,7 @@ local super_atom = {
         if atom.SCOPE:get_boolean(".ASSUME_NEW") then
             atom.TIMESTAMP = blud.current_time
         elseif atom.TIMESTAMP == nil then
-            atom.TIMESTAMP = blud.glob.get_timestamp(atom.BOUND_NAME) or
+            atom.TIMESTAMP = dircache.get_timestamp(atom.BOUND_NAME) or
                              oldest_timestamp
         end
 

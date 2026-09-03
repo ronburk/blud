@@ -1,6 +1,6 @@
 local M = {}
 
-local util = require("util")
+local util = require("blud.util")
 
 
 local saved_value_count = 0

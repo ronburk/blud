@@ -1,7 +1,8 @@
 -- Parse and execute recognized commands using blud's portable command grammar.
 -- Unrecognized commands retain their original text and run through the
 -- operating-system shell.
-local AliasDir = require("aliasdir")
+local AliasDir = require("blud.aliasdir")
+local dircache = require("blud.dircache")
 local M = {}
 
 -- Print a command-style diagnostic and return the conventional failure status.
@@ -118,8 +119,8 @@ end
 local function expand_words(words)
     local argv = {}
     for _, word in ipairs(words) do
-        if word.glob and blud and blud.glob then
-            local count = blud.glob.expand_pattern(argv, word.text)
+        if word.glob then
+            local count = dircache.expand_pattern(argv, word.text)
             if count == 0 then
                 argv[#argv + 1] = word.text
             end
@@ -598,8 +599,8 @@ end
 local source_chunk_number = 0
 
 local function compile_source_action(filename, script)
-    local compiler = require("compiler")
-    local compile_io = require("compile_io")
+    local compiler = require("blud.compiler")
+    local compile_io = require("blud.compile_io")
 
     compile_io.push_input(filename, script)
     compile_io.emit_sourcemap()
@@ -699,7 +700,7 @@ function M.register_command(name, command_function)
     commands[name] = command_function
 end
 
--- Called from Lua as `status = require("shell").execute(command, scope)`
+-- Called from Lua as `status = require("blud.shell").execute(command, scope)`
 -- (normally through blud.shell.execute()). A literal leading `shell` delegates
 -- its remainder to the OS shell. Otherwise, recognized commands stay internal
 -- and unrecognized commands delegate the complete original line.
