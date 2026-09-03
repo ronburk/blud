@@ -2,6 +2,8 @@
 
 *There will be blud.*
 
+[Download the current Windows build](https://github.com/ronburk/blud/releases/download/windows-build/blud.exe).
+
 Blud is an experimental build tool. It reads a `bludfile`, builds a
 dependency graph, and runs indented actions when a target is missing or older
 than one of its prerequisites.
