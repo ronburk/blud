@@ -15,7 +15,9 @@ directory_cache = {
 }
 
 Each value is the table returned by get_dir_cache() for that directory.
-On Linux, an entry's timestamp field is loaded and cached on first access.
+File timestamps are eager on Windows and loaded on first access on Linux.
+Directory timestamps remain absent until get_timestamp() calculates and caches
+the newest timestamp in the entire subtree.
 The special "." entry is a NUL-separated string of child names used by
 glob_expand(), not a filesystem entry.
 ]]
@@ -200,6 +202,42 @@ local function split_parent(path)
     return parent, name
 end
 
+local function get_entry_timestamp(entry)
+    if not entry.is_dir then
+        return entry.timestamp
+    end
+
+    local timestamp = rawget(entry, "timestamp")
+    if timestamp ~= nil then
+        return timestamp
+    end
+
+    local newest = entry.timestamp
+    for name, child in pairs(get_cached_dir(entry.path)) do
+        if name ~= "." then
+            timestamp = get_entry_timestamp(child)
+            if timestamp ~= nil and
+               (newest == nil or timestamp > newest) then
+                newest = timestamp
+            end
+        end
+    end
+
+    if newest ~= nil then
+        rawset(entry, "timestamp", newest)
+    end
+    return newest
+end
+
+local function get_path_timestamp(path)
+    local absolute_path = AliasDir.to_absolute(path)
+    local parent, name = split_parent(absolute_path)
+    local entries = get_cached_dir(parent)
+    local entry = entries[name]
+
+    return entry and get_entry_timestamp(entry) or nil
+end
+
 -- Main function to expand the glob pattern
 function DirCache.expand_pattern(words, pattern)
     -- Split the pattern into path components
@@ -241,15 +279,11 @@ end
 
 -- Return the cached metadata for one path, or nil when it is unavailable.
 function DirCache.get_timestamp(path)
-    local absolute_path = AliasDir.to_absolute(path)
-    local parent, name = split_parent(absolute_path)
-    local ok, entries = pcall(get_cached_dir, parent)
+    local ok, timestamp = pcall(get_path_timestamp, path)
     if not ok then
         return nil
     end
-
-    local entry = entries[name]
-    return entry and entry.timestamp or nil
+    return timestamp
 end
 
 -- Return the cached directory table.  The reserved "." key is matcher data,
