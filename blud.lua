@@ -1,6 +1,6 @@
 -- print(package.config)
 
-util = require("util")
+util = require("blud.util")
 
 blud_primary_target_name = ""
 
@@ -67,7 +67,7 @@ end
 local bludfile_path = get_bludfile_path()
 local luac_path     = bludfile_path .. ".luac"
 local blud_exe_path = get_executable_path()
-local bootstrap_dircache = blud.require("dircache.lua")
+local bootstrap_dircache = require("blud.dircache")
 local blud_exe_timestamp = bootstrap_dircache.get_timestamp(blud_exe_path)
 local bludfile_timestamp = bootstrap_dircache.get_timestamp(bludfile_path)
 local luac_timestamp     = bootstrap_dircache.get_timestamp(luac_path)
@@ -84,7 +84,7 @@ end
 
 if luac_needs_building then
     --rlb
-    local compiler = require("compiler")
+    local compiler = require("blud.compiler")
     local f = nil
     local source_path = bludfile_path
 
@@ -105,7 +105,7 @@ if luac_needs_building then
 --                                    buffered_line_io_string(CSTRGet("builtin.blud")))
 --    phase1_text = phase1_text .. phase1_pass("bludfile", buffered_line_io(file))
 
-    local compile_io = require("compile_io")
+    local compile_io = require("blud.compile_io")
 
     compile_io.push_input("builtin.blud", CSTRGet("builtin.blud"))
     compiler.compile(compile_io)
@@ -215,7 +215,7 @@ local function load_bytecode(file_path)
     return func
 end
 
-blud.require("runtime.lua")
+require("blud.runtime")
 local bytecode_function = load_bytecode(luac_path)
 if bytecode_function then
     blud.sourcemap_chunk_name = debug.getinfo(bytecode_function, "S").source
@@ -253,4 +253,3 @@ blud.debugger.probe({func="<update>"})
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
 blud.why.report()
-
