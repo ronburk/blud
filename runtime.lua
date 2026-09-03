@@ -448,7 +448,6 @@ function is_pattern(word)
     end
 end
 
-blud.current_time = blud.timestamp.get_system()
 blud.why = require("blud.why")
 blud.shallow_copy = function (original)
     local copy = {}
