@@ -20,6 +20,8 @@
 
 static const char blud_timestamp_metatable[] = "blud.timestamp";
 static const char blud_timestamp_api_metatable[] = "blud.timestamp_api";
+static BLUD_TIMESTAMP build_start_timestamp;
+static int have_build_start_timestamp;
 
 static BLUD_TIMESTAMP* new_blud_timestamp(lua_State* L) {
     BLUD_TIMESTAMP* timestamp = (BLUD_TIMESTAMP*)lua_newuserdata(
@@ -111,6 +113,7 @@ typedef struct BLUD_DIR_INFO {
     int           entry_metatable_index;
     const char*   directory;
     luaL_Buffer   buffer;
+    int           future_timestamp;
 } BLUD_DIR_INFO;
 
 static void push_child_path(lua_State* L, const char* directory, const char* name) {
@@ -122,40 +125,6 @@ static void push_child_path(lua_State* L, const char* directory, const char* nam
     lua_pushfstring(L, "%s%s%s", directory, has_separator ? "" : "/", name);
 }
 
-static int lua_dir_entry_index(lua_State* L) {
-    const char* key = lua_tostring(L, 2);
-    BLUD_TIMESTAMP value;
-    BLUD_TIMESTAMP* timestamp;
-    int is_dir;
-
-    if (key == NULL || strcmp(key, "timestamp") != 0)
-        return 0;
-
-    lua_pushliteral(L, "name");
-    lua_rawget(L, 1);
-    push_child_path(
-        L,
-        lua_tostring(L, lua_upvalueindex(1)),
-        luaL_checkstring(L, -1)
-    );
-    if (os_get_path_timestamp(&value, lua_tostring(L, -1)) != 0)
-        return 0;
-
-    lua_pushliteral(L, "is_dir");
-    lua_rawget(L, 1);
-    is_dir = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    timestamp = new_blud_timestamp(L);
-    *timestamp = value;
-    if (!is_dir) {
-        lua_pushliteral(L, "timestamp");
-        lua_pushvalue(L, -2);
-        lua_rawset(L, 1);
-    }
-    return 1;
-}
-
 static void callback(
     void* data,
     const char* name,
@@ -164,6 +133,14 @@ static void callback(
 ) {
     BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
     size_t          name_len = strlen(name);
+
+    if (timestamp != NULL && have_build_start_timestamp &&
+        compare_blud_timestamps(timestamp, &build_start_timestamp) > 0) {
+        BLUD_TIMESTAMP now;
+        if (os_get_system_timestamp(&now) != 0 ||
+            compare_blud_timestamps(timestamp, &now) > 0)
+            info->future_timestamp = 1;
+    }
 
     luaL_addlstring(&info->buffer, name, name_len + 1); // add name & null byte
     lua_pushlstring(info->L, name, name_len);           // put in position for later lua_rawset()
@@ -174,9 +151,9 @@ static void callback(
         lua_pushlstring(info->L, name, name_len);
         lua_settable(info->L, -3);
 
-        if (!is_dir && timestamp != NULL) {
+        if (timestamp != NULL) {
             *new_blud_timestamp(info->L) = *timestamp;
-            lua_setfield(info->L, -2, "timestamp");
+            lua_setfield(info->L, -2, is_dir ? "filesystem_timestamp" : "timestamp");
         }
 
         lua_pushstring(info->L, "is_dir");
@@ -203,13 +180,11 @@ static int lua_get_dir_cache(lua_State *L) {
 
     info.L              = L;
     info.directory      = dir;
+    info.future_timestamp = 0;
     lua_newtable(L);        // table return value
     info.table_index    = lua_gettop(L);
     lua_newtable(L);        // shared metatable for this directory's entries
     info.entry_metatable_index = lua_gettop(L);
-    lua_pushstring(L, dir);
-    lua_pushcclosure(L, lua_dir_entry_index, 1);
-    lua_setfield(L, -2, "__index");
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
     {
         int status;
@@ -218,6 +193,8 @@ static int lua_get_dir_cache(lua_State *L) {
         // printf("lua_get_dir_cache(%s)\n", dir);
         errno = 0;
         status = os_get_dir(callback, (void*)&info, dir);
+        if (info.future_timestamp)
+            return luaL_error(L, "filesystem timestamp is in the future: %s", dir);
         if(status != 0) {
             int error_number = errno;
 
@@ -657,6 +634,7 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 }
 
 int luaopen_mylib(lua_State *L) {
+    have_build_start_timestamp = os_get_system_timestamp(&build_start_timestamp) == 0;
     BLUD_TIMESTAMP* oldest_timestamp;
 
     luaL_newmetatable(L, blud_timestamp_metatable);
