@@ -1,5 +1,6 @@
 local AliasDir = require("aliasdir")
 local debugger = require("debugger")
+local oldest_timestamp = blud.timestamp.oldest
 
 local Operator= {} -- default behavior inherited by concrete operators
 Operator.__index = Operator
@@ -10,7 +11,7 @@ local function target_needs_building(
     timestamp
 )
     return always_make or
-           timestamp == 0 or
+           timestamp == oldest_timestamp or
            newest_prerequisite > timestamp
 end
 Operator.operator_new   = function(t)
@@ -62,7 +63,7 @@ function Operator:BUILD(target_atom, parent)
         target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
-        if not target_atom.RULE and timestamp == 0 then
+        if not target_atom.RULE and timestamp == oldest_timestamp then
             BLUD_EXIT(1000, target_atom.NAME)
         end
 
@@ -91,7 +92,7 @@ function Operator:BUILD(target_atom, parent)
                 -- Record successful actions even when they do not create a file.
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
-            elseif timestamp == 0 and not target_atom.RULE then
+            elseif timestamp == oldest_timestamp and not target_atom.RULE then
                 BLUD_EXIT(1000, target_atom.NAME);
             end
         end
@@ -273,7 +274,7 @@ do  -- Ordinary explicit dependency rules.
         target_atom:PREPARE_PREREQUISITES()
         target_atom:BIND()
         local timestamp = target_atom:get_timestamp()
-        if not target_atom.RULE and timestamp == 0 then
+        if not target_atom.RULE and timestamp == oldest_timestamp then
                 BLUD_EXIT(1000, target_atom.NAME)
         end
 
@@ -301,7 +302,7 @@ do  -- Ordinary explicit dependency rules.
                 blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
-            elseif timestamp == 0 and not target_atom.RULE then
+            elseif timestamp == oldest_timestamp and not target_atom.RULE then
                 BLUD_EXIT(1000, target_atom.NAME);
             end
         end
@@ -397,7 +398,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
         assert(source_rule and source_rule.source_rule_prepared,
                "attempted to build '::' prerequisites before preparing: " ..
                tostring(target_atom.NAME))
-        local newest_time = 0
+        local newest_time = oldest_timestamp
         local newest_prerequisite
         local prerequisites = target_atom.PREREQUISITES or {}
 
@@ -446,7 +447,7 @@ do  -- Source lists: compile each source through a reverse rule, then link.
                 blud.why.action_completed(target_atom)
                 target_atom.TIMESTAMP = blud.current_time
                 timestamp = target_atom.TIMESTAMP
-            elseif timestamp == 0 then
+            elseif timestamp == oldest_timestamp then
                 BLUD_EXIT(1000, target_atom.NAME)
             end
         end
@@ -739,11 +740,11 @@ do  -- Internal update behavior for individual tests.
             end
         end
 
-        -- Zero is a virtual timestamp here; mustrun reports whether this
+        -- The oldest timestamp is virtual here; mustrun reports whether this
         -- invocation selected the test action.
-        target.TIMESTAMP = 0
+        target.TIMESTAMP = oldest_timestamp
         target.BUILDING = false
-        return 0, mustrun
+        return oldest_timestamp, mustrun
     end
 end
 
