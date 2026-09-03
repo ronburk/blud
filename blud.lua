@@ -67,9 +67,10 @@ end
 local bludfile_path = get_bludfile_path()
 local luac_path     = bludfile_path .. ".luac"
 local blud_exe_path = get_executable_path()
-local blud_exe_timestamp = get_path_timestamp(blud_exe_path)
-local bludfile_timestamp = get_path_timestamp(bludfile_path)
-local luac_timestamp     = get_path_timestamp(luac_path)
+local bootstrap_dircache = blud.require("dircache.lua")
+local blud_exe_timestamp = bootstrap_dircache.get_timestamp(blud_exe_path)
+local bludfile_timestamp = bootstrap_dircache.get_timestamp(bludfile_path)
+local luac_timestamp     = bootstrap_dircache.get_timestamp(luac_path)
 
 local luac_needs_building = true
 if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
@@ -252,3 +253,4 @@ blud.debugger.probe({func="<update>"})
 -- util.print("%d targets", #blud.primary_targets)
 blud.build_targets(blud.primary_targets)
 blud.why.report()
+

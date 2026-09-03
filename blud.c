@@ -16,8 +16,6 @@
 #ifdef _WIN32
     #include <windows.h>
 #else
-    #include <sys/stat.h>
-    #include <time.h>
     #include <unistd.h>
 #endif
 
@@ -532,61 +530,6 @@ static int lua_blud_timestamp_api_newindex(lua_State* L) {
 }
 
 
-// Returns microseconds since Unix epoch, or -1 on error
-int64_t get_high_res_timestamp(const char* path) {
-    if (!path || path[0] == '\0') {
-        return -1; // Invalid path
-    }
-
-    int64_t timestamp = 0;
-
-#ifdef _WIN32
-    WIN32_FILE_ATTRIBUTE_DATA file_info;
-    if (GetFileAttributesEx(path, GetFileExInfoStandard, &file_info)) {
-        ULARGE_INTEGER uli;
-        uli.LowPart = file_info.ftLastWriteTime.dwLowDateTime;
-        uli.HighPart = file_info.ftLastWriteTime.dwHighDateTime;
-
-        // Convert to Unix epoch (January 1, 1970) and to microseconds
-        timestamp = (uli.QuadPart - 116444736000000000ULL) / 10;
-    } else {
-        // Optionally handle GetLastError() for more detailed error information
-        return -1;
-    }
-#else
-    struct stat st;
-    if (stat(path, &st) == 0) {
-        #if defined(__APPLE__) && defined(__MACH__)
-            timestamp = ((int64_t)st.st_mtimespec.tv_sec * 1000000LL) + (st.st_mtimespec.tv_nsec / 1000);
-        #elif defined(__linux__)
-            timestamp = ((int64_t)st.st_mtim.tv_sec * 1000000LL) + (st.st_mtim.tv_nsec / 1000);
-        #else
-            timestamp = (int64_t)st.st_mtime * 1000000LL;
-        #endif
-    } else {
-        // Optionally handle errno for more detailed error information
-        return -1;
-    }
-#endif
-
-    return timestamp;
-}
-
-static int lua_get_path_timestamp(lua_State* L) {
-    const char *path = luaL_checkstring(L, 1);
-    int64_t timestamp = get_high_res_timestamp(path);
-
-    if (timestamp == -1) {
-        lua_pushnil(L);
-        lua_pushstring(L, "Failed to get timestamp");
-        return 2;
-    }
-
-    lua_pushinteger(L, timestamp);
-    return 1;
-}
-
-
 int initialize_lua(lua_State* L, const char* init_code, size_t init_size) {
     assert(init_code != NULL);
     // Create the "blud" table in the global Lua environment
@@ -729,7 +672,6 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_remove_file", lua_os_remove_file);
     lua_register(L, "os_touch", lua_os_touch);
     lua_register(L, "get_executable_path", lua_get_executable_path);
-    lua_register(L, "get_path_timestamp", lua_get_path_timestamp);
     lua_register(L, "tokenize_dependency_line", lua_tokenize_dependency_line);
     return 0;
 }
@@ -769,3 +711,4 @@ static int run_lua_vm(int argc, char** argv) {
 int main(int argc, char** argv) {
     return run_lua_vm(argc, argv);
 }
+

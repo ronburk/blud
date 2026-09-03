@@ -171,9 +171,10 @@ function blud.luac_needs_building()
     local luac_path = bludfile_path .. ".luac"
     local blud_exe_path = get_executable_path()
     assert(blud_exe_path ~= nil)
-    local blud_exe_timestamp = get_path_timestamp(blud_exe_path)
-    local bludfile_timestamp = get_path_timestamp(bludfile_path)
-    local luac_timestamp     = get_path_timestamp(luac_path)
+    local dircache = blud.require("dircache.lua")
+    local blud_exe_timestamp = dircache.get_timestamp(blud_exe_path)
+    local bludfile_timestamp = dircache.get_timestamp(bludfile_path)
+    local luac_timestamp     = dircache.get_timestamp(luac_path)
 
     local luac_needs_building = true
     if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
@@ -191,3 +192,4 @@ end
 -- Example test
 blud.require("blud.lua")
 BLUD_EXIT(0)
+
