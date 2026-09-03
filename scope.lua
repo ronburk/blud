@@ -2,7 +2,7 @@
 scope.lua - implement the scopes of macros/variables
 --]]
 
-local Macro = require("macro")
+local Macro = require("blud.macro")
 
 local Scope = {}     -- this will be the metatable for scope objects
 Scope.__index = Scope
