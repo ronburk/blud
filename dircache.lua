@@ -85,7 +85,7 @@ local function recursive_glob_match(words, pattern_components, index, current_pa
             if index == #pattern_components then
                 table.insert(words, full_path)
                 match_count = match_count + 1
-            else
+            elseif dir_cache[matched_entry].is_dir then
                 local next_dir_cache = get_cached_dir(full_path)
                 match_count = match_count + recursive_glob_match(
                     words,
