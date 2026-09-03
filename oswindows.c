@@ -27,21 +27,37 @@ static int make_one_dir(const char* path) {
     return 2;
 }
 
+static int filetime_to_timestamp(
+    BLUD_TIMESTAMP* timestamp,
+    FILETIME file_time
+) {
+    ULARGE_INTEGER value;
+
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    if (value.QuadPart < 116444736000000000ULL)
+        return -1;
+    value.QuadPart -= 116444736000000000ULL;
+    timestamp->seconds = (int64_t)(value.QuadPart / 10000000ULL);
+    timestamp->nanoseconds = (uint32_t)(value.QuadPart % 10000000ULL) * 100;
+    return 0;
+}
+
 int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     FILETIME now;
-    ULARGE_INTEGER file_time;
-    uint64_t ticks;
 
     assert(timestamp != NULL);
     GetSystemTimeAsFileTime(&now);
-    file_time.LowPart = now.dwLowDateTime;
-    file_time.HighPart = now.dwHighDateTime;
-    if (file_time.QuadPart < 116444736000000000ULL)
+    return filetime_to_timestamp(timestamp, now);
+}
+
+int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path) {
+    WIN32_FILE_ATTRIBUTE_DATA attributes;
+
+    assert(timestamp != NULL);
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &attributes))
         return -1;
-    ticks = file_time.QuadPart - 116444736000000000ULL;
-    timestamp->seconds = (int64_t)(ticks / 10000000ULL);
-    timestamp->nanoseconds = (uint32_t)(ticks % 10000000ULL) * 100;
-    return 0;
+    return filetime_to_timestamp(timestamp, attributes.ftLastWriteTime);
 }
 
 // Create only path; unlike os_mkdir(), do not synthesize parent directories.
@@ -442,19 +458,16 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir) {
 
     do {
         const char* name = entry.cFileName;
-        ULARGE_INTEGER time;
-        int64_t seconds;
+        BLUD_TIMESTAMP timestamp;
         int is_dir;
 
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
             continue;
 
-        time.LowPart = entry.ftLastWriteTime.dwLowDateTime;
-        time.HighPart = entry.ftLastWriteTime.dwHighDateTime;
-        seconds = (int64_t)((time.QuadPart - 116444736000000000ULL) /
-                            10000000ULL);
+        if (filetime_to_timestamp(&timestamp, entry.ftLastWriteTime) != 0)
+            continue;
         is_dir = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        callback(data, name, seconds, is_dir);
+        callback(data, name, &timestamp, is_dir);
     } while (FindNextFileA(find, &entry));
 
     if (GetLastError() == ERROR_NO_MORE_FILES)
