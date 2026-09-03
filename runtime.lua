@@ -447,7 +447,7 @@ function is_pattern(word)
     end
 end
 
-blud.current_time = os.time()
+blud.current_time = blud.timestamp.get_system()
 blud.why = require("why")
 blud.shallow_copy = function (original)
     local copy = {}
@@ -468,20 +468,6 @@ blud.dump_atom = function (atom)
 end
 
 require("atom")
-
-blud.get_fs_timestamp = function (filepath)
-    local command = string.format("stat -c %%Y '%s' 2>/dev/null", filepath)
-    local pipe = io.popen(command, "r")
-    local output = pipe:read("*a")
-    pipe:close()
-
-    -- Convert the timestamp to a number
-    local timestamp = tonumber(output)
-    if not timestamp then
-        timestamp = 0
-    end
-    return timestamp
-end
 
 require("operator")
 
