@@ -132,6 +132,7 @@ static int lua_dir_entry_index(lua_State* L) {
     const char* key = lua_tostring(L, 2);
     BLUD_TIMESTAMP value;
     BLUD_TIMESTAMP* timestamp;
+    int is_dir;
 
     if (key == NULL || strcmp(key, "timestamp") != 0)
         return 0;
@@ -146,11 +147,18 @@ static int lua_dir_entry_index(lua_State* L) {
     if (os_get_path_timestamp(&value, lua_tostring(L, -1)) != 0)
         return 0;
 
+    lua_pushliteral(L, "is_dir");
+    lua_rawget(L, 1);
+    is_dir = lua_toboolean(L, -1);
+    lua_pop(L, 1);
+
     timestamp = new_blud_timestamp(L);
     *timestamp = value;
-    lua_pushliteral(L, "timestamp");
-    lua_pushvalue(L, -2);
-    lua_rawset(L, 1);
+    if (!is_dir) {
+        lua_pushliteral(L, "timestamp");
+        lua_pushvalue(L, -2);
+        lua_rawset(L, 1);
+    }
     return 1;
 }
 
@@ -172,7 +180,7 @@ static void callback(
         lua_pushlstring(info->L, name, name_len);
         lua_settable(info->L, -3);
 
-        if (timestamp != NULL) {
+        if (!is_dir && timestamp != NULL) {
             *new_blud_timestamp(info->L) = *timestamp;
             lua_setfield(info->L, -2, "timestamp");
         }
