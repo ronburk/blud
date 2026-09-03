@@ -529,8 +529,8 @@ static int lua_blud_timestamp_api_index(lua_State* L) {
 
     luaL_checkudata(L, 1, blud_timestamp_api_metatable);
     key = luaL_checkstring(L, 2);
-    if (strcmp(key, "oldest") == 0) {
-        lua_pushvalue(L, lua_upvalueindex(1));
+    if (strcmp(key, "oldest") == 0 || strcmp(key, "newest") == 0) {
+        lua_getfield(L, lua_upvalueindex(1), key);
         return 1;
     }
     if (strcmp(key, "get_system") == 0) {
@@ -635,7 +635,6 @@ void set_command_line(lua_State* L, int argc, char** argv) {
 
 int luaopen_mylib(lua_State *L) {
     have_build_start_timestamp = os_get_system_timestamp(&build_start_timestamp) == 0;
-    BLUD_TIMESTAMP* oldest_timestamp;
 
     luaL_newmetatable(L, blud_timestamp_metatable);
     lua_pushcfunction(L, lua_blud_timestamp_equal);
@@ -651,9 +650,19 @@ int luaopen_mylib(lua_State *L) {
     lua_pop(L, 1);
 
     luaL_newmetatable(L, blud_timestamp_api_metatable);
-    oldest_timestamp = new_blud_timestamp(L);
-    oldest_timestamp->seconds = 0;
-    oldest_timestamp->nanoseconds = 0;
+    lua_newtable(L);
+    {
+        BLUD_TIMESTAMP* timestamp = new_blud_timestamp(L);
+        timestamp->seconds = 0;
+        timestamp->nanoseconds = 0;
+        lua_setfield(L, -2, "oldest");
+    }
+    {
+        BLUD_TIMESTAMP* timestamp = new_blud_timestamp(L);
+        timestamp->seconds = INT64_MAX;
+        timestamp->nanoseconds = UINT32_MAX;
+        lua_setfield(L, -2, "newest");
+    }
     lua_pushcclosure(L, lua_blud_timestamp_api_index, 1);
     lua_setfield(L, -2, "__index");
     lua_pushcfunction(L, lua_blud_timestamp_api_newindex);
