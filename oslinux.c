@@ -589,22 +589,20 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
         {
             int is_dir;
 
-            if(entry->d_type == DT_DIR) {
-                is_dir = 1;
-            } else if(entry->d_type == DT_UNKNOWN || entry->d_type == DT_LNK) {
-                if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
-                    // A concurrent removal between readdir() and fstatat() is benign.
-                    if(errno == ENOENT)
-                        continue;
-                    error_number = errno;
-                    break;
-                }
-                is_dir = S_ISDIR(statbuf.st_mode);
-            } else {
-                is_dir = 0;
+            if(fstatat(dirfd(dp), name, &statbuf, 0) == -1) {
+                // A concurrent removal between readdir() and fstatat() is benign.
+                if(errno == ENOENT)
+                    continue;
+                error_number = errno;
+                break;
             }
-
-            callback(data, name, NULL, is_dir);
+            is_dir = S_ISDIR(statbuf.st_mode);
+            {
+                BLUD_TIMESTAMP timestamp;
+                timestamp.seconds = (int64_t)statbuf.st_mtim.tv_sec;
+                timestamp.nanoseconds = (uint32_t)statbuf.st_mtim.tv_nsec;
+                callback(data, name, &timestamp, is_dir);
+            }
         }
     }
 

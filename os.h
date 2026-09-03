@@ -6,7 +6,7 @@
 #include "blud.h"
 
 
-// A NULL timestamp means the entry timestamp was deliberately left unloaded.
+// The callback receives each child's filesystem timestamp, including directories.
 typedef void (*BLUD_DIR_CALLBACK)(
     void*,
     const char*,
