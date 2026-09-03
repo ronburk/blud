@@ -10,6 +10,7 @@
 #include <sys/sendfile.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <time.h>
 #include <utime.h>
 #include "os.h"
@@ -53,6 +54,29 @@ int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path) {
     timestamp->seconds = (int64_t)statbuf.st_mtim.tv_sec;
     timestamp->nanoseconds = (uint32_t)statbuf.st_mtim.tv_nsec;
     return 0;
+}
+
+char* os_get_executable_path(void) {
+    size_t size = PATH_MAX;
+
+    for (;;) {
+        char* path = (char*)malloc(size);
+        ssize_t bytes_read;
+
+        assert(path != NULL);
+        bytes_read = readlink("/proc/self/exe", path, size);
+        if (bytes_read < 0) {
+            free(path);
+            return NULL;
+        }
+        if ((size_t)bytes_read < size) {
+            path[bytes_read] = '\0';
+            return path;
+        }
+
+        free(path);
+        size *= 2;
+    }
 }
 
 static char* join_path(const char* parent, const char* child, size_t child_len) {
