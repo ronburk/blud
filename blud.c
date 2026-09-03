@@ -114,8 +114,18 @@ static int  is_pattern(const char* pattern, int len){
 typedef struct BLUD_DIR_INFO {
     lua_State*    L;
     int           table_index;
+    const char*   directory;
     luaL_Buffer   buffer;
 } BLUD_DIR_INFO;
+
+static void push_child_path(lua_State* L, const char* directory, const char* name) {
+    size_t length = strlen(directory);
+    int has_separator = length > 0 &&
+                        (directory[length - 1] == '/' ||
+                         directory[length - 1] == '\\');
+
+    lua_pushfstring(L, "%s%s%s", directory, has_separator ? "" : "/", name);
+}
 
 static void callback(void* data, const char* name, int64_t timestamp, int is_dir){
     BLUD_DIR_INFO*  info = (BLUD_DIR_INFO*) data;
@@ -137,6 +147,12 @@ static void callback(void* data, const char* name, int64_t timestamp, int is_dir
         lua_pushstring(info->L, "is_dir");
         lua_pushboolean(info->L, is_dir);
         lua_settable(info->L, -3);
+
+        if (is_dir) {
+            lua_pushliteral(info->L, "path");
+            push_child_path(info->L, info->directory, name);
+            lua_settable(info->L, -3);
+        }
     }
     // now stack is [name][table_of_attributes]
     assert(lua_istable(info->L, info->table_index));
@@ -148,6 +164,7 @@ static int lua_get_dir_cache(lua_State *L) {
     const char*     dir = luaL_checkstring(L, 1);
 
     info.L              = L;
+    info.directory      = dir;
     lua_newtable(L);        // table return value
     info.table_index    = lua_gettop(L);
     lua_pushstring(L, "."); // key to store big buffer of all dir entry names
@@ -711,4 +728,3 @@ static int run_lua_vm(int argc, char** argv) {
 int main(int argc, char** argv) {
     return run_lua_vm(argc, argv);
 }
-
