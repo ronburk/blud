@@ -30,6 +30,8 @@ atom
     May also contain PREREQUISITES, ACTION, TYPE, BOUND_NAME, etc.
 --]]
 
+local dircache = require("blud.dircache")
+
 local function dump1(o)
     if type(o) == 'table' then
         local s = '{ '
@@ -123,7 +125,7 @@ function glob_words(input)  -- ?? must it be global???
 
     for _, word in ipairs(input) do
         if is_pattern(word) then
-            blud.glob.expand_pattern(output, word)
+            dircache.expand_pattern(output, word)
         else
             table.insert(output, word)
         end
@@ -133,13 +135,13 @@ function glob_words(input)  -- ?? must it be global???
 end
 
 
-blud.debugger = require("debugger")
+blud.debugger = require("blud.debugger")
 if blud.command_line_options.debug == true then
     blud.debugger.probe = blud.debugger.real_probe
 end
-blud.Macro = require("macro")
+blud.Macro = require("blud.macro")
 -- shell.execute() runs blud commands; only an explicit `shell` delegates.
-blud.shell = require("shell")
+blud.shell = require("blud.shell")
 
 blud.rules          = {}
 
@@ -265,9 +267,8 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     )
 end
 
-blud.implicit        = require("implicit")
+blud.implicit        = require("blud.implicit")
 blud.error           = errorf
-blud.glob            = blud.require("dircache.lua")
 blud.operators       = {}
 blud.build_atom      = nil
 blud.default_build   = nil
@@ -284,7 +285,7 @@ blud.array_append    = function(array, more)
     end
 end
 
-blud.Scope = require("scope")
+blud.Scope = require("blud.scope")
 
 for name, value in pairs(blud.command_line_options.commandline_booleans) do
     blud.Scope.commandline:set_boolean(name, value)
@@ -448,7 +449,7 @@ function is_pattern(word)
 end
 
 blud.current_time = blud.timestamp.get_system()
-blud.why = require("why")
+blud.why = require("blud.why")
 blud.shallow_copy = function (original)
     local copy = {}
     for key, value in pairs(original) do
@@ -467,9 +468,9 @@ blud.dump_atom = function (atom)
     return str
 end
 
-require("atom")
+require("blud.atom")
 
-require("operator")
+require("blud.operator")
 
 blud.get_or_create_target = function(target_name)
     local target = blud.TARGETS[target_name]
