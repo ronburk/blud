@@ -82,7 +82,7 @@ function implicit.find_forward(target_name)
             for j = 1, #rule.prerequisites do -- do prerequisites exist?
                 local prereq_pattern = rule.prerequisites[j]
                 local prereq_word    = implicit.expand(prereq_pattern, match.stem, match.dir_stem)
-                if not get_path_timestamp(prereq_word) then
+                if not blud.glob.get_timestamp(prereq_word) then
                     ok = false
                     break
                 end
@@ -366,3 +366,4 @@ test_pattern("singlefile.txt", "otherfile.txt", nil, nil)
 --error("implicit.lua exits because we are temporarily testing")
 
 return implicit
+
