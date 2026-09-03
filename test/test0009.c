@@ -8,7 +8,12 @@ typedef struct {
     int unexpected_count;
 } TEST_INFO;
 
-static void count_entry(void* data, const char* name, int64_t timestamp, int is_dir)
+static void count_entry(
+    void* data,
+    const char* name,
+    const BLUD_TIMESTAMP* timestamp,
+    int is_dir
+)
 {
     TEST_INFO* info = (TEST_INFO*)data;
 
