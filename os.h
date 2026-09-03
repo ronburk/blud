@@ -37,9 +37,6 @@ extern int os_path_type(const char* path);
 // Store the Unix-epoch system time in timestamp; return 0 or -1.
 extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
 
-// Store path's Unix-epoch modification time in timestamp; return 0 or -1.
-extern int os_get_path_timestamp(BLUD_TIMESTAMP* timestamp, const char* path);
-
 // Return the executable path in a heap-allocated string, or NULL on failure.
 extern char* os_get_executable_path(void);
 
