@@ -4,7 +4,7 @@ local DirCache = {}
 --[[
 directory_cache = {
     ["/absolute/path/to/dir"] = {
-        ["."]       = <entry for the directory itself>,
+        ["."]       = <NUL-separated child names>,
         ["foo.c"]   = { name = ..., is_dir = ... },
         ["include"] = { name = ..., is_dir = ... },
         ...
@@ -13,8 +13,8 @@ directory_cache = {
 }
 
 Each value is the table returned by get_dir_cache() for that directory.
-The special "." entry describes the directory itself rather than one of
-its children; glob_expand() is given that entry as its directory context.
+The special "." entry is a NUL-separated string of child names used by
+glob_expand(), not a filesystem entry.
 ]]
 local directory_cache = {}
 
@@ -184,6 +184,19 @@ local function path_split(path)
     return components
 end
 
+local function split_parent(path)
+    local parent, name = path:match("^(.*)/([^/]+)$")
+    assert(parent and name, "path has no parent: " .. path)
+
+    -- A drive root must retain its trailing separator ("C:/").
+    if parent:match("^[A-Za-z]:$") then
+        parent = parent .. "/"
+    elseif parent == "" then
+        parent = "/"
+    end
+    return parent, name
+end
+
 -- Main function to expand the glob pattern
 function DirCache.expand_pattern(words, pattern)
     -- Split the pattern into path components
@@ -221,6 +234,25 @@ function DirCache.expand_pattern(words, pattern)
         end
     end
     return match_count
+end
+
+-- Return the cached metadata for one path, or nil when it is unavailable.
+function DirCache.get_timestamp(path)
+    local absolute_path = AliasDir.to_absolute(path)
+    local parent, name = split_parent(absolute_path)
+    local ok, entries = pcall(get_cached_dir, parent)
+    if not ok then
+        return nil
+    end
+
+    local entry = entries[name]
+    return entry and entry.timestamp or nil
+end
+
+-- Return the cached directory table.  The reserved "." key is matcher data,
+-- not an entry, and callers must not treat it as one.
+function DirCache.get_entries(directory)
+    return get_cached_dir(directory)
 end
 
 return DirCache
