@@ -94,6 +94,65 @@ static int lua_blud_timestamp_tostring(lua_State* L) {
     return 1;
 }
 
+static int lua_timestamp_to_table(lua_State* L) {
+    const BLUD_TIMESTAMP* timestamp = check_blud_timestamp(L, 1);
+    BLUD_TIMESTAMP_FIELDS fields;
+    int utc = lua_isnoneornil(L, 2) ? 0 : lua_toboolean(L, 2);
+
+    if (!lua_isnoneornil(L, 2) && !lua_isboolean(L, 2))
+        return luaL_error(L, "timestamp timezone must be boolean");
+    if (os_timestamp_to_fields(timestamp, &fields, utc) != 0)
+        return luaL_error(L, "could not convert timestamp to calendar fields");
+    lua_newtable(L);
+    lua_pushinteger(L, fields.year); lua_setfield(L, -2, "year");
+    lua_pushinteger(L, fields.month); lua_setfield(L, -2, "month");
+    lua_pushinteger(L, fields.day); lua_setfield(L, -2, "day");
+    lua_pushinteger(L, fields.hour); lua_setfield(L, -2, "hour");
+    lua_pushinteger(L, fields.minute); lua_setfield(L, -2, "minute");
+    lua_pushinteger(L, fields.second); lua_setfield(L, -2, "second");
+    lua_pushinteger(L, fields.nanosecond); lua_setfield(L, -2, "nanosecond");
+    return 1;
+}
+
+static int lua_timestamp_from_table(lua_State* L) {
+    BLUD_TIMESTAMP_FIELDS fields;
+    BLUD_TIMESTAMP* timestamp;
+    int utc;
+    const char* names[] = {"year", "month", "day", "hour", "minute", "second", "nanosecond"};
+    int* values[] = {&fields.year, &fields.month, &fields.day, &fields.hour,
+                     &fields.minute, &fields.second, &fields.nanosecond};
+    int i;
+
+    luaL_checktype(L, 2, LUA_TTABLE);
+    utc = lua_isnoneornil(L, 3) ? 0 : lua_toboolean(L, 3);
+    if (!lua_isnoneornil(L, 3) && !lua_isboolean(L, 3))
+        return luaL_error(L, "timestamp timezone must be boolean");
+    for (i = 0; i < 6; ++i) {
+        lua_getfield(L, 2, names[i]);
+        if (!lua_isnumber(L, -1) || lua_tointeger(L, -1) != lua_tonumber(L, -1))
+            return luaL_error(L, "timestamp field %s must be an integer", names[i]);
+        *values[i] = (int)lua_tointeger(L, -1);
+        lua_pop(L, 1);
+    }
+    lua_getfield(L, 2, "nanosecond");
+    if (lua_isnoneornil(L, -1))
+        fields.nanosecond = 0;
+    else if (!lua_isnumber(L, -1) || lua_tointeger(L, -1) != lua_tonumber(L, -1))
+        return luaL_error(L, "timestamp field nanosecond must be an integer");
+    else
+        fields.nanosecond = (int)lua_tointeger(L, -1);
+    lua_pop(L, 1);
+    if (fields.month < 1 || fields.month > 12 || fields.day < 1 || fields.day > 31 ||
+        fields.hour < 0 || fields.hour > 23 || fields.minute < 0 || fields.minute > 59 ||
+        fields.second < 0 || fields.second > 60 || fields.nanosecond < 0 ||
+        fields.nanosecond >= 1000000000)
+        return luaL_error(L, "timestamp field out of range");
+    timestamp = new_blud_timestamp(L);
+    if (os_fields_to_timestamp(&fields, timestamp, utc) != 0)
+        return luaL_error(L, "could not convert calendar fields to timestamp");
+    return 1;
+}
+
 
 #if 0
 static int  is_pattern(const char* pattern, int len){
@@ -694,8 +753,12 @@ int luaopen_mylib(lua_State *L) {
     lua_setfield(L, -2, "__le");
     lua_pushcfunction(L, lua_blud_timestamp_tostring);
     lua_setfield(L, -2, "__tostring");
+    lua_pushcfunction(L, lua_timestamp_to_table);
+    lua_setfield(L, -2, "to_table");
     lua_pushliteral(L, "blud timestamp");
     lua_setfield(L, -2, "__metatable");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
     lua_pop(L, 1);
 
     luaL_newmetatable(L, blud_timestamp_api_metatable);
@@ -716,6 +779,8 @@ int luaopen_mylib(lua_State *L) {
     lua_setfield(L, -2, "__index");
     lua_pushcfunction(L, lua_blud_timestamp_api_newindex);
     lua_setfield(L, -2, "__newindex");
+    lua_pushcfunction(L, lua_timestamp_from_table);
+    lua_setfield(L, -2, "__call");
     lua_pushliteral(L, "blud timestamp API");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
