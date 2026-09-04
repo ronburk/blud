@@ -470,15 +470,3 @@ end
 require("blud.atom")
 
 require("blud.operator")
-
-blud.get_or_create_target = function(target_name)
-    local target = blud.TARGETS[target_name]
-    if target == nil then
-        target = blud.new_atom(target_name)
-        blud.TARGETS[target_name] = target
-        if target_name:find("%%") then
-            target.IMPLICIT = true
-        end
-    end
-    return target
-end
