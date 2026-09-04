@@ -1,6 +1,7 @@
 #include "os.h"
 
 #include <assert.h>
+#include <stdio.h>      // For fprintf()
 #include <windows.h>  // For GetCurrentDirectory()
 #include <stdlib.h>    // For malloc(), realloc(), and free()
 #include <string.h>
@@ -39,8 +40,10 @@ static int filetime_to_timestamp(
 
     value.LowPart = file_time.dwLowDateTime;
     value.HighPart = file_time.dwHighDateTime;
-    if (value.QuadPart < 116444736000000000ULL)
-        return -1;
+    if (value.QuadPart < 116444736000000000ULL) {
+        fprintf(stderr, "Windows file timestamp predates the Unix epoch\n");
+        abort();
+    }
     value.QuadPart -= 116444736000000000ULL;
     timestamp->seconds = (int64_t)(value.QuadPart / 10000000ULL);
     timestamp->nanoseconds = (int32_t)(value.QuadPart % 10000000ULL) * 100;
@@ -402,8 +405,7 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir) {
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
             continue;
 
-        if (filetime_to_timestamp(&timestamp, entry.ftLastWriteTime) != 0)
-            continue;
+        filetime_to_timestamp(&timestamp, entry.ftLastWriteTime);
         is_dir = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         callback(data, name, &timestamp, is_dir);
     } while (FindNextFileA(find, &entry));
