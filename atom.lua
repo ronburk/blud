@@ -260,6 +260,7 @@ setmetatable(super_atom, blud.global)
 blud.global.__index      = blud.global
 super_atom.__index  = super_atom
 
+local new_atom
 do
     local suffix_map = {
         [".obj"] = ".o",
@@ -269,7 +270,7 @@ do
         [".cxx"] = ".cpp",
         [".c++"] = ".cpp",
     }
-    blud.new_atom = function(atom_name)
+    new_atom = function(atom_name)
         local atom = {
             NAME          = atom_name,
         -- atom must always have a prerequisite list, even if it is empty
@@ -332,7 +333,7 @@ end
 blud.get_or_create_target = function(target_name)
     local target = targets[target_name]
     if target == nil then
-        target = blud.new_atom(target_name)
+        target = new_atom(target_name)
         targets[target_name] = target
         if target_name:find("%%") then
             target.IMPLICIT = true
