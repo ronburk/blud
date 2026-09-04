@@ -45,6 +45,29 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     return 0;
 }
 
+int os_timestamp_to_fields(
+    const BLUD_TIMESTAMP* timestamp,
+    BLUD_TIMESTAMP_FIELDS* fields,
+    int utc
+) {
+    struct tm calendar;
+    time_t seconds = (time_t)timestamp->seconds;
+
+    assert(timestamp != NULL);
+    assert(fields != NULL);
+    if ((utc ? gmtime_r(&seconds, &calendar) : localtime_r(&seconds, &calendar)) == NULL)
+        return -1;
+
+    fields->year = calendar.tm_year + 1900;
+    fields->month = calendar.tm_mon + 1;
+    fields->day = calendar.tm_mday;
+    fields->hour = calendar.tm_hour;
+    fields->minute = calendar.tm_min;
+    fields->second = calendar.tm_sec;
+    fields->nanosecond = timestamp->nanoseconds;
+    return 0;
+}
+
 char* os_get_executable_path(void) {
     size_t size = PATH_MAX;
 

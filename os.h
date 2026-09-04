@@ -5,6 +5,22 @@
 
 #include "blud.h"
 
+typedef struct BLUD_TIMESTAMP_FIELDS {
+    int year;
+    int month;
+    int day;
+    int hour;
+    int minute;
+    int second;
+    int nanosecond;
+} BLUD_TIMESTAMP_FIELDS;
+
+// Convert an absolute timestamp to UTC or local calendar fields.
+extern int os_timestamp_to_fields(
+    const BLUD_TIMESTAMP* timestamp,
+    BLUD_TIMESTAMP_FIELDS* fields,
+    int utc
+);
 
 // The callback receives each child's filesystem timestamp, including directories.
 typedef void (*BLUD_DIR_CALLBACK)(
