@@ -22,6 +22,13 @@ extern int os_timestamp_to_fields(
     int utc
 );
 
+// Convert UTC or local calendar fields to an absolute timestamp.
+extern int os_fields_to_timestamp(
+    const BLUD_TIMESTAMP_FIELDS* fields,
+    BLUD_TIMESTAMP* timestamp,
+    int utc
+);
+
 // The callback receives each child's filesystem timestamp, including directories.
 typedef void (*BLUD_DIR_CALLBACK)(
     void*,
