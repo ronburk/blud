@@ -14,10 +14,13 @@ local windows_paths = initial_cwd:match("^[A-Za-z]:[/\\]") or
 local current_cwd
 local cwd_stack = {}
 
+-- Use one separator internally; the OS-facing functions accept either form.
 local function with_forward_slashes(path)
     return (path:gsub("\\", "/"))
 end
 
+-- Split an absolute path into its root prefix and remaining components.
+-- A root is the part that cannot be traversed above: '/', 'C:/', or '//host/share'.
 local function split_root(path)
     local drive, remainder = path:match("^([A-Za-z]:)/(.*)$")
     if drive then
@@ -34,6 +37,8 @@ local function split_root(path)
     end
 end
 
+-- Append ordinary path components, resolving '.' and cancellable '..' pairs.
+-- This is lexical normalization; it deliberately does not inspect the filesystem.
 local function append_normalized(components, path)
     for component in path:gmatch("[^/]+") do
         if component == ".." then
@@ -46,6 +51,7 @@ local function append_normalized(components, path)
     end
 end
 
+-- Reconstruct an absolute path from its unchanged root and normalized components.
 local function join_absolute(root, components)
     if #components == 0 then
         return root
@@ -54,6 +60,7 @@ local function join_absolute(root, components)
     return root .. separator .. table.concat(components, "/")
 end
 
+-- Return the root and normalized component list for an absolute path.
 local function absolute_parts(path)
     path = with_forward_slashes(path)
     local root, remainder = split_root(path)
@@ -64,6 +71,7 @@ local function absolute_parts(path)
     return root, components
 end
 
+-- Canonicalize separators and '.', '..' in an absolute path without filesystem I/O.
 local function normalize_absolute(path)
     local root, components = absolute_parts(path)
     return join_absolute(root, components)
@@ -80,6 +88,8 @@ function AliasDir.to_absolute(path)
     path = with_forward_slashes(path)
     assert(path ~= "", "empty path")
 
+    -- On Windows, '\\foo' means root-relative on the current drive, while
+    -- '\\\\server\\share' is a complete UNC root handled by split_root().
     if windows_paths and path:sub(1, 1) == "/" and
        path:sub(1, 2) ~= "//" then
         local current_root = split_root(current_cwd)
@@ -106,6 +116,7 @@ function AliasDir.to_absolute(path)
 end
 
 local function path_part_equal(left, right)
+    -- Windows path components are case-insensitive; Unix components are not.
     if windows_paths then
         return left:lower() == right:lower()
     end
@@ -121,6 +132,7 @@ function AliasDir.to_relative(path)
         return absolute
     end
 
+    -- Remove the shared prefix, then add '..' for each remaining current-dir part.
     local common = 0
     while current_components[common + 1] and
           target_components[common + 1] and
@@ -140,6 +152,7 @@ function AliasDir.to_relative(path)
 end
 
 function AliasDir.set_cwd(path)
+    -- Keep the logical path synchronized only after the OS changes directory.
     local absolute = AliasDir.to_absolute(path)
     local result = os_setcwd(absolute)
     if result == 0 then
@@ -149,6 +162,7 @@ function AliasDir.set_cwd(path)
 end
 
 function AliasDir.push_cwd(path)
+    -- Save the prior logical directory only when entering the requested one works.
     local previous = current_cwd
     local result = AliasDir.set_cwd(path)
     if result == 0 then
@@ -167,6 +181,7 @@ function AliasDir.pop_cwd()
 end
 
 function AliasDir.reset()
+    -- A new build starts from the original directory with no pending push state.
     local result = AliasDir.set_cwd(initial_cwd)
     if result == 0 then
         cwd_stack = {}
