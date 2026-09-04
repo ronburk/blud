@@ -68,6 +68,31 @@ int os_timestamp_to_fields(
     return 0;
 }
 
+int os_fields_to_timestamp(
+    const BLUD_TIMESTAMP_FIELDS* fields,
+    BLUD_TIMESTAMP* timestamp,
+    int utc
+) {
+    struct tm calendar = {0};
+    time_t seconds;
+
+    assert(fields != NULL);
+    assert(timestamp != NULL);
+    calendar.tm_year = fields->year - 1900;
+    calendar.tm_mon = fields->month - 1;
+    calendar.tm_mday = fields->day;
+    calendar.tm_hour = fields->hour;
+    calendar.tm_min = fields->minute;
+    calendar.tm_sec = fields->second;
+    calendar.tm_isdst = -1;
+    seconds = utc ? timegm(&calendar) : mktime(&calendar);
+    if (seconds == (time_t)-1)
+        return -1;
+    timestamp->seconds = (int64_t)seconds;
+    timestamp->nanoseconds = (int32_t)fields->nanosecond;
+    return 0;
+}
+
 char* os_get_executable_path(void) {
     size_t size = PATH_MAX;
 
