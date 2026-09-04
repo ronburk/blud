@@ -1,31 +1,203 @@
 #include "os.h"
 
 #include <assert.h>
-#include <stdio.h>      // For fprintf()
-#include <windows.h>  // For GetCurrentDirectory()
+#include <limits.h>
+#include <stdio.h>     // For fprintf()
+#include <windows.h>
 #include <stdlib.h>    // For malloc(), realloc(), and free()
 #include <string.h>
+#include <wchar.h>
 
 // Windows APIs accept both separators; recognizing both preserves portable paths.
 static int is_separator(char c) {
     return c == '/' || c == '\\';
 }
 
+static int is_wide_separator(wchar_t c) {
+    return c == L'/' || c == L'\\';
+}
+
+// Paths crossing os.h are UTF-8; Windows filesystem APIs receive UTF-16.
+static wchar_t* utf8_to_utf16(const char* text) {
+    wchar_t* result;
+    int length;
+
+    if (text == NULL) {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return NULL;
+    }
+    length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                 text, -1, NULL, 0);
+    if (length == 0)
+        return NULL;
+    result = (wchar_t*)malloc((size_t)length * sizeof *result);
+    if (result == NULL) {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return NULL;
+    }
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                            text, -1, result, length) == 0) {
+        DWORD error = GetLastError();
+
+        free(result);
+        SetLastError(error);
+        return NULL;
+    }
+    return result;
+}
+
+static char* utf16_to_utf8(const wchar_t* text) {
+    char* result;
+    int length;
+
+    if (text == NULL) {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return NULL;
+    }
+    length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                 text, -1, NULL, 0, NULL, NULL);
+    if (length == 0)
+        return NULL;
+    result = (char*)malloc((size_t)length);
+    if (result == NULL) {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return NULL;
+    }
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                            text, -1, result, length, NULL, NULL) == 0) {
+        DWORD error = GetLastError();
+
+        free(result);
+        SetLastError(error);
+        return NULL;
+    }
+    return result;
+}
+
+static DWORD get_file_attributes(const char* path) {
+    wchar_t* wide_path = utf8_to_utf16(path);
+    DWORD result;
+    DWORD error;
+
+    if (wide_path == NULL)
+        return INVALID_FILE_ATTRIBUTES;
+    result = GetFileAttributesW(wide_path);
+    error = GetLastError();
+    free(wide_path);
+    SetLastError(error);
+    return result;
+}
+
+static BOOL create_directory(const char* path) {
+    wchar_t* wide_path = utf8_to_utf16(path);
+    BOOL result;
+    DWORD error;
+
+    if (wide_path == NULL)
+        return FALSE;
+    result = CreateDirectoryW(wide_path, NULL);
+    error = GetLastError();
+    free(wide_path);
+    SetLastError(error);
+    return result;
+}
+
+static BOOL copy_file(const char* from, const char* to) {
+    wchar_t* wide_from = utf8_to_utf16(from);
+    wchar_t* wide_to;
+    BOOL result;
+    DWORD error;
+
+    if (wide_from == NULL)
+        return FALSE;
+    wide_to = utf8_to_utf16(to);
+    if (wide_to == NULL) {
+        error = GetLastError();
+        free(wide_from);
+        SetLastError(error);
+        return FALSE;
+    }
+    result = CopyFileW(wide_from, wide_to, FALSE);
+    error = GetLastError();
+    free(wide_to);
+    free(wide_from);
+    SetLastError(error);
+    return result;
+}
+
+static BOOL remove_directory(const char* path) {
+    wchar_t* wide_path = utf8_to_utf16(path);
+    BOOL result;
+    DWORD error;
+
+    if (wide_path == NULL)
+        return FALSE;
+    result = RemoveDirectoryW(wide_path);
+    error = GetLastError();
+    free(wide_path);
+    SetLastError(error);
+    return result;
+}
+
+static BOOL delete_file(const char* path) {
+    wchar_t* wide_path = utf8_to_utf16(path);
+    BOOL result;
+    DWORD error;
+
+    if (wide_path == NULL)
+        return FALSE;
+    result = DeleteFileW(wide_path);
+    error = GetLastError();
+    free(wide_path);
+    SetLastError(error);
+    return result;
+}
+
 char* os_get_executable_path(void) {
-    return _strdup(_pgmptr);
+    wchar_t* wide_path = NULL;
+    DWORD capacity = 256;
+
+    while (1) {
+        wchar_t* resized = (wchar_t*)realloc(
+            wide_path,
+            (size_t)capacity * sizeof *wide_path
+        );
+        DWORD length;
+
+        if (resized == NULL) {
+            free(wide_path);
+            return NULL;
+        }
+        wide_path = resized;
+        length = GetModuleFileNameW(NULL, wide_path, capacity);
+        if (length == 0) {
+            free(wide_path);
+            return NULL;
+        }
+        if (length < capacity) {
+            char* path = utf16_to_utf8(wide_path);
+            free(wide_path);
+            return path;
+        }
+        if (capacity > MAXDWORD / 2) {
+            free(wide_path);
+            return NULL;
+        }
+        capacity *= 2;
+    }
 }
 
 // Test for an existing directory when distinguishing collision from failure.
 static int dir_exists(const char* path) {
-    DWORD attributes = GetFileAttributesA(path);
+    DWORD attributes = get_file_attributes(path);
 
     return attributes != INVALID_FILE_ATTRIBUTES &&
            (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-// Normalize CreateDirectoryA() to the shared 0-created, 1-existed, 2-error contract.
+// Normalize CreateDirectoryW() to the shared 0-created, 1-existed, 2-error contract.
 static int make_one_dir(const char* path) {
-    if (CreateDirectoryA(path, NULL))
+    if (create_directory(path))
         return 0;
     if (GetLastError() == ERROR_ALREADY_EXISTS && dir_exists(path))
         return 1;
@@ -66,34 +238,47 @@ int os_mkdir(const char* path) {
 }
 
 char* os_getcwd(void) {
-    char *buffer = NULL;
-    DWORD size = 256;
+    wchar_t* wide_path = NULL;
+    DWORD capacity = 256;
 
     while (1) {
-        // Use realloc to resize the buffer
-        buffer = (char*)realloc(buffer, size);
-        if (buffer == NULL) {
-            return NULL; // Allocation failed
-        }
+        wchar_t* resized = (wchar_t*)realloc(
+            wide_path,
+            (size_t)capacity * sizeof *wide_path
+        );
+        DWORD length;
 
-        // Use GetCurrentDirectory for Windows
-        DWORD result = GetCurrentDirectoryA(size, buffer);
-        if (result != 0 && result < size) {
-            return buffer; // Successfully got the current directory
-        } else if (result > size) {
-            size = result; // Buffer was too small, resize based on the result
-        } else {
-            free(buffer);  // Some error occurred, free memory and return NULL
+        if (resized == NULL) {
+            free(wide_path);
             return NULL;
         }
+        wide_path = resized;
+        length = GetCurrentDirectoryW(capacity, wide_path);
+        if (length == 0) {
+            free(wide_path);
+            return NULL;
+        }
+        if (length < capacity) {
+            char* path = utf16_to_utf8(wide_path);
+            free(wide_path);
+            return path;
+        }
+        capacity = length;
     }
 }
 
 int os_setcwd(const char* path) {
+    wchar_t* wide_path;
+    BOOL result;
+
     if (path == NULL || path[0] == '\0')
         return -1;
-
-    return SetCurrentDirectoryA(path) ? 0 : -1;
+    wide_path = utf8_to_utf16(path);
+    if (wide_path == NULL)
+        return -1;
+    result = SetCurrentDirectoryW(wide_path);
+    free(wide_path);
+    return result ? 0 : -1;
 }
 
 static char* join_path(const char* parent, const char* child,
@@ -146,7 +331,7 @@ static char* copy_destination(const char* from, const char* to) {
     if (from == NULL || from[0] == '\0' || to == NULL || to[0] == '\0')
         return NULL;
 
-    attributes = GetFileAttributesA(to);
+    attributes = get_file_attributes(to);
     if (attributes != INVALID_FILE_ATTRIBUTES) {
         if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             return append_final_name(to, from);
@@ -167,19 +352,20 @@ int os_copy_file(const char* from, const char* to) {
 
     if (destination == NULL)
         return -1;
-    result = CopyFileA(from, destination, FALSE) ? 0 : -1;
+    result = copy_file(from, destination) ? 0 : -1;
     free(destination);
     return result;
 }
 
 static int copy_directory_tree(const char* from, const char* to) {
-    WIN32_FIND_DATAA entry;
+    WIN32_FIND_DATAW entry;
     HANDLE find;
     char* pattern;
+    wchar_t* wide_pattern;
     int created = 0;
     int result = -1;
 
-    if (CreateDirectoryA(to, NULL)) {
+    if (create_directory(to)) {
         created = 1;
     } else if (GetLastError() != ERROR_ALREADY_EXISTS || !dir_exists(to)) {
         return -1;
@@ -188,22 +374,33 @@ static int copy_directory_tree(const char* from, const char* to) {
     pattern = join_path(from, "*", 1);
     if (pattern == NULL)
         goto done;
-    find = FindFirstFileA(pattern, &entry);
+    wide_pattern = utf8_to_utf16(pattern);
     free(pattern);
+    if (wide_pattern == NULL)
+        goto done;
+    find = FindFirstFileW(wide_pattern, &entry);
+    free(wide_pattern);
     if (find == INVALID_HANDLE_VALUE)
         goto done;
     result = 0;
 
     do {
-        const char* name = entry.cFileName;
+        char* name;
         char* from_child;
         char* to_child;
 
-        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+        if (wcscmp(entry.cFileName, L".") == 0 ||
+            wcscmp(entry.cFileName, L"..") == 0)
             continue;
+        name = utf16_to_utf8(entry.cFileName);
+        if (name == NULL) {
+            result = -1;
+            break;
+        }
 
         from_child = join_path(from, name, strlen(name));
         to_child = join_path(to, name, strlen(name));
+        free(name);
         if (from_child == NULL || to_child == NULL) {
             free(from_child);
             free(to_child);
@@ -216,14 +413,14 @@ static int copy_directory_tree(const char* from, const char* to) {
         } else if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
             result = copy_directory_tree(from_child, to_child);
         } else {
-            result = CopyFileA(from_child, to_child, FALSE) ? 0 : -1;
+            result = copy_file(from_child, to_child) ? 0 : -1;
         }
 
         free(from_child);
         free(to_child);
         if (result != 0)
             break;
-    } while (FindNextFileA(find, &entry));
+    } while (FindNextFileW(find, &entry));
 
     if (result == 0 && GetLastError() != ERROR_NO_MORE_FILES)
         result = -1;
@@ -231,50 +428,76 @@ static int copy_directory_tree(const char* from, const char* to) {
 
 done:
     if (created && result != 0)
-        RemoveDirectoryA(to);
+        remove_directory(to);
     return result;
 }
 
-static char* full_path(const char* path) {
-    DWORD size = GetFullPathNameA(path, 0, NULL, NULL);
-    char* result;
+static wchar_t* full_path(const char* path) {
+    wchar_t* wide_path = utf8_to_utf16(path);
+    wchar_t* result = NULL;
+    DWORD capacity;
 
-    if (size == 0)
+    if (wide_path == NULL)
         return NULL;
-    result = (char*)malloc(size);
-    if (result == NULL)
-        return NULL;
-    if (GetFullPathNameA(path, size, result, NULL) == 0) {
-        free(result);
+    capacity = GetFullPathNameW(wide_path, 0, NULL, NULL);
+    if (capacity == 0) {
+        free(wide_path);
         return NULL;
     }
-    return result;
+    while (1) {
+        wchar_t* resized = (wchar_t*)realloc(
+            result,
+            (size_t)capacity * sizeof *result
+        );
+        DWORD length;
+
+        if (resized == NULL) {
+            free(result);
+            free(wide_path);
+            return NULL;
+        }
+        result = resized;
+        length = GetFullPathNameW(wide_path, capacity, result, NULL);
+        if (length == 0) {
+            free(result);
+            free(wide_path);
+            return NULL;
+        }
+        if (length < capacity) {
+            free(wide_path);
+            return result;
+        }
+        capacity = length;
+    }
 }
 
-static int same_or_child_path(const char* parent, const char* path) {
-    size_t parent_len = strlen(parent);
+static int same_or_child_path(const wchar_t* parent, const wchar_t* path) {
+    size_t parent_len = wcslen(parent);
+    size_t path_len = wcslen(path);
 
-    while (parent_len > 0 && is_separator(parent[parent_len - 1]) &&
-           !(parent_len == 3 && parent[1] == ':'))
+    while (parent_len > 0 && is_wide_separator(parent[parent_len - 1]) &&
+           !(parent_len == 3 && parent[1] == L':'))
         --parent_len;
-    if (_strnicmp(parent, path, parent_len) != 0)
+    if (parent_len > INT_MAX || path_len < parent_len ||
+        CompareStringOrdinal(parent, (int)parent_len,
+                             path, (int)parent_len, TRUE) != CSTR_EQUAL)
         return 0;
-    if (parent_len == 3 && parent[1] == ':' &&
-        is_separator(parent[2]))
+    if (parent_len == 3 && parent[1] == L':' &&
+        is_wide_separator(parent[2]))
         return 1;
-    return path[parent_len] == '\0' || is_separator(path[parent_len]);
+    return path[parent_len] == L'\0' || is_wide_separator(path[parent_len]);
 }
 
 int os_copy_dir(const char* from, const char* to) {
     DWORD attributes;
     char* destination;
-    char* canonical_from;
-    char* canonical_to;
+    wchar_t* canonical_from;
+    wchar_t* canonical_to;
     int result;
 
     if (from == NULL || from[0] == '\0')
         return -1;
-    attributes = GetFileAttributesA(from);
+    attributes = get_file_attributes(from);
     if (attributes == INVALID_FILE_ATTRIBUTES ||
         (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
         (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
@@ -307,7 +530,7 @@ int os_path_type(const char* path) {
 
     if (path == NULL || path[0] == '\0')
         return 0;
-    attributes = GetFileAttributesA(path);
+    attributes = get_file_attributes(path);
     if (attributes == INVALID_FILE_ATTRIBUTES)
         return 0;
     if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
@@ -318,17 +541,17 @@ int os_path_type(const char* path) {
 
 // Remove one empty directory. Recursive traversal is implemented in shell.lua.
 int os_remove_dir(const char* path) {
-    return RemoveDirectoryA(path) ? 0 : -1;
+    return remove_directory(path) ? 0 : -1;
 }
 
-// Remove a leaf object. Directory reparse points require RemoveDirectoryA().
+// Remove a leaf object. Directory reparse points require RemoveDirectoryW().
 int os_remove_file(const char* path) {
-    DWORD attributes = GetFileAttributesA(path);
+    DWORD attributes = get_file_attributes(path);
 
     if (attributes != INVALID_FILE_ATTRIBUTES &&
         (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-        return RemoveDirectoryA(path) ? 0 : -1;
-    return DeleteFileA(path) ? 0 : -1;
+        return remove_directory(path) ? 0 : -1;
+    return delete_file(path) ? 0 : -1;
 }
 
 // Update access/modification time and create a missing regular file. Directories
@@ -340,11 +563,15 @@ int os_touch(const char* path) {
     HANDLE file;
     FILETIME now;
     BOOL result;
+    wchar_t* wide_path;
 
     if (path == NULL || path[0] == '\0')
         return -1;
 
-    attributes = GetFileAttributesA(path);
+    wide_path = utf8_to_utf16(path);
+    if (wide_path == NULL)
+        return -1;
+    attributes = GetFileAttributesW(wide_path);
     if (attributes == INVALID_FILE_ATTRIBUTES) {
         creation = OPEN_ALWAYS;
         flags = FILE_ATTRIBUTE_NORMAL;
@@ -352,8 +579,8 @@ int os_touch(const char* path) {
         flags = FILE_FLAG_BACKUP_SEMANTICS;
     }
 
-    file = CreateFileA(
-        path,
+    file = CreateFileW(
+        wide_path,
         FILE_WRITE_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         NULL,
@@ -361,6 +588,7 @@ int os_touch(const char* path) {
         flags,
         NULL
     );
+    free(wide_path);
     if (file == INVALID_HANDLE_VALUE)
         return -1;
 
@@ -373,9 +601,10 @@ int os_touch(const char* path) {
 // Enumerate a directory for the existing Lua directory-cache bridge. Convert
 // FILETIME to Unix seconds and report each child's directory attribute.
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir) {
-    WIN32_FIND_DATAA entry;
+    WIN32_FIND_DATAW entry;
     HANDLE find;
     char* pattern;
+    wchar_t* wide_pattern;
     size_t len;
     int result = -1;
 
@@ -392,26 +621,38 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data, const char* dir) {
     pattern[len++] = '*';
     pattern[len] = '\0';
 
-    find = FindFirstFileA(pattern, &entry);
+    wide_pattern = utf8_to_utf16(pattern);
     free(pattern);
+    if (wide_pattern == NULL)
+        return -1;
+    find = FindFirstFileW(wide_pattern, &entry);
+    free(wide_pattern);
     if (find == INVALID_HANDLE_VALUE)
         return -1;
+    result = 0;
 
     do {
-        const char* name = entry.cFileName;
+        char* name;
         BLUD_TIMESTAMP timestamp;
         int is_dir;
 
-        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+        if (wcscmp(entry.cFileName, L".") == 0 ||
+            wcscmp(entry.cFileName, L"..") == 0)
             continue;
+        name = utf16_to_utf8(entry.cFileName);
+        if (name == NULL) {
+            result = -1;
+            break;
+        }
 
         filetime_to_timestamp(&timestamp, entry.ftLastWriteTime);
         is_dir = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         callback(data, name, &timestamp, is_dir);
-    } while (FindNextFileA(find, &entry));
+        free(name);
+    } while (FindNextFileW(find, &entry));
 
-    if (GetLastError() == ERROR_NO_MORE_FILES)
-        result = 0;
+    if (result == 0 && GetLastError() != ERROR_NO_MORE_FILES)
+        result = -1;
     FindClose(find);
     return result;
 }
