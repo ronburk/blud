@@ -89,9 +89,10 @@ local function parse_command_line(args)
             os.exit(0)
         elseif arg == "-f" then
             i = i + 1
-            if i <= #args then
-                options.bludfile_path = args[i]
+            if i > #args then
+                error("-f requires a bludfile")
             end
+            options.bludfile_path = args[i]
         elseif arg == "--lua" then
             i = i + 1
             if i > #args then
