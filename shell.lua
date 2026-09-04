@@ -209,10 +209,51 @@ local function cp(argv)
     return 0
 end
 
--- Implement `touch [-c|--no-create] [--] path...`. argv[1] is "touch";
+local function parse_touch_timestamp(text)
+    local date, second = text:match("^(%d+)%.(%d%d)$")
+    local year, month, day, hour, minute
+
+    if not date then
+        date = text:match("^(%d+)$")
+        if not date then
+            return nil
+        end
+    end
+    if #date ~= 8 and #date ~= 10 and #date ~= 12 then
+        return nil
+    end
+    if #date == 8 then
+        year = blud.timestamp.get_system():to_table().year
+    elseif #date == 10 then
+        year = tonumber(date:sub(1, 2))
+        year = year >= 69 and year + 1900 or year + 2000
+        date = date:sub(3)
+    else
+        year = tonumber(date:sub(1, 4))
+        date = date:sub(5)
+    end
+
+    month = tonumber(date:sub(1, 2))
+    day = tonumber(date:sub(3, 4))
+    hour = tonumber(date:sub(5, 6))
+    minute = tonumber(date:sub(7, 8))
+    local ok, timestamp = pcall(blud.timestamp, {
+        year = year,
+        month = month,
+        day = day,
+        hour = hour,
+        minute = minute,
+        second = second and tonumber(second) or 0,
+        nanosecond = 0,
+    })
+    return ok and timestamp or nil
+end
+
+-- Implement `touch [-c|--no-create] [-t TIMESTAMP] [--] path...`. argv[1] is "touch";
 -- return 0 on success and 1 after emitting the first diagnostic.
 local function touch(argv)
     local no_create = false
+    local timestamp
     local paths = {}
     local options = true
 
@@ -222,6 +263,15 @@ local function touch(argv)
             options = false
         elseif options and (arg == "-c" or arg == "--no-create") then
             no_create = true
+        elseif options and arg == "-t" then
+            i = i + 1
+            if i > #argv then
+                return diagnostic("touch", "option '-t' requires an argument")
+            end
+            timestamp = parse_touch_timestamp(argv[i])
+            if not timestamp then
+                return diagnostic("touch", "invalid date format '" .. argv[i] .. "'")
+            end
         elseif options and arg:sub(1, 1) == "-" and arg ~= "-" then
             return diagnostic("touch", "unsupported option '" .. arg .. "'")
         else
@@ -236,7 +286,7 @@ local function touch(argv)
 
     for _, path in ipairs(paths) do
         if not no_create or os_path_type(path) ~= 0 then
-            if os_touch(path) ~= 0 then
+            if os_touch(path, timestamp) ~= 0 then
                 return diagnostic("touch", "cannot touch '" .. path .. "'")
             end
         end
