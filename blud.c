@@ -613,12 +613,16 @@ static int lua_os_remove_file(lua_State *L) {
     return 1;
 }
 
-// Lua: status = os_touch(path)
+// Lua: status = os_touch(path [, timestamp])
 // status is 0 after updating/creating path, or -1 on failure.
 static int lua_os_touch(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
+    const BLUD_TIMESTAMP* timestamp = NULL;
 
-    lua_pushinteger(L, os_touch(path));
+    if (!lua_isnoneornil(L, 2))
+        timestamp = check_blud_timestamp(L, 2);
+
+    lua_pushinteger(L, os_touch(path, timestamp));
     return 1;
 }
 
