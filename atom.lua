@@ -325,6 +325,10 @@ for atom_name, atom in pairs(blud.TARGETS) do
     setmetatable(atom, super_atom)
 end
 
+blud.find_target = function(target_name)
+    return blud.TARGETS[target_name]
+end
+
 blud.get_or_create_target = function(target_name)
     local target = blud.TARGETS[target_name]
     if target == nil then
