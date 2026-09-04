@@ -8,7 +8,7 @@
 // OS-specific time formats and epochs are converted to this representation.
 typedef struct BLUD_TIMESTAMP {
     int64_t  seconds;
-    uint32_t nanoseconds;
+    int32_t  nanoseconds;
 } BLUD_TIMESTAMP;
 
 #endif // BLUD_H_
