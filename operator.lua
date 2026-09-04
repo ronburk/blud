@@ -963,7 +963,7 @@ do
 
     local function select_declared_build()
         for _, name in ipairs(blud.command_line_options.target_names or {}) do
-            local target = blud.TARGETS[name]
+            local target = blud.find_target(name)
             if target and target.RULE and target.RULE.operator == opBuild then
                 return target
             end
