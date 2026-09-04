@@ -5,6 +5,8 @@
 
 #include "blud.h"
 
+// Path strings crossing this interface are encoded as UTF-8.
+
 typedef struct BLUD_TIMESTAMP_FIELDS {
     int year;
     int month;
