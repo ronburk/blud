@@ -43,7 +43,7 @@ static int filetime_to_timestamp(
         return -1;
     value.QuadPart -= 116444736000000000ULL;
     timestamp->seconds = (int64_t)(value.QuadPart / 10000000ULL);
-    timestamp->nanoseconds = (uint32_t)(value.QuadPart % 10000000ULL) * 100;
+    timestamp->nanoseconds = (int32_t)(value.QuadPart % 10000000ULL) * 100;
     return 0;
 }
 
