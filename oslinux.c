@@ -535,21 +535,37 @@ int os_remove_file(const char* path) {
     return unlink(path) == 0 ? 0 : -1;
 }
 
-// Set access/modification time to now, creating a regular file only when absent.
-int os_touch(const char* path) {
+// Set access/modification time, creating a regular file only when absent.
+int os_touch(const char* path, const BLUD_TIMESTAMP* timestamp) {
     int fd;
+    struct timespec times[2];
 
     if (path == NULL || path[0] == '\0')
         return -1;
-    if (utime(path, NULL) == 0)
-        return 0;
+    if (timestamp == NULL) {
+        if (utime(path, NULL) == 0)
+            return 0;
+    } else {
+        times[0].tv_sec = (time_t)timestamp->seconds;
+        times[0].tv_nsec = timestamp->nanoseconds;
+        times[1] = times[0];
+        if (utimensat(AT_FDCWD, path, times, 0) == 0)
+            return 0;
+    }
     if (errno != ENOENT)
         return -1;
 
     fd = open(path, O_WRONLY | O_CREAT, 0666);
     if (fd < 0)
         return -1;
-    return close(fd) == 0 ? 0 : -1;
+    if (close(fd) != 0)
+        return -1;
+    if (timestamp == NULL)
+        return 0;
+    times[0].tv_sec = (time_t)timestamp->seconds;
+    times[0].tv_nsec = timestamp->nanoseconds;
+    times[1] = times[0];
+    return utimensat(AT_FDCWD, path, times, 0) == 0 ? 0 : -1;
 }
 
 int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){

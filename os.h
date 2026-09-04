@@ -69,7 +69,8 @@ extern int os_remove_dir(const char* path);
 extern int os_remove_file(const char* path);
 
 // Update path timestamps, creating a missing file; return 0 or -1.
-extern int os_touch(const char* path);
+// A NULL timestamp means use the current time.
+extern int os_touch(const char* path, const BLUD_TIMESTAMP* timestamp);
 extern char* os_getcwd(void);
 extern int os_setcwd(const char* path);
 

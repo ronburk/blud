@@ -222,6 +222,22 @@ static int filetime_to_timestamp(
     return 0;
 }
 
+static int timestamp_to_filetime(
+    FILETIME* file_time,
+    const BLUD_TIMESTAMP* timestamp
+) {
+    ULARGE_INTEGER value;
+
+    if (timestamp->seconds < 0)
+        return -1;
+    value.QuadPart = (uint64_t)timestamp->seconds * 10000000ULL +
+                     116444736000000000ULL +
+                     (uint64_t)timestamp->nanoseconds / 100;
+    file_time->dwLowDateTime = value.LowPart;
+    file_time->dwHighDateTime = value.HighPart;
+    return 0;
+}
+
 int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     FILETIME now;
 
@@ -627,12 +643,12 @@ int os_remove_file(const char* path) {
 
 // Update access/modification time and create a missing regular file. Directories
 // require FILE_FLAG_BACKUP_SEMANTICS to obtain an attribute-write handle.
-int os_touch(const char* path) {
+int os_touch(const char* path, const BLUD_TIMESTAMP* timestamp) {
     DWORD attributes;
     DWORD flags = 0;
     DWORD creation = OPEN_EXISTING;
     HANDLE file;
-    FILETIME now;
+    FILETIME file_time;
     BOOL result;
     wchar_t* wide_path;
 
@@ -663,8 +679,13 @@ int os_touch(const char* path) {
     if (file == INVALID_HANDLE_VALUE)
         return -1;
 
-    GetSystemTimeAsFileTime(&now);
-    result = SetFileTime(file, NULL, &now, &now);
+    if (timestamp == NULL)
+        GetSystemTimeAsFileTime(&file_time);
+    else if (timestamp_to_filetime(&file_time, timestamp) != 0) {
+        CloseHandle(file);
+        return -1;
+    }
+    result = SetFileTime(file, NULL, &file_time, &file_time);
     CloseHandle(file);
     return result ? 0 : -1;
 }
