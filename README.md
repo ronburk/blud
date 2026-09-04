@@ -103,7 +103,7 @@ of an action:
 | `echo` | `echo [-n] [-e|-E]... [ARG]...` |
 | `mkdir` | `mkdir [-p] [--] DIRECTORY...` |
 | `rm` | `rm [-f] [-r|-R] [--] PATH...` |
-| `touch` | `touch [-c|--no-create] [--] PATH...` |
+| `touch` | `touch [-c|--no-create] [-t [[CC]YY]MMDDhhmm[.ss]] [--] PATH...` |
 | `shell` | `shell COMMAND...` |
 
 An unrecognized first word sends the original action through the operating-
