@@ -107,13 +107,14 @@ function Operator:BUILD(target_atom, parent)
 function Operator:PREPARE_PREREQUISITES(atom)
 end
 
-function Operator:EVAL_RULE(left_tokens, right_tokens, action)
-    -- util.print("operation_super:EVAL_RULE(%s, %s, action)", util.dump(left_tokens), util.dump(right_tokens))
---    local target_words       = self:GLOB_TARGET_WORDS(left_tokens)
-    local prerequisite_words = self:GLOB_PREREQUISITE_WORDS(right_tokens)
+function Operator:EVAL_RULE(operands, action)
+    -- util.print("operation_super:EVAL_RULE(%s, action)", util.dump(operands))
+--    local target_words       = self:GLOB_TARGET_WORDS(operands.targets)
+    local prerequisite_words =
+        self:GLOB_PREREQUISITE_WORDS(operands.prerequisites)
 --    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
 --    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
-    self:ADD_RULES(left_tokens, prerequisite_words, action)
+    self:ADD_RULES(operands.targets, prerequisite_words, action)
 --    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
 --[[
     if not blud.primary_targets and #target_atoms > 0 then
@@ -827,17 +828,12 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
 
     -- Test patterns are suite-relative, so ADD_RULE expands them after the
     -- suite target is known instead of using ordinary prerequisite globbing.
-    function op:EVAL_RULE(
-        left_tokens,
-        right_tokens,
-        action,
-        order_only_prereq_words
-    )
+    function op:EVAL_RULE(operands, action)
         self:ADD_RULES(
-            left_tokens,
-            right_tokens,
+            operands.targets,
+            operands.prerequisites,
             action,
-            order_only_prereq_words
+            operands.ordered_prerequisites
         )
     end
 
@@ -986,13 +982,13 @@ do
         return nil
     end
 
-    function opBuild:EVAL_RULE(left_tokens, right_tokens, action)
+    function opBuild:EVAL_RULE(operands, action)
         -- Validate the written prerequisite list before ordinary globbing can
         -- discard an unmatched pattern.
-        assert(#right_tokens == 0,
+        assert(#operands.prerequisites == 0,
                ":BUILD: prerequisites are not supported for: " ..
-               table.concat(left_tokens, ", "))
-        Operator.EVAL_RULE(self, left_tokens, right_tokens, action)
+               table.concat(operands.targets, ", "))
+        Operator.EVAL_RULE(self, operands, action)
 
         -- Rules following the declaration expand in the build selected on the
         -- command line, or in the first declared build when none was selected.
