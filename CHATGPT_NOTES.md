@@ -235,6 +235,22 @@ needed `APT::Sandbox::User=root`; the archive-cache override was needed for the
 package download. The install may still report harmless cleanup/log warnings
 about restricted ownership changes.
 
+## Installing MinGW privately (2026-09-04)
+
+When the MinGW-w64 compiler was absent and normal APT installation failed
+because the container blocked writes to `/var/cache/apt/archives`, download
+the packages with a writable cache and disable APT's sandbox user:
+
+```
+mkdir -p /tmp/mingw-cache/partial /tmp/mingw-root
+apt-get -o APT::Sandbox::User=root \
+        -o Dir::Cache::archives=/tmp/mingw-cache \
+        --download-only install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+for p in /tmp/mingw-cache/*.deb; do dpkg-deb -x "$p" /tmp/mingw-root; done
+```
+
+The extracted compiler works by putting `/tmp/mingw-root/usr/bin` on `PATH`.
+
 ## Do not resurrect
 
 The following belong to retired workflows, completed work, or superseded
