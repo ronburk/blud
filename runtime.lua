@@ -220,7 +220,10 @@ end
 
 
 -- eval_rule does minimal processing then goes into the operator hook system
-blud.eval_rule = function(operator_name, left_parts, right_parts, action)
+blud.eval_rule = function(operator_name, operand_parts, action)
+    local left_parts = operand_parts.targets
+    local right_parts = operand_parts.prerequisites
+
     -- now is the time to identify implicit rules
     -- note that "%" hidden inside macro call is a literal
     if operator_name == ":" then
@@ -254,17 +257,19 @@ blud.eval_rule = function(operator_name, left_parts, right_parts, action)
     -- the graph concrete before the update starts.
     local left  = blud.Macro.expand_tokens(blud.Scope.build, left_parts)
     local right = blud.Macro.expand_tokens(blud.Scope.build, right_parts)
+    local directory = operand_parts.directory and
+        blud.Macro.expand_tokens(blud.Scope.build, operand_parts.directory)
 
     -- seems sketchy for some operators to tokenize differently, so do that here
     local target_names = tokenize_dependency_line(left)
     local prereq_names, order_only_prereq_names = tokenize_prerequisites(right)
 
-    operator:EVAL_RULE(
-        target_names,
-        prereq_names,
-        action,
-        order_only_prereq_names
-    )
+    operator:EVAL_RULE({
+        directory = directory,
+        targets = target_names,
+        prerequisites = prereq_names,
+        ordered_prerequisites = order_only_prereq_names,
+    }, action)
 end
 
 blud.implicit        = require("blud.implicit")
