@@ -1,20 +1,10 @@
--- Directory aliases such as OWD must continue to name the same directory even
--- while actions temporarily change the process current working directory.
--- AliasDir therefore owns all changes to the current directory and records
--- directory identities as absolute paths. Callers may accept relative paths,
--- but should convert them with to_absolute() before retaining them. When an
--- alias is expanded for an action, to_relative() expresses its absolute path
--- relative to the current directory.
---
--- Directory links complicate this model. A symbolic current path and the
--- physical directory selected by the operating system can diverge, making a
--- lexically calculated relative path name the wrong file. The intended future
--- design is to operate symbolically, detect when a current-directory change
--- crosses a link boundary, and then have to_relative() return absolute paths
--- until the previous directory state is restored. The pushed state will need
--- to include that mode, and reset() will restore the initial mode. This first
--- implementation deliberately does not detect or otherwise handle links; its
--- lexical normalization of ".." assumes that no link boundary is crossed.
+--[[
+AliasDir manages logical directory aliases across temporary changes to the
+process current directory. It stores directory identities as absolute paths and
+converts them to paths relative to the current directory when actions expand
+aliases. Current path/link-boundary handling is intentionally lexical and does
+not yet account for symbolic-link crossings.
+]]
 
 local AliasDir = {}
 
