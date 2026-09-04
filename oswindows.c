@@ -230,6 +230,77 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     return filetime_to_timestamp(timestamp, now);
 }
 
+int os_timestamp_to_fields(
+    const BLUD_TIMESTAMP* timestamp,
+    BLUD_TIMESTAMP_FIELDS* fields,
+    int utc
+) {
+    FILETIME file_time;
+    SYSTEMTIME system_time;
+    SYSTEMTIME local_time;
+    ULARGE_INTEGER value;
+
+    assert(timestamp != NULL);
+    assert(fields != NULL);
+    value.QuadPart = (uint64_t)timestamp->seconds * 10000000ULL +
+                     116444736000000000ULL;
+    value.QuadPart += (uint64_t)timestamp->nanoseconds / 100;
+    file_time.dwLowDateTime = value.LowPart;
+    file_time.dwHighDateTime = value.HighPart;
+    if (!FileTimeToSystemTime(&file_time, &system_time))
+        return -1;
+    if (utc) {
+        local_time = system_time;
+    } else if (!SystemTimeToTzSpecificLocalTime(NULL, &system_time, &local_time)) {
+        return -1;
+    }
+    fields->year = local_time.wYear;
+    fields->month = local_time.wMonth;
+    fields->day = local_time.wDay;
+    fields->hour = local_time.wHour;
+    fields->minute = local_time.wMinute;
+    fields->second = local_time.wSecond;
+    fields->nanosecond = timestamp->nanoseconds;
+    return 0;
+}
+
+int os_fields_to_timestamp(
+    const BLUD_TIMESTAMP_FIELDS* fields,
+    BLUD_TIMESTAMP* timestamp,
+    int utc
+) {
+    SYSTEMTIME input;
+    SYSTEMTIME universal;
+    FILETIME file_time;
+    ULARGE_INTEGER value;
+
+    assert(fields != NULL);
+    assert(timestamp != NULL);
+    input.wYear = (WORD)fields->year;
+    input.wMonth = (WORD)fields->month;
+    input.wDay = (WORD)fields->day;
+    input.wHour = (WORD)fields->hour;
+    input.wMinute = (WORD)fields->minute;
+    input.wSecond = (WORD)fields->second;
+    input.wMilliseconds = (WORD)(fields->nanosecond / 1000000);
+    input.wDayOfWeek = 0;
+    if (utc) {
+        universal = input;
+    } else if (!TzSpecificLocalTimeToSystemTime(NULL, &input, &universal)) {
+        return -1;
+    }
+    if (!SystemTimeToFileTime(&universal, &file_time))
+        return -1;
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    if (value.QuadPart < 116444736000000000ULL)
+        return -1;
+    value.QuadPart -= 116444736000000000ULL;
+    timestamp->seconds = (int64_t)(value.QuadPart / 10000000ULL);
+    timestamp->nanoseconds = fields->nanosecond;
+    return 0;
+}
+
 // Create only path; recursive creation is handled by the Lua binding.
 int os_mkdir(const char* path) {
     if (path == NULL || path[0] == '\0')
