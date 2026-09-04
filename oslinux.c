@@ -41,7 +41,7 @@ int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp) {
     if (clock_gettime(CLOCK_REALTIME, &now) != 0)
         return -1;
     timestamp->seconds = (int64_t)now.tv_sec;
-    timestamp->nanoseconds = (uint32_t)now.tv_nsec;
+    timestamp->nanoseconds = (int32_t)now.tv_nsec;
     return 0;
 }
 
@@ -542,7 +542,7 @@ int os_get_dir(BLUD_DIR_CALLBACK callback, void* data,const char* dir){
             {
                 BLUD_TIMESTAMP timestamp;
                 timestamp.seconds = (int64_t)statbuf.st_mtim.tv_sec;
-                timestamp.nanoseconds = (uint32_t)statbuf.st_mtim.tv_nsec;
+                timestamp.nanoseconds = (int32_t)statbuf.st_mtim.tv_nsec;
                 callback(data, name, &timestamp, is_dir);
             }
         }
