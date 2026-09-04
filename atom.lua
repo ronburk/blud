@@ -299,7 +299,7 @@ blud.set_callback = function(target, hook_name, callback_func)
     setmetatable(target, new_meta)
 end
 
-blud.TARGETS = {
+local targets = {
     [ ".AFTER" ] = {
         NAME = ".AFTER",
         ATTRIBUTE = true,
@@ -321,19 +321,19 @@ blud.TARGETS = {
     }
 }
 
-for atom_name, atom in pairs(blud.TARGETS) do
+for atom_name, atom in pairs(targets) do
     setmetatable(atom, super_atom)
 end
 
 blud.find_target = function(target_name)
-    return blud.TARGETS[target_name]
+    return targets[target_name]
 end
 
 blud.get_or_create_target = function(target_name)
-    local target = blud.TARGETS[target_name]
+    local target = targets[target_name]
     if target == nil then
         target = blud.new_atom(target_name)
-        blud.TARGETS[target_name] = target
+        targets[target_name] = target
         if target_name:find("%%") then
             target.IMPLICIT = true
         end
