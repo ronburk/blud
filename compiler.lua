@@ -221,6 +221,55 @@ local function append_if_nonempty(parts, part)
     end
 end
 
+local function split_rule_directory_operand(parts)
+    local first = parts[1]
+    if type(first) ~= "string" then
+        return nil, parts
+    end
+
+    local open_pos = first:find("{", 1, true)
+    if not open_pos or first:sub(1, open_pos - 1):find("%S") then
+        return nil, parts
+    end
+
+    local directory_parts = {}
+    local remaining_parts = {}
+    local part = first:sub(open_pos + 1)
+
+    for i = 1, #parts do
+        if i > 1 then
+            part = parts[i]
+        end
+
+        if type(part) == "string" then
+            local close_pos = part:find("}", 1, true)
+            if close_pos then
+                append_if_nonempty(directory_parts, part:sub(1, close_pos - 1))
+                append_if_nonempty(remaining_parts, part:sub(close_pos + 1))
+                for j = i + 1, #parts do
+                    table.insert(remaining_parts, parts[j])
+                end
+
+                local has_value = false
+                for _, directory_part in ipairs(directory_parts) do
+                    if type(directory_part) ~= "string" or directory_part:find("%S") then
+                        has_value = true
+                        break
+                    end
+                end
+                if not has_value then
+                    return nil, nil, "Empty rule directory operand"
+                end
+                return directory_parts, remaining_parts
+            end
+        end
+
+        append_if_nonempty(directory_parts, part)
+    end
+
+    return nil, nil, "Unterminated rule directory operand"
+end
+
 local function split_parts_at_colon_operator(parts)
     local left = {}
 
@@ -383,6 +432,14 @@ end
 
 local function compile_rule_or_target_assignment(compile_io)
     local parts = m.parts_from_lua_text(compile_io.get_current_line())
+    local _, remaining_parts, directory_error =
+        split_rule_directory_operand(parts)
+    if directory_error then
+        compile_io.error(directory_error)
+    end
+    parts = remaining_parts
+
+    -- The directory operand is recognized but intentionally has no effect yet.
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
     if not operator then
