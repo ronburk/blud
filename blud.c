@@ -84,7 +84,7 @@ static int lua_blud_timestamp_tostring(lua_State* L) {
     int length = snprintf(
         text,
         sizeof text,
-        "timestamp(%" PRId64 ".%09" PRIu32 ")",
+        "timestamp(%" PRId64 ".%09" PRId32 ")",
         timestamp->seconds,
         timestamp->nanoseconds
     );
@@ -709,7 +709,7 @@ int luaopen_mylib(lua_State *L) {
     {
         BLUD_TIMESTAMP* timestamp = new_blud_timestamp(L);
         timestamp->seconds = INT64_MAX;
-        timestamp->nanoseconds = UINT32_MAX;
+        timestamp->nanoseconds = INT32_MAX;
         lua_setfield(L, -2, "newest");
     }
     lua_pushcclosure(L, lua_blud_timestamp_api_index, 1);
