@@ -570,7 +570,7 @@ do  -- Internal update behavior for individual tests.
         if path_type ~= 0 then
             error("test destination is not a directory: " .. tostring(path))
         end
-        if os_mkdir(path) == 2 then
+        if os_mkdir(path, true) == 2 then
             error("could not create test directory: " .. tostring(path))
         end
         return true
@@ -1034,7 +1034,7 @@ do
         activate_build(target)
         local owd = target.SCOPE:get_text("OWD")
         if not blud.just_print(target.SCOPE) then
-            local mkdir_result = os_mkdir(owd)
+            local mkdir_result = os_mkdir(owd, true)
             if mkdir_result == 2 then
                 error("could not create build directory: " .. owd)
             end

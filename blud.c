@@ -462,19 +462,68 @@ static int lua_os_copy_dir(lua_State *L) {
     return 1;
 }
 
-static int lua_os_mkdir(lua_State *L) {
-    const char* path = luaL_checkstring(L, 1);
-
-    lua_pushinteger(L, os_mkdir(path));
-    return 1;
+static int mkdir_separator(char c) {
+    return c == '/' || c == '\\';
 }
 
-// Lua: result = os_mkdir_one(path)
-// result is 0 when created, 1 when a directory already exists, or 2 on error.
-static int lua_os_mkdir_one(lua_State *L) {
+// Lua: result = os_mkdir(path [, parents])
+// With parents true, create all missing components. The O/S primitive itself
+// creates exactly one directory.
+static int lua_os_mkdir(lua_State *L) {
     const char* path = luaL_checkstring(L, 1);
+    int parents = lua_toboolean(L, 2);
 
-    lua_pushinteger(L, os_mkdir_one(path));
+    if (!parents) {
+        lua_pushinteger(L, os_mkdir(path));
+        return 1;
+    }
+
+    {
+        size_t length = strlen(path);
+        char* buffer = (char*)malloc(length + 1);
+        char* p;
+
+        if (buffer == NULL) {
+            lua_pushinteger(L, 2);
+            return 1;
+        }
+        memcpy(buffer, path, length + 1);
+        while (length > 1 && mkdir_separator(buffer[length - 1]))
+            buffer[--length] = '\0';
+
+        p = buffer;
+        if (mkdir_separator(p[0]) && mkdir_separator(p[1])) {
+            p += 2;
+            while (*p != '\0' && !mkdir_separator(*p)) ++p;
+            while (mkdir_separator(*p)) ++p;
+            while (*p != '\0' && !mkdir_separator(*p)) ++p;
+        } else if (p[0] != '\0' && p[1] == ':') {
+            p += 2;
+        }
+        while (mkdir_separator(*p)) ++p;
+
+        for (; *p != '\0'; ++p) {
+            if (mkdir_separator(*p)) {
+                char separator = *p;
+                int result;
+                *p = '\0';
+                result = os_mkdir(buffer);
+                *p = separator;
+                if (result == 2) {
+                    free(buffer);
+                    lua_pushinteger(L, 2);
+                    return 1;
+                }
+                while (mkdir_separator(p[1])) ++p;
+            }
+        }
+        {
+            int result = os_mkdir(buffer);
+            free(buffer);
+            lua_pushinteger(L, result == 2 ? 2 : 0);
+        }
+    }
+
     return 1;
 }
 
@@ -689,9 +738,6 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_copy_file", lua_os_copy_file);
     lua_register(L, "os_copy_dir", lua_os_copy_dir);
     lua_register(L, "os_mkdir", lua_os_mkdir);
-    // Filesystem primitives used by shell.lua; wrapper comments above document
-    // their exact global Lua signatures and return values.
-    lua_register(L, "os_mkdir_one", lua_os_mkdir_one);
     lua_register(L, "os_path_type", lua_os_path_type);
     lua_register(L, "os_remove_dir", lua_os_remove_dir);
     lua_register(L, "os_remove_file", lua_os_remove_file);

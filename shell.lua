@@ -441,9 +441,7 @@ local function rm(argv)
     return 0
 end
 
--- Implement `mkdir [-p] [--] path...`. argv[1] is "mkdir". Plain mkdir
--- uses os_mkdir_one() so a missing parent or existing destination is an error;
--- -p uses the older recursive os_mkdir() and accepts existing directories.
+-- Implement `mkdir [-p] [--] path...`. argv[1] is "mkdir".
 local function mkdir(argv)
     local parents = false
     local paths = {}
@@ -474,12 +472,12 @@ local function mkdir(argv)
     for _, path in ipairs(paths) do
         local result
         if parents then
-            result = os_mkdir(path)
+            result = os_mkdir(path, true)
             if result == 2 then
                 return diagnostic("mkdir", "cannot create directory '" .. path .. "'")
             end
         else
-            result = os_mkdir_one(path)
+            result = os_mkdir(path)
             if result == 1 then
                 return diagnostic("mkdir", "cannot create directory '" .. path .. "': File exists")
             elseif result == 2 then

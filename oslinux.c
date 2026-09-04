@@ -434,58 +434,11 @@ int os_copy_dir(const char* from, const char* to) {
     return result;
 }
 
-// Create only path; unlike os_mkdir(), do not synthesize parent directories.
-int os_mkdir_one(const char* path) {
+// Create only path; recursive creation is handled by the Lua binding.
+int os_mkdir(const char* path) {
     if (path == NULL || path[0] == '\0')
         return 2;
     return make_one_dir(path);
-}
-
-int os_mkdir(const char* path) {
-    size_t      len;
-    char*       buffer;
-    char*       p;
-    int         result;
-
-    if (path == NULL || path[0] == '\0')
-        return 2;
-
-    if (dir_exists(path))
-        return 1;
-
-    len     = strlen(path);
-    buffer  = (char*)malloc(len + 1);
-    if (buffer == NULL)
-        return 2;
-    memcpy(buffer, path, len + 1);
-
-    while (len > 1 && buffer[len - 1] == '/')
-        buffer[--len] = '\0';
-
-    p = buffer;
-    while (*p == '/')
-        ++p;
-
-    for (; *p != '\0'; ++p) {
-        if (*p == '/') {
-            *p = '\0';
-            if (buffer[0] != '\0') {
-                result = make_one_dir(buffer);
-                if (result == 2) {
-                    free(buffer);
-                    return 2;
-                }
-            }
-            *p = '/';
-            while (p[1] == '/')
-                ++p;
-        }
-    }
-
-    result = make_one_dir(buffer);
-    free(buffer);
-
-    return result == 2 ? 2 : 0;
 }
 
 char* os_getcwd(void) {

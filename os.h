@@ -25,11 +25,8 @@ extern int os_copy_file(const char* from, const char* to);
 // Return 0 on success and -1 on failure.
 extern int os_copy_dir(const char* from, const char* to);
 
-// Create path and any missing parents: 0 created, 1 existed, 2 failed.
-extern int os_mkdir(const char* path);
-
 // Create exactly path, without parents: 0 created, 1 existed, 2 failed.
-extern int os_mkdir_one(const char* path);
+extern int os_mkdir(const char* path);
 
 // Return 0 for missing, 1 for non-directory, or 2 for a real directory.
 extern int os_path_type(const char* path);
