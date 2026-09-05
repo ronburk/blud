@@ -285,10 +285,6 @@ do
 end
 
 
-blud.is_special_atom = function(atom)
-    return string.sub(atom.NAME, 1, 1) == "."
-end
-
 local function set_callback(target, hook_name, callback_func)
 -- print("set_callback(" .. target.NAME .. ", " .. hook_name .. ")")
     -- make new metatable whose metatable is target metatable
