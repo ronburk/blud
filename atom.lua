@@ -253,11 +253,7 @@ local super_atom = {
 
 }
 
--- Set up atom inheritance: atom -> super_atom -> global.
-blud.global = {
-}
-setmetatable(super_atom, blud.global)
-blud.global.__index      = blud.global
+-- Set up atom inheritance: atom -> super_atom.
 super_atom.__index  = super_atom
 
 local new_atom
