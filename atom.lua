@@ -289,7 +289,7 @@ blud.is_special_atom = function(atom)
     return string.sub(atom.NAME, 1, 1) == "."
 end
 
-blud.set_callback = function(target, hook_name, callback_func)
+local function set_callback(target, hook_name, callback_func)
 -- print("set_callback(" .. target.NAME .. ", " .. hook_name .. ")")
     -- make new metatable whose metatable is target metatable
     local new_meta      = setmetatable({}, getmetatable(target))
@@ -312,7 +312,7 @@ local targets = {
                 )
             end
             -- The parent belongs to this traversal edge, not to the atom.
-            blud.set_callback(parent, "DO_ACTION", after)
+            set_callback(parent, "DO_ACTION", after)
             return true
         end
     },
