@@ -461,16 +461,6 @@ blud.shallow_copy = function (original)
     end
     return copy
 end
-blud.dump_atom = function (atom)
-    local str = atom.NAME .. " : "
-    local prerequisites = atom.PREREQUISITES
-    if prerequisites ~= nil then
-        for key, value in pairs(prerequisites) do
-            str = str .. " " .. value.NAME
-        end
-    end
-    return str
-end
 
 require("blud.atom")
 

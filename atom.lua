@@ -334,4 +334,15 @@ blud.get_or_create_target = function(target_name)
     return target
 end
 
+blud.dump_atom = function (atom)
+    local str = atom.NAME .. " : "
+    local prerequisites = atom.PREREQUISITES
+    if prerequisites ~= nil then
+        for key, value in pairs(prerequisites) do
+            str = str .. " " .. value.NAME
+        end
+    end
+    return str
+end
+
 return super_atom
