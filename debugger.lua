@@ -10,6 +10,7 @@ local breakpoints = {}
 local registered_operators
 local operator_member_names
 local instrumented_operators = {}
+local interactive
 
 local function normalize_source_name(info)
     local source = info.source or info.short_src or "<unknown>"
@@ -186,7 +187,7 @@ local function stop_at_operator_breakpoint(
         table.insert(paused_frames, frame)
     end
     print_current_line(info)
-    debugger.interactive("debug> ")
+    interactive("debug> ")
 end
 
 local function operator_wrapper(operator, member_name, implementation)
@@ -312,7 +313,7 @@ local function step_hook(event, line)
         stopped_depth = depth
         paused_frames = capture_paused_frames(2)
         print_current_line(info)
-        debugger.interactive("debug> ")
+        interactive("debug> ")
     end
 end
 
@@ -703,7 +704,7 @@ function debugger.real_probe(args)
     stopped_depth = call_depth(2)
     paused_frames = capture_paused_frames(2)
     print_current_line(info)
-    debugger.interactive("debug> ")
+    interactive("debug> ")
 end
 
 function debugger.register_operators(operators, member_names)
@@ -728,7 +729,7 @@ function debugger.register_operators(operators, member_names)
     end
 end
 
-function debugger.interactive(prompt, handler)
+function interactive(prompt, handler)
     handler = handler or custom_handler
 
     while true do
