@@ -2,14 +2,14 @@
 
 util = require("blud.util")
 
-blud_primary_target_name = ""
+local blud_primary_target_name = ""
 
 
-blud_user_code = ""
+local blud_user_code = ""
 
 
 
-function lua_quote(str)
+local function lua_quote(str)
     -- Escape backslashes and double quotes
     str = str:gsub("\\", "\\\\"):gsub('"', '\\"')
     
@@ -25,7 +25,7 @@ function lua_quote(str)
 end
 
 
-function syntax_error(line, line_number, format_string, ...)
+local function syntax_error(line, line_number, format_string, ...)
     io.stderr:write(line)
     io.stderr:write("\n^^^^\n")
     io.stderr:write(string.format("Error on line %d: ", line_number))
@@ -42,7 +42,7 @@ end
 
 -- handle a Lua line that might have embedded make code
 -- ??? does not handle embedded $(name a b "c" "d()")
-function phase1_embedded_make(line)
+local function phase1_embedded_make(line)
     local code = line:match("^%s*$ (.*)$")
     if code then
         line = "blud.phase2_append(" .. lua_quote(code) .. ")"
@@ -50,7 +50,7 @@ function phase1_embedded_make(line)
     return line
 end
 
-function phase1_line_is_empty(line)
+local function phase1_line_is_empty(line)
     if line:find("^%s*$") then
         return true
     elseif line:find("^%s*%-%-[^[]") then
