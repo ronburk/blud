@@ -166,7 +166,7 @@ local function source_from_generated_line(map, generated_ln)
     end
 end
 
-function blud.report_runtime_error(err, map)
+local function report_runtime_error(err, map)
     local chunk_name, generated_ln, message =
         tostring(err):match('^%[string "([^"]*)"%]:(%d+):%s*(.*)$')
 
