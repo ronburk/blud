@@ -180,11 +180,11 @@ local super_atom = {
         local implicit_rule, _, prereq_words =
             blud.implicit.find_forward(atom.NAME)
         if implicit_rule then
-            blud.operators[":"]:ADD_RULE(
-                atom,
-                prereq_words,
-                implicit_rule.action
-            )
+            blud.operators[":"]:ADD_RULE({
+                targets = { atom },
+                prerequisites = prereq_words,
+                ordered_prerequisites = {},
+            }, implicit_rule.action)
         end
     end,
     BUILD = function(target_atom, parent)
@@ -332,17 +332,6 @@ blud.get_or_create_target = function(target_name)
         end
     end
     return target
-end
-
-blud.dump_atom = function (atom)
-    local str = atom.NAME .. " : "
-    local prerequisites = atom.PREREQUISITES
-    if prerequisites ~= nil then
-        for key, value in pairs(prerequisites) do
-            str = str .. " " .. value.NAME
-        end
-    end
-    return str
 end
 
 return super_atom
