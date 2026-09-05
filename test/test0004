@@ -1,14 +1,54 @@
--- expect: release/test0004.out
 -- test0004
 --
--- Simple build directive
+-- Verify that timestamps set through the touch action control ordinary file
+-- dependencies, virtual directory dependencies, and future-file handling.
+--
+-- Setup runs in a separate process so verification starts with a directory
+-- cache populated after the entire filesystem fixture has been created.
+--
+-- _BLUD_TEST_
+-- $(OWD)/blud -s -f $< test0004.setup
+-- $(OWD)/blud -s -f $< test0004.older-target test0004.newer-target test0004.virtual-target test0004.future/file
+-- shell test -e test0004.ordinary-ran
+-- shell test ! -e test0004.unexpected-ran
+-- shell test -e test0004.virtual-ran
+-- shell test -e test0004.future-detected
+-- _BLUD_TEST_
 
-release :BUILD: 
-release: BUILD_VALUE = release
+test0004.setup:
+    rm -rf test0004.tree test0004.future
+    rm -f test0004.older-target test0004.newer-prerequisite
+    rm -f test0004.newer-target test0004.older-prerequisite
+    rm -f test0004.virtual-target
+    rm -f test0004.ordinary-ran test0004.unexpected-ran
+    rm -f test0004.virtual-ran test0004.future-detected
 
-CMD = touch $@
+    mkdir -p test0004.tree/sub test0004.future
 
-all: test0004.out
-test0004.out : 
-    shell test x$(BUILD_VALUE) = xrelease
-    $(CMD)
+    touch -t 202001010000.00 test0004.older-target
+    touch -t 202001020000.00 test0004.newer-prerequisite
+
+    touch -t 202001020000.00 test0004.newer-target
+    touch -t 202001010000.00 test0004.older-prerequisite
+
+    touch -t 202001010000.00 test0004.tree/older
+    touch -t 202001030000.00 test0004.tree/sub/newest
+    touch -t 202001010000.00 test0004.tree/sub test0004.tree
+    touch -t 202001020000.00 test0004.virtual-target
+
+    touch -t 209901010000.00 test0004.future/file
+
+test0004.older-target: test0004.newer-prerequisite
+    touch test0004.ordinary-ran
+
+test0004.newer-target: test0004.older-prerequisite
+    touch test0004.unexpected-ran
+
+test0004.virtual-target: test0004.tree
+    touch test0004.virtual-ran
+
+-- Future files currently appear missing. Giving this one a rule makes its
+-- action observable proof that it was not accepted as an existing target.
+test0004.future/file:
+    touch test0004.future-detected
+
