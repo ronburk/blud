@@ -167,7 +167,10 @@ do
     local function stop_action()
         BLUD_EXIT(0)
     end
-    blud.eval_rule(":", {"$action_started_target"}, {}, stop_action)
+    blud.eval_rule(":", {
+        targets = {"$action_started_target"},
+        prerequisites = {},
+    }, stop_action)
 end
 EOF_BLUD
 

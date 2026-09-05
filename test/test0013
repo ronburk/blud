@@ -49,8 +49,11 @@ do
 
     local accepted, error_message = pcall(function()
         blud.operators[":BUILD:"]:EVAL_RULE(
-            { "invalid-build" },
-            { "test0013-missing-*.input" },
+            {
+                targets = { "invalid-build" },
+                prerequisites = { "test0013-missing-*.input" },
+                ordered_prerequisites = {},
+            },
             nil
         )
     end)

@@ -432,14 +432,13 @@ end
 
 local function compile_rule_or_target_assignment(compile_io)
     local parts = m.parts_from_lua_text(compile_io.get_current_line())
-    local _, remaining_parts, directory_error =
+    local directory_parts, remaining_parts, directory_error =
         split_rule_directory_operand(parts)
     if directory_error then
         compile_io.error(directory_error)
     end
     parts = remaining_parts
 
-    -- The directory operand is recognized but intentionally has no effect yet.
     local left_parts, operator, right_parts = split_parts_at_colon_operator(parts)
 
     if not operator then
@@ -448,12 +447,17 @@ local function compile_rule_or_target_assignment(compile_io)
 
     assert(compile_io.get_token() == "EOL")
     local action, lookahead = compile_rule_action(compile_io)
+    local directory_lua = directory_parts and
+        parts_to_body_lua(directory_parts) or "nil"
 
-    compile_io.emit_line("blud.eval_rule(%q, %s, %s, %s)",
-                         operator,
-                         parts_to_body_lua(left_parts),
-                         parts_to_body_lua(right_parts),
-                         action)
+    compile_io.emit_line(
+        "blud.eval_rule(%q, " ..
+            "{directory=%s, targets=%s, prerequisites=%s}, %s)",
+        operator,
+        directory_lua,
+        parts_to_body_lua(left_parts),
+        parts_to_body_lua(right_parts),
+        action)
     return lookahead
 end
 
