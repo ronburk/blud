@@ -5,8 +5,11 @@
 --
 -- Setup runs in a separate process so verification starts with a directory
 -- cache populated after the entire filesystem fixture has been created.
+-- A prior interrupted run may leave the deliberately future-dated file behind;
+-- normalize it before setup tries to enumerate and remove its directory.
 --
 -- _BLUD_TEST_
+-- touch -c test0004.future/file
 -- $(OWD)/blud -s -f $< test0004.setup
 -- $(OWD)/blud -s -f $< test0004.older-target test0004.newer-target test0004.virtual-target test0004.future/file
 -- shell test -e test0004.ordinary-ran
@@ -50,5 +53,5 @@ test0004.virtual-target: test0004.tree
 -- Future files currently appear missing. Giving this one a rule makes its
 -- action observable proof that it was not accepted as an existing target.
 test0004.future/file:
+    touch $@
     touch test0004.future-detected
-
