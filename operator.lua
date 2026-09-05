@@ -28,6 +28,14 @@ local function register_operator(name)
     return operator
 end
 
+local function copy_operands(operands)
+    local result = {}
+    for name, value in pairs(operands) do
+        result[name] = value
+    end
+    return result
+end
+
 -- Generated targets bind under OWD; source-only targets bind under SWD.
 -- The presence of an action is what distinguishes the two.
 function Operator:BIND(atom)
@@ -110,11 +118,12 @@ end
 function Operator:EVAL_RULE(operands, action)
     -- util.print("operation_super:EVAL_RULE(%s, action)", util.dump(operands))
 --    local target_words       = self:GLOB_TARGET_WORDS(operands.targets)
-    local prerequisite_words =
+    local evaluated_operands = copy_operands(operands)
+    evaluated_operands.prerequisites =
         self:GLOB_PREREQUISITE_WORDS(operands.prerequisites)
 --    local target_atoms       = self:ATOMIZE_TARGET_WORDS(target_words)
 --    local prerequisite_atoms = self:ATOMIZE_PREREQUISITE_WORDS(prerequisite_words)
-    self:ADD_RULES(operands.targets, prerequisite_words, action)
+    self:ADD_RULES(evaluated_operands, action)
 --    self:ADD_RULES(target_atoms, prerequisite_atoms, action)
 --[[
     if not blud.primary_targets and #target_atoms > 0 then
@@ -156,18 +165,17 @@ function Operator:GROUP_TARGETS(target_words, prereq_words, action)
 end
 
 -- Parsed target words are normally independent rules; an operator can group them.
-function Operator:ADD_RULES(
-    target_words,
-    prereq_words,
-    action,
-    order_only_prereq_words
-)
+function Operator:ADD_RULES(operands, action)
 --[[
-    util.print("blud.operator_super:ADD_RULES(%s,%s,action)",
-          util.dump(target_words), util.dump(prereq_words))
+    util.print("blud.operator_super:ADD_RULES(%s,action)",
+          util.dump(operands))
 --]]
-    local targets = atomize_words(target_words)
-    local group   = self:GROUP_TARGETS(target_words, prereq_words, action)
+    local targets = atomize_words(operands.targets)
+    local group = self:GROUP_TARGETS(
+        operands.targets,
+        operands.prerequisites,
+        action
+    )
     
     for i=1, #targets do
         local target_atom = targets[i]
@@ -179,16 +187,15 @@ function Operator:ADD_RULES(
             end
         end
         if not group then -- multiple targets synonym for multiple rules
-            self:ADD_RULE(
-                target_atom,
-                prereq_words,
-                action,
-                order_only_prereq_words
-            )
+            local target_operands = copy_operands(operands)
+            target_operands.targets = { target_atom }
+            self:ADD_RULE(target_operands, action)
         end
     end
     if group then
-        self:ADD_RULE(targets, prereq_words, action, order_only_prereq_words)
+        local group_operands = copy_operands(operands)
+        group_operands.targets = targets
+        self:ADD_RULE(group_operands, action)
     end
 end
 
@@ -229,9 +236,13 @@ local function rule_dump(rule)
     return table.concat(lines, "\n")
 end
 
-function Operator:ADD_RULE(target, prereq_words, action)
+function Operator:ADD_RULE(operands, action)
+    assert(#operands.targets == 1,
+           "default ADD_RULE requires exactly one target")
+    local target = operands.targets[1]
+    local prereq_words = operands.prerequisites
    -- util.array_append(target.PREREQUISITES, prereqs)
---    util.print("blud.operator_super:ADD_RULE %s:%s", util.dump(target),util.dump(prereq_words))
+--    util.print("blud.operator_super:ADD_RULE %s", util.dump(operands))
     -- Repeated declarations accumulate prerequisites until one supplies the action.
     local rule = target.RULE
     if not rule then
@@ -322,13 +333,20 @@ do  -- Pattern rules are registered for later implicit-rule lookup.
         -- implicit rules are not candidates for primary targets
         return nil
     end
-    function PercentColon:ADD_RULE(target_atom, prereq_words, action)
-        -- util.print("(%%:):ADD_RULE(%s, %s, action)", util.dump(target_atom), util.dump(prereq_words))
+    function PercentColon:ADD_RULE(operands, action)
+        assert(#operands.targets == 1,
+               "pattern ADD_RULE requires exactly one target")
+        local target_atom = operands.targets[1]
+        -- util.print("(%%:):ADD_RULE(%s, action)", util.dump(operands))
         assert(target_atom.NAME:find("%", 1, true),
                "pattern-rule target has no '%' wildcard: " ..
                tostring(target_atom.NAME))
         -- Pattern rules live in the implicit-rule index, not on the pattern atom.
-        local errmsg = blud.implicit.add_rule(target_atom.NAME, prereq_words, action)
+        local errmsg = blud.implicit.add_rule(
+            target_atom.NAME,
+            operands.prerequisites,
+            action
+        )
         if errmsg then
             blud.error(errmsg)
         end
@@ -376,7 +394,11 @@ do  -- Source lists: compile each source through a reverse rule, then link.
                     blud.error("target %s already has a non-':' rule", output_name)
                 end
             else
-                blud.operators[":"]:ADD_RULE(output_atom, { prereq_name }, implicit_rule.action)
+                blud.operators[":"]:ADD_RULE({
+                    targets = { output_atom },
+                    prerequisites = { prereq_name },
+                    ordered_prerequisites = {},
+                }, implicit_rule.action)
             end
             table.insert(new_prereqs, output_atom)
         end
@@ -829,24 +851,22 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
     -- Test patterns are suite-relative, so ADD_RULE expands them after the
     -- suite target is known instead of using ordinary prerequisite globbing.
     function op:EVAL_RULE(operands, action)
-        self:ADD_RULES(
-            operands.targets,
-            operands.prerequisites,
-            action,
-            operands.ordered_prerequisites
-        )
+        self:ADD_RULES(operands, action)
     end
 
-    function op:ADD_RULE(
-        target,
-        prereq_words,
-        action,
-        order_only_prereq_words
-    )
+    function op:ADD_RULE(operands, action)
+        assert(#operands.targets == 1,
+               "test ADD_RULE requires exactly one target")
+        local target = operands.targets[1]
+        local prereq_words = operands.prerequisites
+        local order_only_prereq_words = operands.ordered_prerequisites
         action = action or default_test_action
 
         if not target.RULE then
-            Operator.ADD_RULE(self, target, {}, nil)
+            local target_operands = copy_operands(operands)
+            target_operands.prerequisites = {}
+            target_operands.ordered_prerequisites = {}
+            Operator.ADD_RULE(self, target_operands, nil)
         elseif target.RULE.operator ~= self then
             blud.error("#1: target used with more than one operator.", target.NAME)
         end
@@ -892,7 +912,12 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
 
             local test_rule = test_atom.RULE
             if not test_rule then
-                Operator.ADD_RULE(bludtest_operator, test_atom, {}, action)
+                Operator.ADD_RULE(bludtest_operator, {
+                    directory = operands.directory,
+                    targets = { test_atom },
+                    prerequisites = {},
+                    ordered_prerequisites = {},
+                }, action)
                 test_rule = test_atom.RULE
                 test_rule.test_target = target
                 test_rule.test_basename = basename
@@ -995,9 +1020,12 @@ do
         activate_build(assert(select_declared_build()))
     end
 
-    function opBuild:ADD_RULE(target, prereqs, action)
-        -- util.print("[:BUILD:]:ADD_RULE(%s, %s, action)",
-        --            util.dump(target), util.dump(prereqs))
+    function opBuild:ADD_RULE(operands, action)
+        assert(#operands.targets == 1,
+               "build ADD_RULE requires exactly one target")
+        local target = operands.targets[1]
+        local prereqs = operands.prerequisites
+        -- util.print("[:BUILD:]:ADD_RULE(%s, action)", util.dump(operands))
 
         -- A build declaration selects an output/variable context, not a target.
         assert(#prereqs == 0,
@@ -1017,7 +1045,7 @@ do
         target.BOUND_NAME = AliasDir.to_absolute(target.NAME)
         -- Important: do not call target:ADD_RULE().
         -- A :BUILD: declaration is not a build dependency rule.
-        Operator.ADD_RULE(self, target, {}, nil)
+        Operator.ADD_RULE(self, operands, nil)
     end
 
     function opBuild:BUILD(target)
