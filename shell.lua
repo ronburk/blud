@@ -257,7 +257,8 @@ local function touch(argv)
     local paths = {}
     local options = true
 
-    for i = 2, #argv do
+    local i = 2
+    while i <= #argv do
         local arg = argv[i]
         if options and arg == "--" then
             options = false
@@ -278,6 +279,7 @@ local function touch(argv)
             options = false
             paths[#paths + 1] = arg
         end
+        i = i + 1
     end
 
     if #paths == 0 then
