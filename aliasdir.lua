@@ -84,7 +84,7 @@ function AliasDir.get_cwd()
     return logical_cwd
 end
 
-function AliasDir.to_absolute(path)
+local function resolve_from(base, path)
     path = normalize_separators(path)
     assert(path ~= "", "empty path")
 
@@ -92,7 +92,7 @@ function AliasDir.to_absolute(path)
     -- '\\\\server\\share' is a complete UNC root handled by split_absolute_root().
     if is_windows and path:sub(1, 1) == "/" and
        path:sub(1, 2) ~= "//" then
-        local current_root = split_absolute_root(logical_cwd)
+        local current_root = split_absolute_root(base)
         local drive_letter = current_root:match("^([A-Za-z]:)/$")
         assert(drive_letter, "cannot resolve a root-relative path without a drive: " .. path)
         path = drive_letter .. path
@@ -104,7 +104,7 @@ function AliasDir.to_absolute(path)
     end
 
     local drive_letter, path_tail = path:match("^([A-Za-z]:)(.*)$")
-    local current_root, components = split_absolute_path(logical_cwd)
+    local current_root, components = split_absolute_path(base)
     if drive_letter then
         assert(current_root:sub(1, 2):lower() == drive_letter:lower(),
                "cannot resolve a path relative to another drive: " .. path)
@@ -113,6 +113,16 @@ function AliasDir.to_absolute(path)
 
     append_normalized_components(components, path)
     return join_absolute_path(current_root, components)
+end
+
+function AliasDir.to_absolute(path)
+    return resolve_from(logical_cwd, path)
+end
+
+-- Resolve path relative to base, where both relative and absolute paths are
+-- accepted. The result is an absolute, lexically normalized path.
+function AliasDir.resolve(base, path)
+    return resolve_from(AliasDir.to_absolute(base), path)
 end
 
 local function path_component_equal(left, right)

@@ -39,6 +39,7 @@ TEST0017_DIRECTORY = captured-directory
 
 no_separator :CAPTURE: normal_a normal_b
 {$(TEST0017_DIRECTORY)} with_directory_a with_directory_b :CAPTURE: normal_directory | order_directory
+{$(TEST0017_DIRECTORY)/./} normalized_directory :CAPTURE: normal_directory | order_directory
 spaced :CAPTURE: normal_a normal_b | order_a order_b
 adjacent :CAPTURE: normal_a normal_b|order_a order_b
 empty_normal :CAPTURE: | order_a order_b
@@ -50,6 +51,7 @@ with_action :CAPTURE: normal_action | order_action
 assignment: PIPE_VALUE = a|b
 
 do
+    local AliasDir = require("blud.aliasdir")
     local state = blud.test0017_state
 
     local function assert_words(name, kind, expected)
@@ -77,15 +79,22 @@ do
 
     assert_words("no_separator", "normal", {"normal_a", "normal_b"})
     assert_words("no_separator", "order_only", {})
-    assert(state.captures.no_separator.directory == nil,
-           "rule without a directory had a directory operand")
+    assert(state.captures.no_separator.directory == AliasDir.to_absolute("."),
+           "rule without a directory did not use the current directory")
 
-    for _, name in ipairs({"with_directory_a", "with_directory_b"}) do
-        assert(state.captures[name].directory == "captured-directory",
-               "split rule did not retain its directory operand")
+    local captured_directory = AliasDir.to_absolute("captured-directory")
+    for _, name in ipairs({
+        "captured-directory/with_directory_a",
+        "captured-directory/with_directory_b",
+    }) do
+        assert(state.captures[name].directory == captured_directory,
+               "split rule did not canonicalize its directory operand")
         assert_words(name, "normal", {"normal_directory"})
         assert_words(name, "order_only", {"order_directory"})
     end
+    assert(state.captures["captured-directory/normalized_directory"].directory ==
+           captured_directory,
+           "rule directory was not lexically normalized")
 
     for _, name in ipairs({"spaced", "adjacent"}) do
         assert_words(name, "normal", {"normal_a", "normal_b"})
@@ -105,8 +114,42 @@ do
     assert_words("with_action", "normal", {"normal_action"})
     assert_words("with_action", "order_only", {"order_action"})
 
+    local colon = blud.operators[":"]
+    colon:EVAL_RULE({
+        directory = "directory-one",
+        targets = {"same/../shared-target"},
+        prerequisites = {},
+        ordered_prerequisites = {},
+    }, nil)
+    colon:EVAL_RULE({
+        directory = "./directory-one",
+        targets = {"shared-target"},
+        prerequisites = {},
+        ordered_prerequisites = {},
+    }, nil)
+    colon:EVAL_RULE({
+        directory = "directory-two",
+        targets = {"shared-target"},
+        prerequisites = {},
+        ordered_prerequisites = {},
+    }, nil)
+    local accepted, error_message = pcall(function()
+        colon:EVAL_RULE({
+            directory = "directory-two",
+            targets = {"../directory-one/shared-target"},
+            prerequisites = {},
+            ordered_prerequisites = {},
+        }, nil)
+    end)
+    assert(not accepted,
+           "same target declared from different directories was accepted")
+    assert(tostring(error_message):find(
+               "more than one directory", 1, true),
+           "directory-conflict error had an unexpected message: " ..
+           tostring(error_message))
+
     local calls_before_error = state.calls
-    local accepted, error_message = pcall(
+    accepted, error_message = pcall(
         blud.eval_rule,
         ":CAPTURE:",
         {

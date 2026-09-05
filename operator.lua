@@ -36,6 +36,18 @@ local function copy_operands(operands)
     return result
 end
 
+local function resolve_rule_operands(operands)
+    local result = copy_operands(operands)
+    local directory = AliasDir.to_absolute(operands.directory or ".")
+    result.directory = directory
+    result.targets = {}
+    for index, target in ipairs(operands.targets) do
+        local absolute_target = AliasDir.resolve(directory, target)
+        result.targets[index] = AliasDir.to_relative(absolute_target)
+    end
+    return result
+end
+
 -- Generated targets bind under OWD; source-only targets bind under SWD.
 -- The presence of an action is what distinguishes the two.
 function Operator:BIND(atom)
@@ -170,7 +182,8 @@ function Operator:ADD_RULES(operands, action)
     util.print("blud.operator_super:ADD_RULES(%s,action)",
           util.dump(operands))
 --]]
-    local targets = atomize_words(operands.targets)
+    operands = resolve_rule_operands(operands)
+    local targets = self:ATOMIZE_TARGET_WORDS(operands.targets)
     local group = self:GROUP_TARGETS(
         operands.targets,
         operands.prerequisites,
@@ -241,6 +254,7 @@ function Operator:ADD_RULE(operands, action)
            "default ADD_RULE requires exactly one target")
     local target = operands.targets[1]
     local prereq_words = operands.prerequisites
+    local directory = operands.directory or AliasDir.to_absolute(".")
    -- util.array_append(target.PREREQUISITES, prereqs)
 --    util.print("blud.operator_super:ADD_RULE %s", util.dump(operands))
     -- Repeated declarations accumulate prerequisites until one supplies the action.
@@ -252,8 +266,15 @@ function Operator:ADD_RULE(operands, action)
         rule.targets      = { target }
         rule.prereq_words = prereq_words
         rule.operator     = self
+        rule.directory    = directory
         target.RULE       = rule
     else
+        if rule.directory ~= directory then
+            error(
+                "target declared from more than one directory: " ..
+                tostring(target.NAME)
+            )
+        end
         if rule.operator ~= self then
             error(
                 "target used with more than one operator: " ..
