@@ -164,7 +164,7 @@ local function parts_to_body_lua(parts)
     return result .. "}"
 end
 
-function compile_macro_assign(compile_io, macro_name)
+local function compile_macro_assign(compile_io, macro_name)
     local assign_op = compile_io.get_assign_op()
 
     compile_io.skip_white()
@@ -504,6 +504,8 @@ local function first_lua_token(compile_io)
     end
     return token_type, token_text
 end
+
+local compile_directives
 
 local function compile_lua(compile_io, first_record,
                            first_token_type, first_token_text)
