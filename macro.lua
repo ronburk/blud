@@ -1,4 +1,4 @@
-local M = {}
+local Macro = {}
 
 local util = require("blud.util")
 
@@ -24,7 +24,7 @@ local function rewrite_self_references(parts, old_name, new_name)
 end
 
 
-M.from_parts = function(parts)
+Macro.from_parts = function(parts)
     assert(type(parts) == "table")
 
     local macro = {}
@@ -32,9 +32,9 @@ M.from_parts = function(parts)
     -- Expansion belongs to the macro object so callers need not know that this
     -- flavor stores parsed parts. Positional arguments live in a child scope;
     -- ordinary names continue to resolve from the invocation scope.
-    function macro:expand(scope, actuals, stack)
-        local param_scope = scope:new_param_scope(actuals)
-        return M.expand_tokens(param_scope, parts, stack)
+    function macro:expand(scope, actual_arguments, expansion_stack)
+        local param_scope = scope:new_param_scope(actual_arguments)
+        return Macro.expand_tokens(param_scope, parts, expansion_stack)
     end
 
     -- Assignment is virtualized on the value being replaced. This flavor is
@@ -47,9 +47,9 @@ M.from_parts = function(parts)
             return nil
         elseif operator == "=" then
             saved_value_count = saved_value_count + 1
-            local saved_name = string.format("%s %3d", name, saved_value_count)
-            if rewrite_self_references(replacement_parts, name, saved_name) then
-                scope:set_macro(saved_name, macro)
+            local saved_macro_name = string.format("%s %3d", name, saved_value_count)
+            if rewrite_self_references(replacement_parts, name, saved_macro_name) then
+                scope:set_macro(saved_macro_name, macro)
             end
         elseif operator == "+=" then
             local appended_parts = util.deep_copy(parts)
@@ -62,7 +62,7 @@ M.from_parts = function(parts)
             error("Unknown assignment operator '" .. operator .. "':")
         end
 
-        return M.from_parts(replacement_parts)
+        return Macro.from_parts(replacement_parts)
     end
 
     function macro:get_parts()
@@ -72,11 +72,11 @@ M.from_parts = function(parts)
 end
 
 
-M.from_function = function(expand)
+Macro.from_function = function(expand)
     local macro = {}
 
-    function macro:expand(scope, actuals, stack)
-        return expand(scope, actuals, stack)
+    function macro:expand(scope, actual_arguments, expansion_stack)
+        return expand(scope, actual_arguments, expansion_stack)
     end
     return macro
 end
@@ -93,7 +93,7 @@ do
     }
     local obsolete_modifiers = { "private", "public" }
 
-    function M.match_macro_assign(line, skip_leading_white)
+    function Macro.match_macro_assign(line, skip_leading_white)
         -- print("match_macro_assign(\"" .. util.dump(line) .. "\")")
         local anchor = "^"
         if skip_leading_white then anchor = "^%s*" end
@@ -132,10 +132,10 @@ end
 -- Lua comment.
 
 -- little scanner class maintains state of a scan
-local Scanner   = {}
+local MacroScanner   = {}
 do
-    Scanner.__index = Scanner
-    function Scanner.new(text, start_pos, recognize_lua_comments)
+    MacroScanner.__index = MacroScanner
+    function MacroScanner.new(text, start_pos, recognize_lua_comments)
         local self = {
             text                   = text,
             len                    = #text,
@@ -143,20 +143,20 @@ do
             part                   = nil,
             recognize_lua_comments = recognize_lua_comments or false,
         }
-        return setmetatable(self, Scanner)
+        return setmetatable(self, MacroScanner)
     end
-    function Scanner:unget_part(part)
+    function MacroScanner:unget_part(part)
         assert(self.part == nil)
         self.part = part
     end
-    function Scanner:get_char()
+    function MacroScanner:get_char()
         assert(self.pos <= self.len)
 
         local ch = self.text:sub(self.pos, self.pos)
         self.pos = self.pos + 1
         return ch
     end
-    function Scanner:find_lua_short_string_end(quote, pos)
+    function MacroScanner:find_lua_short_string_end(quote, pos)
         pos = pos + 1
         while pos <= self.len do
             local ch = self.text:sub(pos, pos)
@@ -173,7 +173,7 @@ do
         return nil
     end
     -- advance to next "stop char"
-    function Scanner:get_next_part(stop_chars)
+    function MacroScanner:get_next_part(stop_chars)
         local result   = self.part
         if result then
             self.part = nil
@@ -240,7 +240,7 @@ end
 
 do
     local function collect(text, stop_chars, recognize_lua_comments)
-        local s = Scanner.new(text, nil, recognize_lua_comments)
+        local s = MacroScanner.new(text, nil, recognize_lua_comments)
         local result = {}
 
         while true do
@@ -327,30 +327,30 @@ local function append_part(parts, part)
 end
 
 local function parts_from_text(text, recognize_lua_comments)
-    local scanner = Scanner.new(text, nil, recognize_lua_comments)
-    local result  = M.parts_from_text_(scanner)
+    local scanner = MacroScanner.new(text, nil, recognize_lua_comments)
+    local result  = Macro.parts_from_text_(scanner)
     return result
 end
 
 -- Action and other literal text keeps `--`; it may be a command-line option.
-M.parts_from_text = function(text)
+Macro.parts_from_text = function(text)
     return parts_from_text(text, false)
 end
 
 -- Directive text uses Lua's quote-aware line-comment syntax. This scan occurs
 -- before expansion, so a macro cannot create a comment retroactively.
-M.parts_from_lua_text = function(text)
+Macro.parts_from_lua_text = function(text)
     return parts_from_text(text, true)
 end
 
 
-M.parts_from_text_ = function(scanner,     stop_chars)
+Macro.parts_from_text_ = function(scanner,     stop_chars)
     stop_chars        = stop_chars or ""
     local result      = {}
     local part        = scanner:get_next_part(stop_chars)
     while part do
         if part.type == "stop" and part.text == "$" then
-            local macro_call = M.macro_extract_call(scanner)
+            local macro_call = Macro.macro_extract_call(scanner)
             append_part(result, macro_call)
         elseif part.type == "stop" then
             scanner:unget_part(part)
@@ -370,28 +370,28 @@ end
 --     extract macro invocation from scanner. No error return,
 -- if it's not looking like a macro, we just skip the '$'
 -- returns a symbolic macro reference, including any actual parameters
-M.macro_extract_call = function(scanner)
-    local arg_stack  = {macro=true, eval="delay"}
+Macro.macro_extract_call = function(scanner)
+    local macro_call  = {macro=true, eval="delay"}
     local first_char = scanner:get_char()
     local close_char = ({["("]=")", ["{"]="}"})[first_char]
 
     if not close_char then    -- if single-char macro with no arguments
-        arg_stack[1] = {first_char}
+        macro_call[1] = {first_char}
     else    -- else looks like paren-style macro invocation
-        if close_char == '}' then arg_stack.eval = "immediate" end
+        if close_char == '}' then macro_call.eval = "immediate" end
         local parts
-        parts = M.parts_from_text_(scanner, " "..close_char)
+        parts = Macro.parts_from_text_(scanner, " "..close_char)
         if #parts <= 0 then
             error("empty macro invocation")
         else
-            table.insert(arg_stack, parts)
+            table.insert(macro_call, parts)
             local stop_part  = scanner:get_next_part(" "..close_char)
 
             if not stop_part then
                 error("unterminated macro invocation: expected '" .. close_char .. "'")
             end
 
-            if arg_stack.eval == "immediate"
+            if macro_call.eval == "immediate"
                 and #parts == 1
                 and type(parts[1]) == "string"
                 and parts[1]:match("^%d+$")
@@ -404,8 +404,8 @@ M.macro_extract_call = function(scanner)
 
             if stop_part.text == ' ' then
                 repeat
-                    parts = M.parts_from_text_(scanner, ","..close_char)
-                    table.insert(arg_stack, parts)
+                    parts = Macro.parts_from_text_(scanner, ","..close_char)
+                    table.insert(macro_call, parts)
 
                     stop_part = scanner:get_next_part(","..close_char)
                     if not stop_part then
@@ -420,50 +420,50 @@ M.macro_extract_call = function(scanner)
             end
         end
     end
-    return arg_stack
+    return macro_call
 end
 
 
 -- Expand the invocation name and arguments before asking the selected macro
 -- object to render itself. Immediate versus deferred syntax determines when
 -- this function is called; it does not change the macro object's interface.
-M.expand_call = function(scope, macro_call, stack)
-    stack = stack or {}
+Macro.expand_call = function(scope, macro_call, expansion_stack)
+    expansion_stack = expansion_stack or {}
 
-    local actuals = {}
+    local actual_arguments = {}
     for _, argument_parts in ipairs(macro_call) do
-        table.insert(actuals, M.expand_tokens(scope, argument_parts, stack))
+        table.insert(actual_arguments, Macro.expand_tokens(scope, argument_parts, expansion_stack))
     end
 
-    local name = actuals[1]
-    for _, active_name in ipairs(stack) do
+    local name = actual_arguments[1]
+    for _, active_name in ipairs(expansion_stack) do
         if active_name == name then
             error("die")
         end
     end
 
-    table.insert(stack, name)
+    table.insert(expansion_stack, name)
     local macro = scope:get_macro(name)
-    local result = macro and macro:expand(scope, actuals, stack) or ""
-    table.remove(stack)
+    local result = macro and macro:expand(scope, actual_arguments, expansion_stack) or ""
+    table.remove(expansion_stack)
     return result
 end
 
 
 -- Parts expansion coordinates nested macro calls, but each resolved macro
 -- decides how it produces its own text.
-M.expand_tokens = function(scope, tokens, stack)
+Macro.expand_tokens = function(scope, tokens, expansion_stack)
     if type(tokens) == "string" then
         return tokens
     end
 
-    stack = stack or {}
+    expansion_stack = expansion_stack or {}
     local result = {}
     for _, token in ipairs(tokens) do
         if type(token) == "string" then
             table.insert(result, token)
         elseif type(token) == "table" then
-            table.insert(result, M.expand_call(scope, token, stack))
+            table.insert(result, Macro.expand_call(scope, token, expansion_stack))
         else
             error("Illegal token in token array: " .. util.dump(token))
         end
@@ -472,26 +472,22 @@ M.expand_tokens = function(scope, tokens, stack)
 end
 
 
-M.expand_text = function(scope, text, stack)
-    return M.expand_tokens(scope, M.parts_from_text(text), stack)
+Macro.expand_text = function(scope, text, expansion_stack)
+    return Macro.expand_tokens(scope, Macro.parts_from_text(text), expansion_stack)
 end
 
-
-local function q(s)
-    return string.format("%q", s)
-end
 
 
 local function macro_call_to_lua_expression(part)
     local arguments = {}
     for _, argument_parts in ipairs(part) do
-        table.insert(arguments, M.parts_to_lua_expression(argument_parts))
+        table.insert(arguments, Macro.parts_to_lua_expression(argument_parts))
     end
     return "scope:get_text(" .. table.concat(arguments, ", ") .. ")"
 end
 
 
-M.part_to_lua = function(part)
+Macro.part_to_lua = function(part)
     if type(part) == "string" then
         return part
     end
@@ -503,17 +499,17 @@ M.part_to_lua = function(part)
     assert(false, "unknown part type!")
 end
 
-M.parts_to_lua = function(parts)
+Macro.parts_to_lua = function(parts)
     local result = ""
 
     for _, part in ipairs(parts) do
-        result = result .. M.part_to_lua(part)
+        result = result .. Macro.part_to_lua(part)
     end
 
     return result
 end
 
-M.part_to_lua_expression = function(part)
+Macro.part_to_lua_expression = function(part)
     if type(part) == "string" then
         return string.format("%q", part)
     end
@@ -526,13 +522,13 @@ M.part_to_lua_expression = function(part)
     
 end
 
-M.parts_to_lua_expression = function(parts)
+Macro.parts_to_lua_expression = function(parts)
     if #parts == 0 then return "\"\"" end
 
     local result = ""
     for _, part in ipairs(parts) do
         if result ~= "" then result = result .. " .. " end
-        result = result .. M.part_to_lua_expression(part)
+        result = result .. Macro.part_to_lua_expression(part)
     end
     return result
 end
@@ -542,7 +538,7 @@ end
 ---[=[UNIT_TESTS
 do
     local wrapped_parts = { "one" }
-    local wrapped_macro = M.from_parts(wrapped_parts)
+    local wrapped_macro = Macro.from_parts(wrapped_parts)
     assert(type(wrapped_macro) == "table")
     assert(type(wrapped_macro.get_parts) == "function")
     assert(wrapped_macro[1] == nil)
@@ -573,51 +569,51 @@ do
         assignment_scope,
         "VALUE",
         "=",
-        M.parts_from_text("$(VALUE) two")
+        Macro.parts_from_text("$(VALUE) two")
     )
     local recursive_parts = recursive_macro:get_parts()
-    local saved_name = recursive_parts[1][1][1]
-    assert(type(saved_name) == "string",
+    local saved_macro_name = recursive_parts[1][1][1]
+    assert(type(saved_macro_name) == "string",
            "self-reference rewrite nested the saved macro name")
-    assert(installed[saved_name] == wrapped_macro)
+    assert(installed[saved_macro_name] == wrapped_macro)
     saved_value_count = count_before_test
 
     local function try(parts)
         local result = ""
         for _, part in ipairs(parts) do
-            result = result .. M.part_to_lua_expression(part)
+            result = result .. Macro.part_to_lua_expression(part)
         end
         return result
     end
 
     assert_eq(
         "parts_to_lua one macro",
-        M.parts_to_lua(M.parts_from_text('assert($(TEST) == "foo")')),
+        Macro.parts_to_lua(Macro.parts_from_text('assert($(TEST) == "foo")')),
         'assert(scope:get_text("TEST") == "foo")'
     )
     assert_eq(
         "parts_to_lua multiple macros",
-        M.parts_to_lua(M.parts_from_text('assert($(LEFT) == $(RIGHT))')),
+        Macro.parts_to_lua(Macro.parts_from_text('assert($(LEFT) == $(RIGHT))')),
         'assert(scope:get_text("LEFT") == scope:get_text("RIGHT"))'
     )
     assert_eq(
         "parts_to_lua no macros",
-        M.parts_to_lua(M.parts_from_text('assert(value == "foo")')),
+        Macro.parts_to_lua(Macro.parts_from_text('assert(value == "foo")')),
         'assert(value == "foo")'
     )
     assert_eq(
         "parts_to_lua nested macro name",
-        M.parts_to_lua(M.parts_from_text('$($(NAME))')),
+        Macro.parts_to_lua(Macro.parts_from_text('$($(NAME))')),
         'scope:get_text(scope:get_text("NAME"))'
     )
     assert_eq(
         "parts_to_lua parameterized macro",
-        M.parts_to_lua(M.parts_from_text('$(PAIR one,two)')),
+        Macro.parts_to_lua(Macro.parts_from_text('$(PAIR one,two)')),
         'scope:get_text("PAIR", "one", "two")'
     )
     assert_eq(
         "parts_to_lua empty macro arguments",
-        M.parts_to_lua(M.parts_from_text('$(PAIR ,two,)')),
+        Macro.parts_to_lua(Macro.parts_from_text('$(PAIR ,two,)')),
         'scope:get_text("PAIR", "", "two", "")'
     )
 
@@ -675,7 +671,7 @@ do
     end
 
     local function check_parts(text, expected)
-        local parts = M.parts_from_text(text)
+        local parts = Macro.parts_from_text(text)
         check_final_format(parts)
 
         local actual = parts_to_string(parts)
@@ -690,7 +686,7 @@ do
     end
 
     local function check_lua_parts(text, expected)
-        local parts = M.parts_from_lua_text(text)
+        local parts = Macro.parts_from_lua_text(text)
         check_final_format(parts)
 
         local actual = parts_to_string(parts)
@@ -706,7 +702,7 @@ do
 
     local function check_error(text)
         local ok = pcall(function()
-            M.parts_from_text(text)
+            Macro.parts_from_text(text)
         end)
         if ok then
             error("parts_from_text(" .. string.format("%q", text) .. ") should have failed", 2)
@@ -714,7 +710,7 @@ do
     end
 
     local function check_macro_arguments(name, text, expected)
-        local parts = M.parts_from_text(text)
+        local parts = Macro.parts_from_text(text)
         check_final_format(parts)
         assert_eq(
             "macro argument parser: " .. name,
@@ -725,7 +721,7 @@ do
 
     local function check_macro_argument_error(name, text, expected)
         local ok, actual = pcall(function()
-            M.parts_from_text(text)
+            Macro.parts_from_text(text)
         end)
         if ok then
             error("macro argument parser: " .. name .. " should have failed", 2)
@@ -890,4 +886,4 @@ do
 end
 --]=]
 
-return M
+return Macro
