@@ -18,7 +18,8 @@ windebug: BLUD_TARGET = blud.exe
 windebug: LUAJIT_LDFLAGS = ./luajit/src/libluajit-win64.a
 windebug: ALL_TARGETS = $(BLUD_TARGET)
 
-debug windebug: CFLAGS += -g
+debug: CFLAGS += -g
+windebug: CFLAGS += -g -DWINVER=0x0602
 debug windebug: CSTRFLAGS = -d
 release: CSTRFLAGS =
 
