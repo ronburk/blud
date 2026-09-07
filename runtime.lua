@@ -160,6 +160,27 @@ blud.silent = function(scope)
 end
 
 
+blud.trace_update = function(target, timestamp, newest_prerequisite_time,
+                             newest_prerequisite)
+    if not blud.command_line_options.trace then
+        return
+    end
+
+    local reason
+    if blud.command_line_options.always_make then
+        reason = "-B was specified"
+    elseif timestamp == blud.timestamp.oldest then
+        reason = "the target does not exist"
+    elseif newest_prerequisite then
+        reason = "prerequisite '" .. newest_prerequisite.NAME .. "' was newer"
+    else
+        reason = "a prerequisite was newer"
+    end
+
+    print("blud: update target '" .. target.BOUND_NAME .. "' due to: " .. reason)
+end
+
+
 blud.execute = function(scope, text)
     assert(type(text) == "string")
     local status
