@@ -108,6 +108,12 @@ function Operator:BUILD(target_atom, parent)
         if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.trace_update(
+                    target_atom,
+                    timestamp,
+                    newest_prerequisite_time,
+                    newest_prerequisite
+                )
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
@@ -332,6 +338,12 @@ do  -- Ordinary explicit dependency rules.
         if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.trace_update(
+                    target_atom,
+                    timestamp,
+                    newest_prerequisite_time,
+                    newest_prerequisite
+                )
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
@@ -488,6 +500,12 @@ do  -- Source lists: compile each source through a reverse rule, then link.
         if needs_building then
             local rule = target_atom.RULE
             if rule and rule.action then
+                blud.trace_update(
+                    target_atom,
+                    timestamp,
+                    newest_prerequisite_time,
+                    newest_prerequisite
+                )
                 blud.why.action_started(target_atom)
                 target_atom:DO_ACTION(parent)
                 blud.why.action_completed(target_atom)
