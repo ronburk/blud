@@ -13,9 +13,6 @@ function blud.printf(fmt, ...)
     print(string.format(fmt, ...))
 end
 
-
-
-
 local function load_embedded_lua(filename)
     local source = CSTRGet(filename)
     if source == nil then
