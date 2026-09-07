@@ -505,8 +505,6 @@ local function first_lua_token(compile_io)
     return token_type, token_text
 end
 
-local compile_directives
-
 local function compile_lua(compile_io, first_record,
                            first_token_type, first_token_text)
     local blocks = {}
