@@ -64,7 +64,7 @@ end
 
 
 
-local bludfile_path = get_bludfile_path()
+local bludfile_path = blud.command_line_options.bludfile_path
 local luac_path     = bludfile_path .. ".luac"
 local blud_exe_path = get_executable_path()
 local bootstrap_dircache = require("blud.dircache")
