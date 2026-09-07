@@ -61,6 +61,7 @@ Options:
   -B                    Rebuild targets regardless of timestamps.
   --why TARGET          Build normally, then explain TARGET's build decision.
   -n                    Print actions without executing them.
+  --trace              Annotate actions with their associated targets.
   -s, --silent,
       --quiet           Do not print actions before executing them.
   -W ATOM               Assume ATOM is newly changed.
@@ -128,6 +129,8 @@ local function parse_command_line(args)
             options.why_target_name = args[i]
         elseif arg == "-n" then
             options.commandline_booleans[".JUST_PRINT"] = true
+        elseif arg == "--trace" then
+            options.trace = true
         elseif arg == "-s" or arg == "--silent" or arg == "--quiet" then
             options.commandline_booleans[".SILENT"] = true
         elseif arg == "-W" then
