@@ -1,5 +1,13 @@
 -- expect: test0013.out
 -- Prerequisite globs expand when their rule declaration executes.
+--
+-- _BLUD_TEST_
+-- rm -f test0013-glob-a.input test0013-glob-b.input test0013-glob-c.input test0013.out
+-- touch test0013-glob-a.input test0013-glob-b.input
+-- $(OWD)/blud -f $<
+-- test -e test0013.out
+-- rm -f test0013-glob-a.input test0013-glob-b.input test0013-glob-c.input test0013.out
+-- _BLUD_TEST_
 
 all:
 
@@ -24,10 +32,7 @@ do
         file:close()
     end
 
-    remove_fixtures()
     os.remove("test0013.out")
-    create_fixture(fixture_names[2])
-    create_fixture(fixture_names[1])
 
     : snapshot: test0013-glob-*.input test0013-missing-*.input
 
