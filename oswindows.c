@@ -623,6 +623,9 @@ int os_path_type(const char* path) {
     if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
         (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
         return 2;
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
+        return 3;
     return 1;
 }
 
