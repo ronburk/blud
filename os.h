@@ -57,6 +57,10 @@ extern int os_mkdir(const char* path);
 // directory, or 3 for a regular file.
 extern int os_path_type(const char* path);
 
+// Store the size in bytes of a regular file in size; return 0 on success and
+// -1 on failure. Directories and other non-regular objects are failures.
+extern int os_get_path_size(const char* path, int64_t* size);
+
 // Store the Unix-epoch system time in timestamp; return 0 or -1.
 extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
 
