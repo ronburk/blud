@@ -1,5 +1,27 @@
 -- expect: test0009.out
--- Directory scans skip dangling entries but report real enumeration failures.
+-- A glob must report an error when its directory cannot be enumerated.
+--
+-- _BLUD_TEST_
+-- rm -rf test0009.entries test0009.missing
+-- $(OWD)/blud -f $<
+-- test -e test0009.out
+-- rm -rf test0009.entries test0009.missing
+-- _BLUD_TEST_
 
 all:
-    shell bash test/test0009.sh
+
+do
+    os.remove("test0009.out")
+    blud.shell.execute("rm -rf test0009.entries test0009.missing", scope)
+    assert(blud.shell.execute("mkdir test0009.entries", scope) == 0)
+    assert(blud.shell.execute("touch test0009.entries/real", scope) == 0)
+    assert(blud.shell.execute("test -e test0009.entries/real", scope) == 0)
+
+    local status = blud.shell.execute("rm test0009.missing/*", scope)
+    assert(status ~= 0, "missing-directory glob unexpectedly succeeded")
+
+    blud.shell.execute("rm -rf test0009.entries test0009.missing", scope)
+    local output = io.open("test0009.out", "w")
+    assert(output, "could not create test0009.out")
+    output:close()
+end
