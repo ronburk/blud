@@ -669,6 +669,32 @@ int os_get_path_size(const char* path, int64_t* size) {
     return 0;
 }
 
+int os_path_is_readable(const char* path) {
+    DWORD attributes;
+
+    if (path == NULL || path[0] == '\0')
+        return 0;
+    attributes = get_file_attributes(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES ||
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return 0;
+    return 1;
+}
+
+int os_path_is_writable(const char* path) {
+    DWORD attributes;
+
+    if (path == NULL || path[0] == '\0')
+        return 0;
+    attributes = get_file_attributes(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES ||
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return 0;
+    return (attributes & FILE_ATTRIBUTE_READONLY) == 0;
+}
+
 // Remove one empty directory. Recursive traversal is implemented in shell.lua.
 int os_remove_dir(const char* path) {
     return remove_directory(path) ? 0 : -1;
