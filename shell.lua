@@ -401,6 +401,40 @@ local function echo(argv)
     return 0
 end
 
+-- Implement `test -e|-f|-d|-s|-r|-w path`.
+local function test(argv)
+    if #argv < 2 then
+        return diagnostic("test", "missing condition")
+    elseif #argv > 3 then
+        return diagnostic("test", "too many operands")
+    end
+
+    local option = argv[2]
+    local path = argv[3]
+    if option == nil or option:sub(1, 1) ~= "-" or #option ~= 2 then
+        return diagnostic("test", "unsupported condition")
+    elseif path == nil then
+        return diagnostic("test", "missing file operand")
+    end
+
+    if option == "-e" then
+        return os_path_type(path) ~= 0 and 0 or 1
+    elseif option == "-f" then
+        return os_path_type(path) == 3 and 0 or 1
+    elseif option == "-d" then
+        return os_path_type(path) == 2 and 0 or 1
+    elseif option == "-s" then
+        local size = os_get_path_size(path)
+        return size ~= nil and size > 0 and 0 or 1
+    elseif option == "-r" then
+        return os_path_is_readable(path) and 0 or 1
+    elseif option == "-w" then
+        return os_path_is_writable(path) and 0 or 1
+    end
+
+    return diagnostic("test", "unsupported option '" .. option .. "'")
+end
+
 -- Join a directory and child name without duplicating an existing separator.
 -- Forward slash is accepted by both supported operating systems.
 local function join_path(parent, name)
@@ -740,6 +774,7 @@ local commands = {
     rm = rm,
     shell = shell,
     source = source,
+    test = test,
     touch = touch,
 }
 
