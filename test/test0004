@@ -11,28 +11,38 @@
 -- _BLUD_TEST_
 -- touch -c test0004.future/file
 -- $(OWD)/blud -s -f $< test0004.setup
--- $(OWD)/blud -s -f $< test0004.older-target test0004.newer-target test0004.virtual-target test0004.future/file
+-- $(OWD)/blud -s -f $< test0004.older-target test0004.newer-target test0004.equal-target test0004.empty-target test0004.virtual-target test0004.future/file
 -- test -e test0004.ordinary-ran
 -- test ! -e test0004.unexpected-ran
 -- test -e test0004.virtual-ran
 -- test -e test0004.future-detected
+-- test ! -e test0004.equal-ran
+-- test -e test0004.empty-ran
 -- _BLUD_TEST_
 
 test0004.setup:
-    rm -rf test0004.tree test0004.future
+    rm -rf test0004.tree test0004.future test0004.empty
     rm -f test0004.older-target test0004.newer-prerequisite
     rm -f test0004.newer-target test0004.older-prerequisite
+    rm -f test0004.equal-target test0004.equal-prerequisite
     rm -f test0004.virtual-target
     rm -f test0004.ordinary-ran test0004.unexpected-ran
     rm -f test0004.virtual-ran test0004.future-detected
+    rm -f test0004.equal-ran test0004.empty-ran
 
-    mkdir -p test0004.tree/sub test0004.future
+    mkdir -p test0004.tree/sub test0004.future test0004.empty
 
     touch -t 202001010000.00 test0004.older-target
     touch -t 202001020000.00 test0004.newer-prerequisite
 
     touch -t 202001020000.00 test0004.newer-target
     touch -t 202001010000.00 test0004.older-prerequisite
+
+    touch -t 202001010000.00 test0004.equal-target
+    touch -t 202001010000.00 test0004.equal-prerequisite
+
+    touch -t 202001010000.00 test0004.empty-target
+    touch -t 202001020000.00 test0004.empty
 
     touch -t 202001010000.00 test0004.tree/older
     touch -t 202001030000.00 test0004.tree/sub/newest
@@ -46,6 +56,12 @@ test0004.older-target: test0004.newer-prerequisite
 
 test0004.newer-target: test0004.older-prerequisite
     touch test0004.unexpected-ran
+
+test0004.equal-target: test0004.equal-prerequisite
+    touch test0004.equal-ran
+
+test0004.empty-target: test0004.empty
+    touch test0004.empty-ran
 
 test0004.virtual-target: test0004.tree
     touch test0004.virtual-ran
