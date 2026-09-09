@@ -1,5 +1,12 @@
 -- expect: test0015.out
 -- Loaded Lua sources have a private, write-once registry.
+--
+-- _BLUD_TEST_
+-- rm -f test0015.out
+-- $(OWD)/blud -f $<
+-- test -e test0015.out
+-- rm -f test0015.out
+-- _BLUD_TEST_
 
 all:
 
@@ -86,14 +93,14 @@ do
     local failing_name = "[registry-error-test]"
     local failing_source =
         "local marker = true\n" ..
-        "error(\"registry failure\")\n"
+        "error("registry failure")\n"
     local failing_chunk = assert(
         blud.load_lua_source(failing_source, failing_name))
     local succeeded, diagnostic = xpcall(failing_chunk, blud.error_handler)
     assert(not succeeded,
            "registered failing source unexpectedly succeeded")
     assert(diagnostic:find(
-               failing_name .. ":2 --> error(\"registry failure\")",
+               failing_name .. ":2 --> error("registry failure")",
                1,
                true),
            "error handler did not show the registered source line: " ..
