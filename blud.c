@@ -595,6 +595,38 @@ static int lua_os_path_type(lua_State *L) {
     return 1;
 }
 
+// Lua: size = os_get_path_size(path)
+// Returns the size of a regular file, or nil when path is not a regular file.
+static int lua_os_get_path_size(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+    int64_t size;
+
+    if (os_get_path_size(path, &size) != 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, (lua_Integer)size);
+    return 1;
+}
+
+// Lua: readable = os_path_is_readable(path)
+// Returns 1 for a readable regular file and 0 otherwise.
+static int lua_os_path_is_readable(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushboolean(L, os_path_is_readable(path));
+    return 1;
+}
+
+// Lua: writable = os_path_is_writable(path)
+// Returns 1 for a writable regular file and 0 otherwise.
+static int lua_os_path_is_writable(lua_State *L) {
+    const char* path = luaL_checkstring(L, 1);
+
+    lua_pushboolean(L, os_path_is_writable(path));
+    return 1;
+}
+
 // Lua: status = os_remove_dir(path)
 // status is 0 on success or -1 when the empty directory cannot be removed.
 static int lua_os_remove_dir(lua_State *L) {
@@ -808,6 +840,9 @@ int luaopen_mylib(lua_State *L) {
     lua_register(L, "os_copy_dir", lua_os_copy_dir);
     lua_register(L, "os_mkdir", lua_os_mkdir);
     lua_register(L, "os_path_type", lua_os_path_type);
+    lua_register(L, "os_get_path_size", lua_os_get_path_size);
+    lua_register(L, "os_path_is_readable", lua_os_path_is_readable);
+    lua_register(L, "os_path_is_writable", lua_os_path_is_writable);
     lua_register(L, "os_remove_dir", lua_os_remove_dir);
     lua_register(L, "os_remove_file", lua_os_remove_file);
     lua_register(L, "os_touch", lua_os_touch);
