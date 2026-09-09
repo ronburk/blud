@@ -1,5 +1,15 @@
--- expect: test0011.out
--- --lua runs an arbitrary LuaJIT source file without entering build mode.
+-- test0011
+--
+-- --lua runs a LuaJIT source file directly and passes through its arguments.
+-- The fixture creates a marker only after checking the embedded LuaJIT version,
+-- script name, arguments, and ordinary global-environment behavior.
+--
+-- _BLUD_TEST_
+-- rm -f test0011.lua-ran test0011.out
+-- $(OWD)/blud --lua test0011.lua -n --not-a-blud-option two
+-- test -e test0011.lua-ran
+-- touch test0011.out
+-- rm -f test0011.lua-ran test0011.out
+-- _BLUD_TEST_
 
 all:
-    shell bash test/test0011.sh

@@ -1,0 +1,10 @@
+assert(jit.version:match("^LuaJIT "))
+assert(arg[0]:match("test0011%.lua$"))
+assert(arg[1] == "-n")
+assert(arg[2] == "--not-a-blud-option")
+assert(arg[3] == "two")
+assert(undefined_global == nil)
+
+local marker = io.open("test0011.lua-ran", "w")
+assert(marker, "could not create --lua marker")
+marker:close()
