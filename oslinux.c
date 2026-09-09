@@ -522,7 +522,11 @@ int os_path_type(const char* path) {
 
     if (path == NULL || path[0] == '\0' || lstat(path, &statbuf) != 0)
         return 0;
-    return S_ISDIR(statbuf.st_mode) ? 2 : 1;
+    if (S_ISDIR(statbuf.st_mode))
+        return 2;
+    if (S_ISREG(statbuf.st_mode))
+        return 3;
+    return 1;
 }
 
 // Remove one empty directory. Recursive traversal is implemented in shell.lua.
