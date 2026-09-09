@@ -86,8 +86,12 @@ local function parse(command)
             end
         elseif c == "#" and not word_started then
             break
+        elseif (c == "(" or c == ")") and command_name == "test" then
+            finish_word()
+            append(c, false)
+            finish_word()
         elseif c == "$" or c == "`" or c == "|" or c == "&" or
-               c == ";" or c == "<" or c == ">" or c == "(" or
+               c == ";" or c == "<" or c == ">" or
                c == ")" or c == "{" or c == "}" or
                (c == "~" and not word_started) then
             local parsed_command_name = command_name
@@ -401,38 +405,101 @@ local function echo(argv)
     return 0
 end
 
--- Implement `test -e|-f|-d|-s|-r|-w path`.
+-- Translate one supported test predicate into a Lua expression. Operands stay
+-- in argv so their contents can never become Lua source code.
+local test_predicates = {
+    ["-e"] = function(index)
+        return "(os_path_type(argv[" .. index .. "]) ~= 0)"
+    end,
+    ["-f"] = function(index)
+        return "(os_path_type(argv[" .. index .. "]) == 3)"
+    end,
+    ["-d"] = function(index)
+        return "(os_path_type(argv[" .. index .. "]) == 2)"
+    end,
+    ["-s"] = function(index)
+        return "((os_get_path_size(argv[" .. index .. "]) or -1) > 0)"
+    end,
+    ["-r"] = function(index)
+        return "os_path_is_readable(argv[" .. index .. "])"
+    end,
+    ["-w"] = function(index)
+        return "os_path_is_writable(argv[" .. index .. "])"
+    end,
+}
+
+-- Translate `test`'s small supported expression language to Lua. LuaJIT then
+-- parses the generated expression, including its precedence and parentheses.
+local function test_to_lua(argv)
+    local expression = {}
+    local need_operand = true
+    local parenthesis_depth = 0
+    local index = 2
+
+    while index <= #argv do
+        local word = argv[index]
+        if need_operand then
+            if word == "!" then
+                expression[#expression + 1] = "not "
+            elseif word == "(" then
+                expression[#expression + 1] = "("
+                parenthesis_depth = parenthesis_depth + 1
+            else
+                local predicate = test_predicates[word]
+                if not predicate then
+                    return nil, "expected test condition, got '" .. word .. "'"
+                end
+                if argv[index + 1] == nil then
+                    return nil, "missing operand for '" .. word .. "'"
+                end
+                expression[#expression + 1] = predicate(index + 1)
+                index = index + 1
+                need_operand = false
+            end
+        elseif word == "-a" or word == "-o" then
+            expression[#expression + 1] = word == "-a" and " and " or " or "
+            need_operand = true
+        elseif word == ")" then
+            if parenthesis_depth == 0 then
+                return nil, "unmatched ')'"
+            end
+            expression[#expression + 1] = ")"
+            parenthesis_depth = parenthesis_depth - 1
+        else
+            return nil, "expected '-a', '-o', or ')', got '" .. word .. "'"
+        end
+        index = index + 1
+    end
+
+    if need_operand then
+        return nil, "missing test condition"
+    elseif parenthesis_depth ~= 0 then
+        return nil, "unmatched '('"
+    end
+    return table.concat(expression)
+end
+
+-- Implement `test` by evaluating the translated Lua expression.
 local function test(argv)
-    if #argv < 2 then
-        return diagnostic("test", "missing condition")
-    elseif #argv > 3 then
-        return diagnostic("test", "too many operands")
+    local expression, translate_error = test_to_lua(argv)
+    if not expression then
+        return diagnostic("test", translate_error)
     end
 
-    local option = argv[2]
-    local path = argv[3]
-    if option == nil or option:sub(1, 1) ~= "-" or #option ~= 2 then
-        return diagnostic("test", "unsupported condition")
-    elseif path == nil then
-        return diagnostic("test", "missing file operand")
+    local chunk, load_error = loadstring(
+        "return function(argv) return " .. expression .. " end",
+        "[test]"
+    )
+    if not chunk then
+        return diagnostic("test", "invalid expression: " .. tostring(load_error))
     end
 
-    if option == "-e" then
-        return os_path_type(path) ~= 0 and 0 or 1
-    elseif option == "-f" then
-        return os_path_type(path) == 3 and 0 or 1
-    elseif option == "-d" then
-        return os_path_type(path) == 2 and 0 or 1
-    elseif option == "-s" then
-        local size = os_get_path_size(path)
-        return size ~= nil and size > 0 and 0 or 1
-    elseif option == "-r" then
-        return os_path_is_readable(path) and 0 or 1
-    elseif option == "-w" then
-        return os_path_is_writable(path) and 0 or 1
+    local evaluate = chunk()
+    local ok, result = pcall(evaluate, argv)
+    if not ok then
+        return diagnostic("test", "evaluation failed: " .. tostring(result))
     end
-
-    return diagnostic("test", "unsupported option '" .. option .. "'")
+    return result and 0 or 1
 end
 
 -- Join a directory and child name without duplicating an existing separator.
@@ -816,5 +883,52 @@ function M.execute(command, scope)
 
     return command_function(argv, scope)
 end
+
+---[=[UNIT_TESTS
+do
+    local function equal_translation(argv, expected)
+        local expression, error_message = test_to_lua(argv)
+        assert(expression, error_message)
+        assert(
+            expression == expected,
+            string.format(
+                "test translation: expected %q, got %q",
+                expected,
+                expression
+            )
+        )
+    end
+
+    local function reject(argv)
+        local expression = test_to_lua(argv)
+        assert(expression == nil, "test translation was accepted")
+    end
+
+    equal_translation(
+        {"test", "-e", "file"},
+        "(os_path_type(argv[3]) ~= 0)"
+    )
+    equal_translation(
+        {"test", "!", "-e", "file", "-a", "-s", "other"},
+        "not (os_path_type(argv[4]) ~= 0) and " ..
+        "((os_get_path_size(argv[7]) or -1) > 0)"
+    )
+    equal_translation(
+        {"test", "(", "-e", "left", "-o", "-d", "right", ")",
+         "-a", "-r", "last"},
+        "((os_path_type(argv[4]) ~= 0) or " ..
+        "(os_path_type(argv[7]) == 2)) and " ..
+        "os_path_is_readable(argv[11])"
+    )
+
+    reject({"test"})
+    reject({"test", "-e"})
+    reject({"test", "-e", "file", "-d", "other"})
+    reject({"test", "-a", "-e", "file"})
+    reject({"test", "(", "-e", "file"})
+    reject({"test", "-e", "file", ")"})
+end
+
+--]=]
 
 return M
