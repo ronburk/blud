@@ -1,5 +1,27 @@
--- expect: test0007.out
--- Atom timestamps are cached logical values after a successful build.
+-- test0007
+--
+-- A prerequisite shared by two targets must be built only once in one build.
+--
+-- _BLUD_TEST_
+-- rm -rf test0007.shared-ran test0007.first test0007.second
+-- rm -f test0007.out
+-- $(OWD)/blud -f $<
+-- test -d test0007.shared-ran
+-- test -e test0007.first
+-- test -e test0007.second
+-- touch test0007.out
+-- rm -rf test0007.shared-ran test0007.first test0007.second
+-- _BLUD_TEST_
 
-all:
-    shell bash test/test0007.sh
+all: test0007.first test0007.second
+
+test0007.first: test0007.shared
+    touch $@
+
+test0007.second: test0007.shared
+    touch $@
+
+-- This target intentionally has no output file.  mkdir without -p makes a
+-- second execution fail, so this catches duplicate execution directly.
+test0007.shared:
+    mkdir test0007.shared-ran
