@@ -1,5 +1,7 @@
 -- expect: test0014.out
 -- Standalone action compilation can reuse the cached compiler I/O module.
+--
+-- _BLUD_TEST_ $(OWD)/blud -f $<
 
 all:
 
