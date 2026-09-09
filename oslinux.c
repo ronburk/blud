@@ -529,6 +529,19 @@ int os_path_type(const char* path) {
     return 1;
 }
 
+int os_get_path_size(const char* path, int64_t* size) {
+    struct stat statbuf;
+
+    assert(size != NULL);
+    if (path == NULL || path[0] == '\0' || stat(path, &statbuf) != 0 ||
+        !S_ISREG(statbuf.st_mode))
+        return -1;
+    assert(statbuf.st_size >= 0);
+    *size = (int64_t)statbuf.st_size;
+    assert(*size >= 0);
+    return 0;
+}
+
 // Remove one empty directory. Recursive traversal is implemented in shell.lua.
 int os_remove_dir(const char* path) {
     return rmdir(path) == 0 ? 0 : -1;
