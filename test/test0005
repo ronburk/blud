@@ -1,10 +1,42 @@
--- expect: test0005.out
--- test0005: lua code execution
-
-do
-    local f = assert(io.open("test0005.out", "w"))
-    f:write("lua ran\n")
-    f:close()
-end
+-- test0005
+--
+-- Exercise the builtin test command using portable shell commands.
+--
+-- _BLUD_TEST_
+-- rm -rf test0005.directory "test0005 space" test0005.nonempty test0005.empty
+-- $(OWD)/blud -s -f $<
+-- rm -rf test0005.directory "test0005 space" test0005.nonempty test0005.empty
+-- _BLUD_TEST_
 
 all:
+    rm -rf test0005.directory "test0005 space"
+    rm -f test0005.nonempty test0005.empty
+    mkdir -p test0005.directory "test0005 space"
+    touch test0005.empty
+    cp test/test0005 test0005.nonempty
+    cp test/test0005 "test0005 space/nonempty file"
+
+    test -e test0005.nonempty
+    test -f test0005.nonempty
+    test ! -d test0005.nonempty
+    test -d test0005.directory
+    test ! -f test0005.directory
+    test -s test0005.nonempty
+    test ! -s test0005.empty
+    test -r test0005.nonempty
+    test -w test0005.nonempty
+
+    test ! -e test0005.missing
+    test ! -r test0005.missing
+    test ! -w test0005.missing
+
+    test -e "test0005 space/nonempty file"
+    test -f "test0005 space/nonempty file"
+    test -s "test0005 space/nonempty file"
+    test -r "test0005 space/nonempty file"
+    test -w "test0005 space/nonempty file"
+
+    test -e test0005.nonempty -a -f test0005.nonempty
+    test -e test0005.missing -o -d test0005.directory
+    test ( -e test0005.nonempty -a -s test0005.nonempty ) -o -d test0005.directory
+    test ! ( -e test0005.missing -o -f test0005.directory )
