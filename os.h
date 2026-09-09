@@ -53,7 +53,8 @@ extern int os_copy_dir(const char* from, const char* to);
 // Create exactly path, without parents: 0 created, 1 existed, 2 failed.
 extern int os_mkdir(const char* path);
 
-// Return 0 for missing, 1 for non-directory, or 2 for a real directory.
+// Return 0 for missing, 1 for another existing object, 2 for a real
+// directory, or 3 for a regular file.
 extern int os_path_type(const char* path);
 
 // Store the Unix-epoch system time in timestamp; return 0 or -1.
