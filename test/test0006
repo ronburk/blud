@@ -1,6 +1,26 @@
--- expect: test0006.out
--- -B rebuilds every considered target regardless of timestamps
+-- test0006
+--
+-- Verify that -B rebuilds every considered target regardless of timestamps.
+--
+-- _BLUD_TEST_
+-- rm -f test0006.prerequisite test0006.target
+-- rm -f test0006.prerequisite.ran test0006.target.ran
+-- touch test0006.prerequisite test0006.target
+-- $(OWD)/blud -f $< test0006.target
+-- test ! -e test0006.prerequisite.ran
+-- test ! -e test0006.target.ran
+-- $(OWD)/blud -B -f $< test0006.target
+-- test -e test0006.prerequisite.ran
+-- test -e test0006.target.ran
+-- touch test0006.out
+-- rm -f test0006.prerequisite test0006.target
+-- rm -f test0006.prerequisite.ran test0006.target.ran
+-- _BLUD_TEST_
 
-all:
-    shell bash test/test0006.sh
+test0006.target : test0006.prerequisite
+    touch test0006.target.ran
+    touch $@
 
+test0006.prerequisite:
+    touch test0006.prerequisite.ran
+    touch $@
