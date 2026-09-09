@@ -61,6 +61,12 @@ extern int os_path_type(const char* path);
 // -1 on failure. Directories and other non-regular objects are failures.
 extern int os_get_path_size(const char* path, int64_t* size);
 
+// Return 1 if path is a readable regular file, otherwise 0.
+extern int os_path_is_readable(const char* path);
+
+// Return 1 if path is a writable regular file, otherwise 0.
+extern int os_path_is_writable(const char* path);
+
 // Store the Unix-epoch system time in timestamp; return 0 or -1.
 extern int os_get_system_timestamp(BLUD_TIMESTAMP* timestamp);
 
