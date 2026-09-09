@@ -12,10 +12,10 @@
 -- touch -c test0004.future/file
 -- $(OWD)/blud -s -f $< test0004.setup
 -- $(OWD)/blud -s -f $< test0004.older-target test0004.newer-target test0004.virtual-target test0004.future/file
--- shell test -e test0004.ordinary-ran
--- shell test ! -e test0004.unexpected-ran
--- shell test -e test0004.virtual-ran
--- shell test -e test0004.future-detected
+-- test -e test0004.ordinary-ran
+-- test ! -e test0004.unexpected-ran
+-- test -e test0004.virtual-ran
+-- test -e test0004.future-detected
 -- _BLUD_TEST_
 
 test0004.setup:
