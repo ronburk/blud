@@ -13,8 +13,8 @@ all:
     rm -f test0005.nonempty test0005.empty
     mkdir -p test0005.directory "test0005 space"
     touch test0005.empty
-    cp test/test0005 test0005.nonempty
-    cp test/test0005 "test0005 space/nonempty file"
+    cp test0005 test0005.nonempty
+    cp test0005 "test0005 space/nonempty file"
 
     test -e test0005.nonempty
     test -f test0005.nonempty
