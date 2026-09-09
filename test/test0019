@@ -11,5 +11,5 @@ INPUTS = $(BUILD_INPUT)
 all: $(BUILD_TARGET)
 
 $(BUILD_TARGET): $(INPUTS)
-    shell test $< = test0019
+    test $< = test0019
     touch $@
