@@ -1,7 +1,67 @@
--- expect: test0008.out
--- Verify portable internal commands and platform-shell delegation.
--- The action invokes the detailed shell test as one command because this test
--- format currently accepts a single action line.
+-- test0008
+--
+-- Exercise the portable command grammar and the boundary to delegated commands.
+--
+-- The child Blud invocations below are deliberately plain executable commands:
+-- they test delegation without depending on Bash, redirection, or shell syntax.
+--
+-- _BLUD_TEST_
+-- rm -rf test0008.tree "test0008 space"
+-- rm -rf test0008.remove-tree
+-- rm -f test0008.unknown.ran test0008.shell.ran
+-- rm -f test0008.out
+-- mkdir -p test0008.tree/a/b "test0008 space" test0008.remove-tree/child
+-- touch test0008.tree/a/b/one test0008.tree/a/b/two
+-- touch "test0008 space/quoted file"
+-- touch test0008.remove-tree/child/file
+-- $(OWD)/blud -f $<
+-- test -e "test0008 space/quoted file"
+-- test ! -e test0008.tree/a/b/one
+-- test -e test0008.tree/a/b/two
+-- test -e test0008.tree/cd-result
+-- test -e test0008.unknown.ran
+-- test -e test0008.shell.ran
+-- test ! -e test0008.remove-tree
+-- $(OWD)/blud -f $< test0008.cleanup
+-- touch test0008.out
+-- _BLUD_TEST_
 
-all:
-    shell bash test/test0008.sh
+all: test0008.finish
+
+-- The glob is expanded by Blud's builtin rm, not by the platform shell.  The
+-- files were created by the outer driver so this child process has a fresh
+-- directory cache when it expands the pattern.
+test0008.relative-glob:
+    rm test0008.tree/a/b/o*
+
+-- cd changes the process directory for the following action.  The second cd
+-- restores it so later relative paths still refer to the test workspace.
+test0008.after-cd: test0008.relative-glob
+    cd test0008.tree
+
+test0008.cd-result: test0008.after-cd
+    touch cd-result
+    cd ..
+
+-- An unrecognized command is delegated to the platform shell.  Its command
+-- line contains only the portable executable path and ordinary arguments.
+test0008.unknown: test0008.cd-result
+    ../../blud -f test0008 test0008.unknown.ran
+
+-- The explicit shell command delegates the same portable child invocation.
+test0008.shell: test0008.unknown
+    shell ../../blud -f test0008 test0008.shell.ran
+
+test0008.finish: test0008.shell
+    rm -r test0008.remove-tree
+
+test0008.unknown.ran:
+    touch $@
+
+test0008.shell.ran:
+    touch $@
+
+-- Cleanup runs in a new process, so its recursive directory walk also starts
+-- with a fresh directory cache.
+test0008.cleanup:
+    rm -rf test0008.tree "test0008 space" test0008.unknown.ran test0008.shell.ran
