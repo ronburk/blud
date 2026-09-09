@@ -1,5 +1,24 @@
--- expect: test0012.out
--- -s suppresses action echoing without suppressing action output.
+-- test0012
+--
+-- Exercise the portable command-line execution controls: -s preserves command
+-- output while suppressing the action echo, and -n does not execute actions.
+--
+-- _BLUD_TEST_
+-- rm -f test0012.ran test0012.out
+-- $(OWD)/blud -s -f $< test0012.silent
+-- test -e test0012.ran
+-- rm -f test0012.ran
+-- $(OWD)/blud -n -f $< test0012.no-execute
+-- test ! -e test0012.ran
+-- touch test0012.out
+-- rm -f test0012.ran test0012.out
+-- _BLUD_TEST_
 
 all:
-    shell bash test/test0012.sh
+
+test0012.silent:
+    echo command-output
+    touch test0012.ran
+
+test0012.no-execute:
+    touch test0012.ran
