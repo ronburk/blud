@@ -1,6 +1,24 @@
 -- expect: graphbuild/test0019.out
 -- Rule targets and prerequisites expand in the selected build scope.
 
+-- The harness runs this build-scope test in a child Blud process and checks
+-- that the expected target output is produced.
+-- _BLUD_TEST_
+-- rm -f graphbuild/test0019.out
+-- $(OWD)/blud -f $<
+-- test -e graphbuild/test0019.out
+-- rm -f graphbuild/test0019.out
+-- _BLUD_TEST_
+
+do
+    local function check_prerequisite(argv)
+        assert(argv[2] == "test0019",
+               "build-scope prerequisite expanded incorrectly")
+        return 0
+    end
+    blud.shell.register_command("test0019_check", check_prerequisite)
+end
+
 graphbuild :BUILD:
 graphbuild: BUILD_TARGET = test0019.out
 graphbuild: BUILD_INPUT = $(GLOBAL_INPUT)
@@ -11,5 +29,5 @@ INPUTS = $(BUILD_INPUT)
 all: $(BUILD_TARGET)
 
 $(BUILD_TARGET): $(INPUTS)
-    test $< = test0019
+    test0019_check $<
     touch $@
