@@ -1,5 +1,28 @@
 -- expect: test0010.out
--- Scope values are always macro-parts tables after storage or lookup.
+-- Scope values are stored and retrieved as macro-parts tables.
+--
+-- _BLUD_TEST_
+-- rm -f test0010.out
+-- $(OWD)/blud -f $<
+-- test -e test0010.out
+-- rm -f test0010.out
+-- _BLUD_TEST_
+
+NAME = literal
+DEFAULT ?= first
+DEFAULT ?= second
+APPENDED = one
+APPENDED += two
 
 all:
-    shell bash test/test0010.sh
+
+do
+    assert(blud.Scope.bludfile:get_text("NAME") == "literal")
+    assert(blud.Scope.bludfile:get_text("DEFAULT") == "first")
+    assert(blud.Scope.bludfile:get_text("APPENDED") == "one two")
+end
+
+do
+    local output = assert(io.open("test0010.out", "w"))
+    output:close()
+end
