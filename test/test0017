@@ -1,6 +1,16 @@
 -- expect: test0017.out
 -- Rule operands remain together while multi-target rules are split.
 
+-- The harness invokes this test as a child Blud process and checks the Lua
+-- assertions by requiring the test to create its success marker.
+-- _BLUD_TEST_
+-- rm -f test0017.out test0017-unexpected
+-- $(OWD)/blud -f $<
+-- test -e test0017.out
+-- test ! -e test0017-unexpected
+-- rm -f test0017.out test0017-unexpected
+-- _BLUD_TEST_
+
 all:
 
 do
