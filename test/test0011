@@ -5,11 +5,12 @@
 -- script name, arguments, and ordinary global-environment behavior.
 --
 -- _BLUD_TEST_
--- rm -f test0011.lua-ran test0011.out
+-- rm -f test0011.lua test0011.lua-ran test0011.out
+-- cp $(OWD)/../test/test0011.lua test0011.lua
 -- $(OWD)/blud --lua test0011.lua -n --not-a-blud-option two
 -- test -e test0011.lua-ran
 -- touch test0011.out
--- rm -f test0011.lua-ran test0011.out
+-- rm -f test0011.lua test0011.lua-ran test0011.out
 -- _BLUD_TEST_
 
 all:
