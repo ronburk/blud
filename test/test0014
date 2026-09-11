@@ -6,8 +6,8 @@
 all:
 
 do
-    local compiler = require("compiler")
-    local compile_io = require("compile_io")
+    local compiler = require("blud.compiler")
+    local compile_io = require("blud.compile_io")
 
     local function compile_action(name, text)
         compile_io.push_input(name, text)
