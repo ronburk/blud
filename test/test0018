@@ -1,6 +1,15 @@
 -- expect: test0018.out
 -- A rejected implicit rule must not remain in either rule index.
 
+-- The harness invokes this test as a child Blud process and checks the Lua
+-- assertions by requiring the test to create its success marker.
+-- _BLUD_TEST_
+-- rm -f test0018.out
+-- $(OWD)/blud -f $<
+-- test -e test0018.out
+-- rm -f test0018.out
+-- _BLUD_TEST_
+
 all:
 
 do
