@@ -1178,9 +1178,9 @@ test0004 does not work. What is it supposed to do?  OK, got it working, I think.
 ** <2026-04-23 Thu>
 can I figure out what's going on? Let's see.  Ok:
   a) build via: bash build.sh
-  b) test via:  bash test.sh
+  b) test via:  ./blud test
   c) rm test/*.out before running tests if you want to run all
-  d) to run one test: bash test.sh testname.blud
+  d) to run one test: ./blud -f test/testname
   
   
 Why won't it run the 0001 test first? OK, fixed bash script on that point.
