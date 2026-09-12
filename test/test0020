@@ -1,0 +1,75 @@
+-- expect: test0020.out
+-- A buildless :TEST: suite gets a distinct nested output directory and can
+-- be run by naming the suite atom directly.
+--
+-- _BLUD_TEST_
+-- rm -rf test0020-fixture test0020.out
+-- $(OWD)/blud -f $<
+-- test -e test0020.out
+-- rm -rf test0020-fixture test0020.out
+-- _BLUD_TEST_
+
+all:
+
+do
+    local fixture = "test0020-fixture"
+
+    local function write_file(filename, contents)
+        local file, error_message = io.open(filename, "w")
+        assert(file,
+               "could not create " .. filename .. ": " ..
+               tostring(error_message))
+        assert(file:write(contents))
+        file:close()
+    end
+
+    -- The fixture is outside version control but may remain after a failed
+    -- assertion, so start each run from a clean state.
+    assert(blud.shell.execute("rm -rf " .. fixture, scope) == 0)
+    assert(blud.shell.execute(
+        "mkdir -p " .. fixture .. "/test",
+        scope
+    ) == 0)
+    write_file(
+        fixture .. "/bludfile",
+        "test :TEST: *\n" ..
+        "    touch ran\n"
+    )
+    write_file(
+        fixture .. "/test/testcase",
+        "-- buildless :TEST: source fixture\n"
+    )
+
+    -- Keep the executable path valid after changing into the fixture.
+    local executable = get_executable_path()
+    assert(blud.shell.execute("cd " .. fixture, scope) == 0)
+
+    -- There is no default target in this bludfile. Naming the :TEST: atom
+    -- must nevertheless select and run the suite.
+    assert(blud.shell.execute(executable .. " test", scope) == 0,
+           "direct buildless test-suite invocation failed")
+    assert(blud.shell.execute(executable .. " -B test", scope) == 0,
+           "second buildless test-suite invocation failed")
+
+    assert(blud.shell.execute("cd ..", scope) == 0)
+
+    assert(os_path_type(fixture .. "/test/testcase") == 3,
+           "test source was not preserved")
+    assert(os_path_type(fixture .. "/test/test") == 2,
+           "buildless test output directory was not nested")
+    assert(os_path_type(fixture .. "/test/test/testcase") == 2,
+           "test workspace was not created")
+    assert(os_path_type(fixture .. "/test/test/testcase/testcase") == 3,
+           "test source was not staged in its workspace")
+    assert(os_path_type(fixture .. "/test/test/testcase/ran") == 3,
+           "buildless test action did not run")
+    assert(os_path_type(fixture .. "/test/test/testcase/bludtest.pass") == 3,
+           "buildless test did not create its pass marker")
+    assert(os_path_type(fixture .. "/test/test/test") == 0,
+           "test selector rediscovered its output directory")
+
+    assert(blud.shell.execute("rm -rf " .. fixture, scope) == 0)
+    assert(os_path_type(fixture) == 0,
+           "buildless test fixture cleanup failed")
+    assert(io.open("test0020.out", "w")):close()
+end
