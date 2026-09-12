@@ -36,6 +36,57 @@ local function copy_operands(operands)
     return result
 end
 
+local function join_path(parent, child)
+    if parent:match("[/\\\\]$") then
+        return parent .. child
+    end
+    return parent .. "/" .. child
+end
+
+local function path_basename(path)
+    local trimmed = path:gsub("[/\\\\]+$", "")
+    local basename = trimmed:match("([^/\\\\]+)$")
+    assert(basename, "path has no basename: " .. tostring(path))
+    return basename
+end
+
+local function is_absolute_path(path)
+    return path:match("^/") or path:match("^[A-Za-z]:[/\\\\]")
+end
+
+local function suite_source_directory(suite_name)
+    -- Relative test atoms use SWD to bind back into the suite directory.
+    if is_absolute_path(suite_name) or suite_name:match("^%./") then
+        return suite_name
+    end
+    return "./" .. suite_name
+end
+
+local function path_key(path)
+    local absolute = AliasDir.to_absolute(path)
+    -- AliasDir uses case-insensitive component comparisons on Windows.
+    if absolute:match("^[A-Za-z]:") or absolute:sub(1, 2) == "//" then
+        return absolute:lower()
+    end
+    return absolute
+end
+
+local function path_is_same_or_below(path, directory)
+    local path_value = path_key(path)
+    local directory_value = path_key(directory)
+    if path_value == directory_value then
+        return true
+    end
+    if directory_value == "/" or directory_value:match("^[a-z]:/$") then
+        return path_value:sub(1, #directory_value) == directory_value
+    end
+    return path_value:sub(1, #directory_value + 1) == directory_value .. "/"
+end
+
+local function paths_equal(left, right)
+    return path_key(left) == path_key(right)
+end
+
 local function resolve_rule_operands(operands)
     local result = copy_operands(operands)
     local directory = AliasDir.to_absolute(operands.directory or ".")
@@ -525,20 +576,6 @@ end
 do  -- Internal update behavior for individual tests.
     local opBLUDTEST = register_operator(":BLUDTEST:")
 
-    local function join_path(parent, child)
-        if parent:match("[/\\]$") then
-            return parent .. child
-        end
-        return parent .. "/" .. child
-    end
-
-    local function path_basename(path)
-        local trimmed = path:gsub("[/\\]+$", "")
-        local basename = trimmed:match("([^/\\]+)$")
-        assert(basename, "path has no basename: " .. tostring(path))
-        return basename
-    end
-
     local function source_entries(directory)
         local entries = dircache.get_entries(directory)
         local names = {}
@@ -755,13 +792,24 @@ do  -- Internal update behavior for individual tests.
             prerequisite:BUILD(target)
         end
 
-        -- Each test owns a directory below its suite in OWD. The source is
-        -- copied there before execution; the source atom remains bound to the
-        -- original path so timestamp caching never changes its identity.
-        local workspace = join_path(
-            join_path(target.SCOPE:get_text("OWD"), test_target.NAME),
-            test_basename
+        -- Each test owns a directory below its suite in OWD. If OWD is the
+        -- default "." then the normal suite output directory is also the
+        -- source directory; nest the output directory one level deeper.
+        local output_directory = join_path(
+            target.SCOPE:get_text("OWD"),
+            test_target.NAME
         )
+        local source_directory = assert(
+            test_target.RULE.test_source_directory,
+            "test has no source directory: " .. tostring(test_target.NAME)
+        )
+        if paths_equal(output_directory, source_directory) then
+            output_directory = join_path(
+                source_directory,
+                path_basename(test_target.NAME)
+            )
+        end
+        local workspace = join_path(output_directory, test_basename)
         local pass_path = join_path(workspace, "bludtest.pass")
         local source_changed = not scompare(source, workspace)
 
@@ -817,42 +865,39 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
     local op = register_operator(":TEST:")
     local bludtest_operator = blud.operators[":BLUDTEST:"]
 
-    local function is_absolute_path(path)
-        return path:match("^/") or path:match("^[A-Za-z]:[/\\]")
-    end
-
-    local function suite_source_directory(suite_name)
-        -- Relative test atoms use SWD to bind back into the suite directory.
-        if is_absolute_path(suite_name) or suite_name:match("^%./") then
-            return suite_name
-        end
-        return "./" .. suite_name
-    end
-
     local function expand_test_words(suite_name, prereq_words)
         -- Glob relative patterns inside the suite while keeping atom names
         -- suite-relative; SWD supplies the removed prefix when they bind.
         local tests = {}
         local suite_prefix = suite_name .. "/"
         local source_directory = suite_source_directory(suite_name)
+        local reserved_output_directory = join_path(
+            source_directory,
+            path_basename(suite_name)
+        )
 
         for _, word in ipairs(prereq_words) do
             local absolute = is_absolute_path(word)
             local pattern = absolute and word or suite_prefix .. word
 
             for _, matched_path in ipairs(glob_words({ pattern })) do
-                if absolute then
-                    table.insert(tests, {
-                        name = matched_path,
-                    })
-                else
-                    assert(matched_path:sub(1, #suite_prefix) == suite_prefix,
-                           "relative test glob escaped suite directory: " ..
-                           tostring(matched_path))
-                    table.insert(tests, {
-                        name = matched_path:sub(#suite_prefix + 1),
-                        source_directory = source_directory,
-                    })
+                if not path_is_same_or_below(
+                    matched_path,
+                    reserved_output_directory
+                ) then
+                    if absolute then
+                        table.insert(tests, {
+                            name = matched_path,
+                        })
+                    else
+                        assert(matched_path:sub(1, #suite_prefix) == suite_prefix,
+                               "relative test glob escaped suite directory: " ..
+                               tostring(matched_path))
+                        table.insert(tests, {
+                            name = matched_path:sub(#suite_prefix + 1),
+                            source_directory = source_directory,
+                        })
+                    end
                 end
             end
         end
@@ -862,7 +907,7 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
 
     local function test_basename(test_name)
         local name = test_name:gsub("[/\\]+$", "")
-        local basename = name:match("([^/\\]+)$")
+        local basename = path_basename(name)
         if not basename or basename == "." or basename == ".." then
             blud.error("#1: invalid test name.", test_name)
         end
@@ -916,6 +961,7 @@ do  -- Test targets aggregate one :BLUDTEST: rule per matched test.
         end
 
         local target_rule = target.RULE
+        target_rule.test_source_directory = suite_source_directory(target.NAME)
         for _, test in ipairs(tests) do
             local test_name = test.name
             local test_atom = blud.get_or_create_target(test_name)
