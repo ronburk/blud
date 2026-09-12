@@ -414,9 +414,8 @@ local function is_build_operator(target)
 end
 
 local function infer_targets(default_target, targets)
-    assert(default_target, "no default target to build")
-
     if not targets[1] then
+        assert(default_target, "no default target to build")
         return { default_target }
     end
 
