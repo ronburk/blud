@@ -229,6 +229,13 @@ debug/test/test0001/test0001.log
 The source test is a prerequisite of that log, so changing the source causes
 the test to run again. `-B` forces every test action to run.
 
+The suite atom can be named directly even when the bludfile has no ordinary
+primary target or `:BUILD:` declaration. In that case, `OWD` is `.`, so the
+suite output directory would otherwise be the source directory itself. Blud
+instead repeats the suite name beneath the source directory: a `test` suite
+uses `test/test/<case>/` as its per-test workspace. That repeated directory
+name is reserved and is ignored by the suite's test selector.
+
 Test support is still evolving. The action currently receives the original
 test source as `$<`; embedded test recipes and output capture are not yet
 implemented.
