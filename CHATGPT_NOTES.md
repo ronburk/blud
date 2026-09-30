@@ -1,9 +1,8 @@
 # ChatGPT Notes for blud
 
 These are concise handoff notes for future ChatGPT sessions working on Ron
-Burk's `blud` project. They were refreshed on 2026-08-03 after executable
-`source` actions, sourcemapped Lua diagnostics, and non-inheriting
-target-specific macros were merged.
+Burk's `blud` project. They were refreshed on 2026-09-30 against `main` at
+`91e089a` (2026-09-11).
 
 ## Start of a chat
 
@@ -27,13 +26,16 @@ target-specific macros were merged.
    Rerun it after changing relevant Lua sources. `lua-index.json` is obsolete
    and must not be regenerated or used.
 
+Use the GitHub connector for remote branches and PRs; do not use `gh` or
+`git push`.
+
 Show Linux commands and brief progress while working. Never fabricate,
 reconstruct, normalize, or silently alter command output.
 
 ## Current baseline
 
-At this refresh, `main` is `4361570` and includes merged PRs #60 and #61. The
-important recent behavior is:
+At this refresh, `main` is `91e089a`, including PR #263, which removed the
+obsolete standalone test driver. Important current behavior includes:
 
 - every concrete root target reports when it is already up to date;
 - `--why` distinguishes completed, skipped, interrupted, failed, and
@@ -44,8 +46,17 @@ important recent behavior is:
 - target-specific macro assignments no longer flow into prerequisites;
 - the interactive debugger has an update-phase breakpoint and a bounded,
   control-character-safe value explorer.
+- `:TEST:` can run directly from a buildless bludfile; its per-test workspaces
+  are nested under the suite directory to preserve source tests.
 
-There are 16 direct bludfile tests, `test0001` through `test0016`.
+There are 20 regression fixtures, `test/test0001` through `test/test0020`,
+plus the `test/test0011.lua` fixture. Run the suite with `./blud test`; use
+`./blud -B test` to force every test. The removed `test.sh` is not the test
+entry point.
+
+On 2026-09-30, `bash build.sh` and `./blud test` both succeeded on Linux. The
+suite deliberately exercises a failing glob in `test0009`, so the `rm` error
+diagnostic is expected; the test asserts that the command fails.
 
 `build.sh` embeds an explicit list of Lua modules into `bludlua.c`. Any new Lua
 module must be added to that list. The build expects a built LuaJIT 2.1 tree at
@@ -149,9 +160,13 @@ formatter. Diagnostics do not reopen source filenames.
 Remaining sourcemap work is narrow:
 
 - `--lua` still calls `loadfile()` directly instead of registering its text;
-- the generated embedded `<runtime>` chunk still uses its older loader path;
-- `source_from_generated_line()`, `report_runtime_error()`, and commented call
-  sites in `blud.lua` are obsolete cleanup.
+- `source_from_generated_line()` and `report_runtime_error()` in `blud.lua`
+  are leftover definitions with no callers; verify references before removing
+  them.
+
+Embedded Lua modules already load through `blud.load_lua_bytecode()` and the
+source registry; the older note that they still use a separate runtime loader
+path is stale.
 
 ### `--why`
 
@@ -195,28 +210,21 @@ implemented. It is not the current next task. In particular, `test0014` is no
 longer available for a proposed Rule test; it now covers standalone action
 compilation and sourcemap return/embedding.
 
-## Validation and known failure
+## Validation and known limitations
 
-Use the smallest focused test while developing. The recent compiler,
-diagnostic, and `source` paths can be checked with:
+Use a focused fixture while developing, then rebuild and run the full suite:
 
 ```
 bash build.sh
-./blud -f test/test0014
-./blud -f test/test0015
-./blud -f test/test0016
-./blud testsource
-./blud -f test/test0001 --why talk
+./blud test
 git diff --check
 git status --short
 ```
 
-As of this refresh, `./blud test` stops in `test0007.luatest`: that isolated
-atom harness constructs bound atoms without `SCOPE`, while
-`atom:get_timestamp()` now reads `.ASSUME_NEW` through `atom.SCOPE`. The error
-is `atom.lua:149: attempt to index field 'SCOPE' (a nil value)`. This predates
-and is unrelated to `source`; do not claim the full suite passed until the
-harness or contract is fixed.
+The previous `test0007`/missing-`SCOPE` full-suite failure is resolved; do not
+carry it forward. The current README says test support is still evolving:
+embedded test recipes and output capture are not implemented. It also notes
+that Windows build instructions are not yet documented.
 
 ## Installing packages in this environment (2026-09-03)
 
@@ -264,6 +272,7 @@ plans:
 - the preview-only `source: would execute ...` implementation;
 - reopening mapped filenames or scanning generated code for `--BLUDLINE`;
 - the old claim that multiline actions are unimplemented;
+- the standalone `test.sh` driver, removed in PR #263; use `./blud test`;
 - the paused `test0002` design or Rule-object proposal as the current priority;
 - `luajit.zip` or uploaded repository archives as authoritative source.
 
