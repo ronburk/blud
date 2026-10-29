@@ -72,6 +72,7 @@ local blud_exe_timestamp = bootstrap_dircache.get_timestamp(blud_exe_path)
 local bludfile_timestamp = bootstrap_dircache.get_timestamp(bludfile_path)
 local luac_timestamp     = bootstrap_dircache.get_timestamp(luac_path)
 
+local compiled_function
 local luac_needs_building = true
 if bludfile_timestamp ~= nil and luac_timestamp ~= nil then
     if blud_exe_timestamp < bludfile_timestamp and blud_exe_timestamp < luac_timestamp then
@@ -136,7 +137,8 @@ if luac_needs_building then
     end
     
 --    print(code_to_compile)
-    local compiled_function, err =
+    local err
+    compiled_function, err =
         blud.load_lua_source(code_to_compile, source_path, sourcemap)
     
     if not compiled_function then
@@ -216,7 +218,8 @@ local function load_bytecode(file_path)
 end
 
 require("blud.runtime")
-local bytecode_function = load_bytecode(luac_path)
+-- Cache persistence is optional; never reload stale bytecode after compiling.
+local bytecode_function = compiled_function or load_bytecode(luac_path)
 if bytecode_function then
     blud.sourcemap_chunk_name = debug.getinfo(bytecode_function, "S").source
     bytecode_function()

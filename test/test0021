@@ -1,0 +1,68 @@
+-- A failed cache write must not run stale bytecode or require a cache to exist.
+-- Inject the failure so this regression also works as root and on Windows.
+--
+-- _BLUD_TEST_
+-- $(OWD)/blud --lua $< stale
+-- $(OWD)/blud --lua $< missing
+-- _BLUD_TEST_
+
+local mode = assert(arg[1])
+assert(mode == "stale" or mode == "missing")
+local source_path = "test0021-fixture.blud"
+local cache_path = source_path .. ".luac"
+local marker_path = "test0021.ran"
+os.remove(source_path)
+os.remove(cache_path)
+os.remove(marker_path)
+
+local function write_file(path, contents)
+    local file = assert(io.open(path, "wb"))
+    assert(file:write(contents))
+    assert(file:close())
+end
+
+write_file(source_path, "all:\n    touch " .. marker_path .. "\n")
+if mode == "stale" then
+    write_file(cache_path, string.dump(function()
+        error("stale bytecode executed after cache write failure")
+    end))
+end
+
+local original_open = io.open
+local write_denied = false
+io.open = function(path, access)
+    if path == cache_path and access == "wb" then
+        write_denied = true
+        return nil, "Permission denied"
+    end
+    return original_open(path, access)
+end
+
+-- Force recompilation without sleeps or filesystem timestamp assumptions.
+local dircache = require("blud.dircache")
+local original_timestamp = dircache.get_timestamp
+dircache.get_timestamp = function(path)
+    if path == source_path then
+        return nil
+    end
+    return original_timestamp(path)
+end
+
+blud.command_line_options = {
+    bludfile_path = source_path,
+    debug = false,
+    always_make = false,
+    commandline_booleans = {},
+}
+require("blud.debugger")
+require("blud.blud")
+
+io.open = original_open
+dircache.get_timestamp = original_timestamp
+assert(write_denied, "test did not exercise a failed cache write")
+assert(os_path_type(marker_path) == 3, "current source action did not execute")
+assert(os.remove(marker_path))
+assert(os.remove(source_path))
+if mode == "stale" then
+    assert(os.remove(cache_path))
+end
