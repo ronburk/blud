@@ -77,6 +77,11 @@ do
         assert(AliasDir.resolve("/non-root", "x:cache") ==
                "/non-root/x:cache",
                "Linux filename was interpreted as a Windows drive")
+
+        -- Backslashes are literal filename characters on Linux.
+        assert(AliasDir.resolve("/non-root", "work\\copy") ==
+               "/non-root/work\\copy",
+               "Linux backslash was interpreted as a directory separator")
     end
 
     local function assert_words(name, kind, expected)
