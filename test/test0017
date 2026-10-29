@@ -64,6 +64,15 @@ do
     local AliasDir = require("blud.aliasdir")
     local state = blud.test0017_state
 
+    -- Repeated leading slashes still name the Unix root, not the current
+    -- directory or a UNC share. A non-root base makes relative resolution fail.
+    if jit.os == "Linux" then
+        for _, path in ipairs({"//tmp", "///tmp", "//tmp/child/.."}) do
+            assert(AliasDir.resolve("/non-root", path) == "/tmp",
+                   "absolute Unix path resolved incorrectly: " .. path)
+        end
+    end
+
     local function assert_words(name, kind, expected)
         local actual = state.captures[name][kind]
         assert(type(actual) == "table",

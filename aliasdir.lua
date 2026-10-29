@@ -22,6 +22,10 @@ end
 -- Split an absolute path into its root prefix and remaining components.
 -- A root is the part that cannot be traversed above: '/', 'C:/', or '//host/share'.
 local function split_absolute_root(path)
+    if not is_windows and path:sub(1, 1) == "/" then
+        return "/", path:sub(2)
+    end
+
     local drive_letter, path_tail = path:match("^([A-Za-z]:)/(.*)$")
     if drive_letter then
         return drive_letter .. "/", path_tail
