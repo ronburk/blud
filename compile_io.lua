@@ -413,6 +413,10 @@ local function read_physical_line(input)
         input.physical_pos = #text + 1
     end
 
+    if line:sub(-1) == "\r" then
+        line = line:sub(1, -2)
+    end
+
     local source_ln = input.next_source_ln
     input.next_source_ln = source_ln + 1
     return line, source_ln

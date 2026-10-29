@@ -50,6 +50,15 @@ do
     local second, _, second_sourcemap, second_embedded_sourcemap =
         compile_action("second.action", "echo second\n")
 
+    -- A CRLF blank line must be treated as blank, not parsed as a rule.
+    compile_io.push_input("crlf.blud",
+                          "all:\r\n    echo SUCCESS\r\n\r\n")
+    compile_io.emit_sourcemap()
+    compiler.compile(compile_io)
+    local crlf_generated = compile_io.close(false)
+    local crlf_chunk, crlf_error = loadstring(crlf_generated, "crlf.blud")
+    assert(crlf_chunk, "could not load CRLF compilation: " .. tostring(crlf_error))
+
     assert(first_sourcemap ~= second_sourcemap,
            "compile_io.close() reused its previous sourcemap table")
     assert_sourcemaps_equal(first_sourcemap, first_embedded_sourcemap)
