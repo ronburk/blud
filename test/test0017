@@ -71,6 +71,12 @@ do
             assert(AliasDir.resolve("/non-root", path) == "/tmp",
                    "absolute Unix path resolved incorrectly: " .. path)
         end
+
+        -- A colon is an ordinary filename character on Linux, even after
+        -- one letter; it must not select Windows drive-relative resolution.
+        assert(AliasDir.resolve("/non-root", "x:cache") ==
+               "/non-root/x:cache",
+               "Linux filename was interpreted as a Windows drive")
     end
 
     local function assert_words(name, kind, expected)
