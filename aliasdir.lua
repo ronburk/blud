@@ -27,7 +27,7 @@ local function split_absolute_root(path)
     end
 
     local drive_letter, path_tail = path:match("^([A-Za-z]:)/(.*)$")
-    if drive_letter then
+    if is_windows and drive_letter then
         return drive_letter .. "/", path_tail
     end
 
@@ -109,7 +109,7 @@ local function resolve_from(base, path)
 
     local drive_letter, path_tail = path:match("^([A-Za-z]:)(.*)$")
     local current_root, components = split_absolute_path(base)
-    if drive_letter then
+    if is_windows and drive_letter then
         assert(current_root:sub(1, 2):lower() == drive_letter:lower(),
                "cannot resolve a path relative to another drive: " .. path)
         path = path_tail
