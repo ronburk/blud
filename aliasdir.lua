@@ -14,9 +14,12 @@ local is_windows = initial_cwd:match("^[A-Za-z]:[/\\]") or
 local logical_cwd
 local logical_cwd_stack = {}
 
--- Use one separator internally; the OS-facing functions accept either form.
+-- Windows accepts both separators; Unix treats backslashes as filename bytes.
 local function normalize_separators(path)
-    return (path:gsub("\\", "/"))
+    if is_windows then
+        return (path:gsub("\\", "/"))
+    end
+    return path
 end
 
 -- Split an absolute path into its root prefix and remaining components.
