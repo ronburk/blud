@@ -1134,7 +1134,6 @@ do
     end
 
     function opBuild:BUILD(target)
-        util.print("[:BUILD:]:BUILD(%s)", target.NAME)
         assert(target.SCOPE and target.SCOPE.target == target,
                "build has no owning target scope: " .. tostring(target.NAME))
         assert(target.RULE and target.RULE.operator == self,
