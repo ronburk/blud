@@ -64,7 +64,11 @@ function BLUD_EXIT(code, data)
     assert(type(data) == "string", "BLUD_EXIT() requires an error data string")
 
     if expected_code == nil then
-        io.stderr:write(string.format("BLUD error %d: %s\n", code, data))
+        if code == 1000 then
+            io.stderr:write(string.format("blud: No rule to make target '%s'.\n", data))
+        else
+            io.stderr:write(string.format("BLUD error %d: %s\n", code, data))
+        end
         os.exit(1)
     end
 
