@@ -69,6 +69,7 @@ luajit/**
 !luajit/
 !luajit/src
 !luajit/src/lua.h
+!luajit/src/lua.hpp
 !luajit/src/luaconf.h
 !luajit/src/lauxlib.h
 !luajit/src/lualib.h
